@@ -4,14 +4,14 @@
 
 In progress.
 
-Last updated: 2026-04-18.
+Last updated: 2026-04-19.
 
 Phase snapshot:
 
 - Phase 1 local package-management baseline: mostly complete
 - Phase 2 registry and publishing: partially implemented
-- Phase 3 native artifact distribution: in progress (broader toolchain
-  auto-discovery and hosted release delivery remain)
+- Phase 3 native artifact distribution: in progress (broader native toolchain
+  policy and full hosted official-package release automation remain)
 - Phase 4 enterprise and security features: not started beyond local
   `--locked` / `--offline` workflows
 
@@ -46,6 +46,8 @@ repository. The current codebase supports:
 - Phase 2B semver-constrained published source-package installs using
   `x.y.z`, `^x.y.z`, and `~x.y.z`
 - root-manifest registry configuration via `[registries.<name>]`
+- hosted `http(s)` registry index/download/publish flows backed by the same
+  `registry.v1` format
 - registry-pinned lock/install metadata including registry identity and
   artifact digests
 - cached `--offline` reinstalls for previously fetched registry source packages
@@ -55,6 +57,10 @@ repository. The current codebase supports:
   `namespace/name@constraint` specs
 - source-package `mog publish` to the current static file-registry format,
   including exact dependency pinning and idempotent re-publish checks
+- `mog login <registry>` / `mog logout <registry>` hosted-registry auth flows
+  backed by user config and bearer tokens
+- git dependency fetch/install using `git` plus exactly one of `rev`, `tag`,
+  or `branch`, with resolved commit pinning in generated metadata
 - native-package `mog publish` / install through the current static
   file-registry format for the current host platform
 - target-keyed native-package publish/install through the current static
@@ -68,6 +74,9 @@ repository. The current codebase supports:
 - root-manifest native toolchain configuration via
   `[native.toolchains."<target>"] cmake_toolchain = "..."`, with
   `--cmake-toolchain` taking precedence
+- non-host native toolchain auto-discovery via
+  `MOG_CMAKE_TOOLCHAIN_<TARGET>`, `.mog/toolchains/<target>.cmake`, and
+  `toolchains/<target>.cmake`
 - package-manifest dependency parsing aligned with project manifests via
   `[dependencies]` inline tables, while retaining legacy compatibility for
   `dependencies = []`
@@ -86,11 +95,11 @@ repository. The current codebase supports:
 
 Not implemented yet:
 
-- authenticated publishing flows
-- git dependency fetch/install
-- alternate or networked registry transports beyond the current static
-  file-registry format
 - signed metadata or artifact verification
+- richer hosted-registry service contracts beyond the current `index.toml` +
+  artifact upload/download workflow
+- broader official-package hosted release automation beyond the current static
+  artifact workflow
 - enterprise policy workflows beyond the current local `--locked` / `--offline`
   support
 
@@ -278,8 +287,9 @@ Current implementation status:
   registries, including `namespace/name` and `namespace/name@constraint`
 - published source-package adds currently accept exact versions plus `^` and
   `~` semver constraints
-- does not yet support git fetches, authenticated publishing, or alternate
-  registry transports
+- git dependency specs now accept exactly one of `rev`, `tag`, or `branch`
+- does not yet auto-discover packages from git specs in `mog add`, and still
+  focuses on local/workspace and published registry discovery
 
 ### Install dependencies
 
@@ -298,18 +308,22 @@ Behavior:
 Current implementation status:
 
 - implemented for local path, workspace, published source packages, and
-  published native packages from configured static file registries
-- supports `--locked` and `--offline` for local graphs and for registry
-  packages that are already cached locally
+  published native packages from configured static file registries and hosted
+  `http(s)` registries
+- supports `--locked` and `--offline` for local graphs, git dependencies, and
+  registry packages that are already cached locally
 - published source-package resolution supports exact versions plus `^` and `~`
   semver constraints
 - generated metadata now records registry identity, artifact path, and
   artifact digest in addition to existing manifest/API digests
+- generated metadata now also records git source metadata and the resolved git
+  commit for git-backed dependencies
 - published native-package installs now select among platform-keyed native
   artifacts and fall back to local source builds when a matching prebuilt is
   unavailable on the current host target
-- does not yet fetch from git/network API registries or perform non-host
-  source-build fallback
+- non-host native source-build fallback now supports explicit toolchains,
+  root-manifest toolchain config, env-based discovery, and repo-local
+  toolchain discovery
 
 ### Update dependencies
 
@@ -327,6 +341,8 @@ Behavior:
 Current implementation status:
 
 - implemented for both local graphs and published source-package graphs
+- git-backed dependencies now re-resolve and refresh their pinned commit when
+  `mog update` is used
 - now performs version upgrades across published source-package releases within
   supported semver constraints
 
@@ -366,12 +382,15 @@ Behavior:
 Current implementation status:
 
 - implemented for source packages and current-host native packages published to
-  configured static file registries
+  configured static file registries and hosted `http(s)` registries that expose
+  the current `registry.v1` artifact layout
 - rejects conflicting re-publishes of an existing `package_id@version`
 - published native packages now emit both a generic source artifact and a
   host-target prebuilt artifact in the current registry format
-- does not yet support authentication, hosted registries, or multi-host
-  prebuilt release automation
+- hosted publishes now require `mog login <registry>` credentials when the
+  registry uses `http(s)`
+- does not yet enforce richer publish policy such as git tag/version matching,
+  signed uploads, or multi-host prebuilt release automation
 
 ## Package Layout
 
@@ -951,10 +970,15 @@ Current status:
   - lockfile-first install/run behavior with explicit `mog update` refreshes
   - `mog add` support for published package specs
   - `mog publish` for source packages to the current file-registry format
+  - hosted `http(s)` registry install/update/publish using cached `index.toml`
+    downloads and cached artifact directories
+  - `mog login` / `mog logout` registry auth flows using bearer tokens stored
+    in user config
+  - git dependency fetch/install using pinned `rev`, `tag`, or `branch`
+    selectors and resolved commit pinning in `mog.lock`
 - not yet complete inside Phase 2:
-  - package authentication / login flows
-  - git dependency fetch/install
-  - non-file registry transports or hosted registry APIs
+  - richer hosted registry APIs and publish policy beyond the current
+    `index.toml` + artifact upload contract
   - richer publish workflow concerns such as version/tag enforcement and
     registry-side authentication
 
@@ -996,6 +1020,8 @@ Current status:
 - root-manifest native toolchain configuration via
   `[native.toolchains."<target>"] cmake_toolchain = "..."`, with
   `--cmake-toolchain` taking precedence
+- non-host native toolchain auto-discovery via environment and repo-local
+  toolchain files
 - SDL-gated publish/install smoke coverage for the official `mog:window`
   package through the current static file-registry format
 - scripted repo-local publish workflow for the official `mog:window` package
@@ -1003,10 +1029,10 @@ Current status:
   file-registry artifact for the official `mog:window` package on supported
   host runners
 - not yet complete inside Phase 3:
-  - broader native toolchain policy and auto-discovery beyond the current
-    CMake toolchain contract
-  - hosted registry deployment and credentialed release delivery beyond the
-    current static-registry artifact workflow
+  - broader native toolchain policy beyond the current CMake toolchain
+    discovery contract
+  - hosted official-package deployment automation beyond the current static
+    registry artifact workflow and generic hosted publish support
 
 ### Phase 4: Enterprise and Security Features
 
