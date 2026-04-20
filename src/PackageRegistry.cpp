@@ -517,6 +517,16 @@ bool loadLockfileEntries(const std::filesystem::path& lockfilePath,
             current.sourcePath = parsed;
         } else if (key == "registry") {
             current.registry = parsed;
+        } else if (key == "git") {
+            current.gitUrl = parsed;
+        } else if (key == "git_rev") {
+            current.gitRev = parsed;
+        } else if (key == "git_tag") {
+            current.gitTag = parsed;
+        } else if (key == "git_branch") {
+            current.gitBranch = parsed;
+        } else if (key == "git_commit") {
+            current.gitCommit = parsed;
         } else if (key == "artifact_path") {
             current.artifactPath = parsed;
         } else if (key == "artifact_digest") {

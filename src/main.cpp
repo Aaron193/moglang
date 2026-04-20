@@ -30,6 +30,9 @@ static void printUsage(const char* executable) {
         << "  add <package>          Add a package dependency and install it\n"
         << "  install [flags]        Install dependencies using mog.lock when it is current\n"
         << "  update [flags]         Re-resolve dependencies and rewrite install metadata\n"
+        << "  login <registry> [--token <token>]\n"
+        << "                         Store a hosted-registry bearer token\n"
+        << "  logout <registry>      Remove a hosted-registry bearer token\n"
         << "  publish [options] [dir] Publish a package to a configured file registry\n"
         << "  run [flags] <file>     Install dependencies if needed, then run a program\n"
         << "  validate-package <dir> Validate a package directory\n"
@@ -187,6 +190,46 @@ static bool parsePublishArgs(int argc, char** argv, int startIndex,
             outError = "publish accepts at most one package directory.";
             return false;
         }
+    }
+
+    return true;
+}
+
+static bool parseLoginArgs(int argc, char** argv, int startIndex,
+                           std::string& outRegistryAlias,
+                           std::string& outToken,
+                           std::string& outError) {
+    outError.clear();
+    outRegistryAlias.clear();
+    outToken.clear();
+
+    for (int index = startIndex; index < argc; ++index) {
+        const std::string arg = argv[index];
+        if (arg == "--token") {
+            if (index + 1 >= argc) {
+                outError = "Missing value for --token.";
+                return false;
+            }
+            outToken = argv[++index];
+        } else if (arg.rfind("--token=", 0) == 0) {
+            outToken = arg.substr(8);
+        } else if (arg == "--help" || arg == "-h") {
+            outError = "help";
+            return false;
+        } else if (!arg.empty() && arg[0] == '-') {
+            outError = "Unknown option: " + arg;
+            return false;
+        } else if (outRegistryAlias.empty()) {
+            outRegistryAlias = arg;
+        } else {
+            outError = "login accepts exactly one registry alias.";
+            return false;
+        }
+    }
+
+    if (outRegistryAlias.empty()) {
+        outError = "login requires a registry alias.";
+        return false;
     }
 
     return true;
@@ -463,6 +506,54 @@ static int runPublishCommand(int argc, char** argv) {
     return 0;
 }
 
+static int runLoginCommand(int argc, char** argv) {
+    std::string registryAlias;
+    std::string token;
+    std::string parseError;
+    if (!parseLoginArgs(argc, argv, 2, registryAlias, token, parseError)) {
+        if (parseError == "help") {
+            printUsage(argv[0]);
+            return 0;
+        }
+        std::cerr << parseError << std::endl;
+        printUsage(argv[0]);
+        return 1;
+    }
+
+    if (token.empty()) {
+        if (!std::getline(std::cin, token)) {
+            std::cerr << "login requires a token via --token or stdin." << std::endl;
+            return 1;
+        }
+    }
+
+    std::string error;
+    if (!loginProjectRegistry(currentManagedProjectRoot(), registryAlias, token,
+                              error)) {
+        std::cerr << "Login failed: " << error << std::endl;
+        return 1;
+    }
+
+    std::cout << "Stored token for registry '" << registryAlias << "'" << std::endl;
+    return 0;
+}
+
+static int runLogoutCommand(int argc, char** argv) {
+    if (argc < 3) {
+        std::cerr << "logout requires a registry alias." << std::endl;
+        return 1;
+    }
+
+    std::string error;
+    if (!logoutProjectRegistry(currentManagedProjectRoot(), argv[2], error)) {
+        std::cerr << "Logout failed: " << error << std::endl;
+        return 1;
+    }
+
+    std::cout << "Removed token for registry '" << argv[2] << "'" << std::endl;
+    return 0;
+}
+
 int main(int argc, char** argv) {
     RuntimeOptions runtimeOptions;
     try {
@@ -514,6 +605,12 @@ int main(int argc, char** argv) {
     }
     if (command == "publish") {
         return runPublishCommand(argc, argv);
+    }
+    if (command == "login") {
+        return runLoginCommand(argc, argv);
+    }
+    if (command == "logout") {
+        return runLogoutCommand(argc, argv);
     }
     if (command == "validate-package") {
         if (argc < 3) {

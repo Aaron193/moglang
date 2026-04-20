@@ -254,6 +254,24 @@ bool parseDependencyInlineTable(const std::string& value,
                 return false;
             }
             outDependency.git = parsed;
+        } else if (key == "rev") {
+            std::string parsed;
+            if (!parseQuotedString(rawValue, parsed, outError)) {
+                return false;
+            }
+            outDependency.gitRev = parsed;
+        } else if (key == "tag") {
+            std::string parsed;
+            if (!parseQuotedString(rawValue, parsed, outError)) {
+                return false;
+            }
+            outDependency.gitTag = parsed;
+        } else if (key == "branch") {
+            std::string parsed;
+            if (!parseQuotedString(rawValue, parsed, outError)) {
+                return false;
+            }
+            outDependency.gitBranch = parsed;
         } else if (key == "registry") {
             std::string parsed;
             if (!parseQuotedString(rawValue, parsed, outError)) {
@@ -280,6 +298,23 @@ bool parseDependencyInlineTable(const std::string& value,
         outDependency.git.empty() && outDependency.registry.empty() &&
         outDependency.packageId.empty()) {
         outError = "Dependency entries must define path, workspace, git, registry, or package metadata.";
+        return false;
+    }
+
+    const size_t gitRefCount =
+        (!outDependency.gitRev.empty() ? 1u : 0u) +
+        (!outDependency.gitTag.empty() ? 1u : 0u) +
+        (!outDependency.gitBranch.empty() ? 1u : 0u);
+    if (outDependency.git.empty()) {
+        if (gitRefCount != 0) {
+            outError = "Git dependency ref fields require git = \"...\".";
+            return false;
+        }
+        return true;
+    }
+    if (gitRefCount != 1) {
+        outError =
+            "Git dependencies must declare exactly one of rev, tag, or branch.";
         return false;
     }
 

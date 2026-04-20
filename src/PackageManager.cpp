@@ -260,6 +260,29 @@ bool parseQuotedStringArray(const std::string& value,
     return true;
 }
 
+bool validateDependencySpec(const DependencySpec& dependency,
+                            std::string& outError) {
+    const size_t gitRefCount =
+        (!dependency.gitRev.empty() ? 1u : 0u) +
+        (!dependency.gitTag.empty() ? 1u : 0u) +
+        (!dependency.gitBranch.empty() ? 1u : 0u);
+    if (dependency.git.empty()) {
+        if (gitRefCount != 0) {
+            outError = "Git dependency ref fields require git = \"...\".";
+            return false;
+        }
+        return true;
+    }
+
+    if (gitRefCount != 1) {
+        outError =
+            "Git dependencies must declare exactly one of rev, tag, or branch.";
+        return false;
+    }
+
+    return true;
+}
+
 std::string quoteTomlString(const std::string& text) {
     std::string out;
     out.reserve(text.size() + 2);
@@ -369,19 +392,32 @@ struct RegistryIndexRecord {
 struct LoadedRegistryIndex {
     std::filesystem::path indexPath;
     std::filesystem::path rootDir;
+    bool isRemote = false;
+    std::string remoteIndexUrl;
+    std::string remoteRootUrl;
     std::unordered_map<std::string, RegistryIndexRecord> recordsByKey;
     std::unordered_map<std::string, std::vector<RegistryIndexRecord>> recordsByPackageId;
+};
+
+struct RegistryLocation {
+    bool isRemote = false;
+    std::filesystem::path localIndexPath;
+    std::filesystem::path localRootDir;
+    std::string remoteIndexUrl;
+    std::string remoteRootUrl;
 };
 
 const ProjectRegistryConfig* findRegistryConfig(
     const ProjectManifestData& manifest, std::string_view alias);
 const ProjectNativeToolchainConfig* findNativeToolchainConfig(
     const ProjectManifestData& manifest, std::string_view target);
+std::string normalizeEnvKey(std::string_view text);
 
 struct NativeToolchainSelection {
     std::string target;
     std::string cmakeToolchainFile;
     std::string sourceDescription;
+    std::vector<std::string> checkedSources;
 };
 
 std::string registryRecordKey(std::string_view packageId,
@@ -537,6 +573,51 @@ bool resolveNativeToolchainSelection(const std::string& projectRoot,
             outSelection.sourceDescription =
                 nativeToolchainSettingLabel(outSelection.target);
         }
+        if (toolchainPath.empty()) {
+            const std::string envName =
+                "MOG_CMAKE_TOOLCHAIN_" + normalizeEnvKey(outSelection.target);
+            if (const char* envValue = std::getenv(envName.c_str());
+                envValue != nullptr && *envValue != '\0') {
+                toolchainPath = std::filesystem::path(envValue);
+                outSelection.sourceDescription = "$" + envName;
+            } else {
+                outSelection.checkedSources.push_back("$" + envName);
+            }
+        }
+        if (toolchainPath.empty()) {
+            const std::filesystem::path projectMogToolchain =
+                std::filesystem::path(projectRoot) / ".mog" / "toolchains" /
+                (outSelection.target + ".cmake");
+            if (fileExists(projectMogToolchain)) {
+                toolchainPath = projectMogToolchain;
+                outSelection.sourceDescription =
+                    normalizeRelativePath(projectMogToolchain.lexically_relative(
+                                              std::filesystem::path(projectRoot))
+                                              .string());
+            } else {
+                outSelection.checkedSources.push_back(
+                    normalizeRelativePath(projectMogToolchain.lexically_relative(
+                                              std::filesystem::path(projectRoot))
+                                              .string()));
+            }
+        }
+        if (toolchainPath.empty()) {
+            const std::filesystem::path projectToolchain =
+                std::filesystem::path(projectRoot) / "toolchains" /
+                (outSelection.target + ".cmake");
+            if (fileExists(projectToolchain)) {
+                toolchainPath = projectToolchain;
+                outSelection.sourceDescription =
+                    normalizeRelativePath(projectToolchain.lexically_relative(
+                                              std::filesystem::path(projectRoot))
+                                              .string());
+            } else {
+                outSelection.checkedSources.push_back(
+                    normalizeRelativePath(projectToolchain.lexically_relative(
+                                              std::filesystem::path(projectRoot))
+                                              .string()));
+            }
+        }
     }
 
     if (toolchainPath.empty()) {
@@ -545,10 +626,22 @@ bool resolveNativeToolchainSelection(const std::string& projectRoot,
 
     const std::string resolvedToolchain = canonicalOrLexical(toolchainPath);
     if (!fileExists(resolvedToolchain)) {
+        std::ostringstream details;
+        if (!outSelection.checkedSources.empty()) {
+            details << " Checked: ";
+            for (size_t index = 0; index < outSelection.checkedSources.size();
+                 ++index) {
+                if (index != 0) {
+                    details << ", ";
+                }
+                details << outSelection.checkedSources[index];
+            }
+            details << ".";
+        }
         outError = buildNativeSourceFallbackPrefix(entry) +
                    " could not find CMake toolchain file '" +
                    resolvedToolchain + "' configured via " +
-                   outSelection.sourceDescription + ".";
+                   outSelection.sourceDescription + "." + details.str();
         return false;
     }
 
@@ -765,6 +858,24 @@ bool parseDependencyInlineTable(const std::string& value,
                 return false;
             }
             outDependency.git = parsed;
+        } else if (key == "rev") {
+            std::string parsed;
+            if (!parseQuotedString(rawValue, parsed, outError)) {
+                return false;
+            }
+            outDependency.gitRev = parsed;
+        } else if (key == "tag") {
+            std::string parsed;
+            if (!parseQuotedString(rawValue, parsed, outError)) {
+                return false;
+            }
+            outDependency.gitTag = parsed;
+        } else if (key == "branch") {
+            std::string parsed;
+            if (!parseQuotedString(rawValue, parsed, outError)) {
+                return false;
+            }
+            outDependency.gitBranch = parsed;
         } else if (key == "registry") {
             std::string parsed;
             if (!parseQuotedString(rawValue, parsed, outError)) {
@@ -794,7 +905,7 @@ bool parseDependencyInlineTable(const std::string& value,
         return false;
     }
 
-    return true;
+    return validateDependencySpec(outDependency, outError);
 }
 
 std::string readFileText(const std::filesystem::path& path) {
@@ -1056,6 +1167,445 @@ bool createTemporaryDirectory(std::string_view prefix,
     return false;
 }
 
+constexpr const char* kArtifactManifestFileName = ".artifact-manifest.toml";
+
+std::filesystem::path userStateRoot() {
+    const std::filesystem::path cacheRoot = userCacheRoot();
+    return cacheRoot.has_parent_path() ? cacheRoot.parent_path() : cacheRoot;
+}
+
+std::filesystem::path userConfigRoot() {
+    if (const char* xdgConfig = std::getenv("XDG_CONFIG_HOME");
+        xdgConfig != nullptr && *xdgConfig != '\0') {
+        return std::filesystem::path(xdgConfig) / "mog";
+    }
+    if (const char* home = std::getenv("HOME"); home != nullptr && *home != '\0') {
+        return std::filesystem::path(home) / ".config" / "mog";
+    }
+    return std::filesystem::temp_directory_path() / "mog-config";
+}
+
+std::filesystem::path registryCacheRoot() {
+    return userStateRoot() / "registry";
+}
+
+std::filesystem::path gitCacheRoot() {
+    return userStateRoot() / "git";
+}
+
+std::filesystem::path registryAuthPath() {
+    return userConfigRoot() / "auth.toml";
+}
+
+bool isHttpUrl(std::string_view text) {
+    return text.rfind("http://", 0) == 0 || text.rfind("https://", 0) == 0;
+}
+
+std::string trimTrailingSlash(std::string text) {
+    while (text.size() > 1 && text.back() == '/') {
+        text.pop_back();
+    }
+    return text;
+}
+
+std::string normalizeEnvKey(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    for (unsigned char ch : text) {
+        if (std::isalnum(ch)) {
+            out.push_back(static_cast<char>(std::toupper(ch)));
+        } else {
+            out.push_back('_');
+        }
+    }
+    return out;
+}
+
+std::string normalizeRegistryIndexUrl(std::string url) {
+    if (url.empty()) {
+        return url;
+    }
+    if (url.back() == '/') {
+        return url + "index.toml";
+    }
+    if (url.size() >= 10 &&
+        url.compare(url.size() - 10, 10, "index.toml") == 0) {
+        return url;
+    }
+    const size_t slash = url.find_last_of('/');
+    const size_t dot = url.find_last_of('.');
+    if (dot != std::string::npos &&
+        (slash == std::string::npos || dot > slash)) {
+        return url;
+    }
+    return url + "/index.toml";
+}
+
+std::string parentUrl(std::string url) {
+    url = trimTrailingSlash(std::move(url));
+    const size_t scheme = url.find("://");
+    const size_t searchStart = scheme == std::string::npos ? 0 : scheme + 3;
+    const size_t slash = url.find_last_of('/');
+    if (slash == std::string::npos || slash < searchStart) {
+        return url;
+    }
+    return url.substr(0, slash);
+}
+
+std::string joinUrlPath(std::string base, std::string_view relative) {
+    if (isHttpUrl(relative)) {
+        return std::string(relative);
+    }
+    base = trimTrailingSlash(std::move(base));
+    std::string rel = normalizeRelativePath(std::string(relative));
+    while (!rel.empty() && rel.front() == '/') {
+        rel.erase(rel.begin());
+    }
+    if (rel.empty()) {
+        return base;
+    }
+    return base + "/" + rel;
+}
+
+std::filesystem::path remoteRegistryIndexCachePath(std::string_view alias,
+                                                   std::string_view indexUrl) {
+    return registryCacheRoot() / "indexes" / normalizeEnvKey(alias) /
+           hashString(indexUrl) / "index.toml";
+}
+
+std::filesystem::path remoteRegistryArtifactCachePath(
+    std::string_view alias, std::string_view artifactPath,
+    std::string_view artifactDigest) {
+    return registryCacheRoot() / "artifacts" / normalizeEnvKey(alias) /
+           hashString(std::string(artifactPath) + "|" + std::string(artifactDigest));
+}
+
+std::filesystem::path gitWorkingCachePath(const DependencySpec& dependency) {
+    const std::string selector =
+        !dependency.gitRev.empty()
+            ? "rev|" + dependency.gitRev
+            : (!dependency.gitTag.empty() ? "tag|" + dependency.gitTag
+                                          : "branch|" + dependency.gitBranch);
+    return gitCacheRoot() / "working" /
+           hashString(dependency.git + "|" + selector);
+}
+
+std::filesystem::path gitResolvedCachePath(const DependencySpec& dependency,
+                                           std::string_view commit) {
+    return gitCacheRoot() / "resolved" /
+           hashString(dependency.git + "|" + std::string(commit));
+}
+
+bool runCapturedSystemCommand(const std::string& command, std::string& outText,
+                              std::string& outError) {
+    outText.clear();
+    outError.clear();
+
+    std::filesystem::path tempDir;
+    if (!createTemporaryDirectory("mog-cmd", tempDir, outError)) {
+        return false;
+    }
+    ScopedPathCleanup cleanup{tempDir};
+    const std::filesystem::path outputPath = tempDir / "output.txt";
+    const std::string fullCommand =
+        command + " > " + shellQuote(outputPath.string()) + " 2>&1";
+    const bool ok = std::system(fullCommand.c_str()) == 0;
+    outText = readFileText(outputPath);
+    if (!ok && outError.empty()) {
+        outError = trim(outText);
+    }
+    return ok;
+}
+
+bool copyDirectoryRecursiveExcludingGit(const std::filesystem::path& from,
+                                        const std::filesystem::path& to,
+                                        std::string& outError) {
+    if (!copyDirectoryRecursive(from, to, outError)) {
+        return false;
+    }
+    std::error_code ec;
+    std::filesystem::remove_all(to / ".git", ec);
+    if (ec) {
+        outError = "Could not remove git metadata from '" + to.string() + "'.";
+        return false;
+    }
+    return true;
+}
+
+bool writeArtifactManifest(const std::filesystem::path& artifactDir,
+                           std::string& outError) {
+    std::vector<std::string> files;
+    std::error_code ec;
+    for (std::filesystem::recursive_directory_iterator it(artifactDir, ec), end;
+         !ec && it != end; it.increment(ec)) {
+        if (!it->is_regular_file(ec) || ec) {
+            continue;
+        }
+        const std::filesystem::path relative =
+            it->path().lexically_relative(artifactDir);
+        if (relative == kArtifactManifestFileName) {
+            continue;
+        }
+        files.push_back(normalizeRelativePath(relative.lexically_normal().string()));
+    }
+    if (ec) {
+        outError = "Could not enumerate artifact files under '" +
+                   artifactDir.string() + "'.";
+        return false;
+    }
+
+    files = sortedUniqueStrings(std::move(files));
+    std::ofstream out(artifactDir / kArtifactManifestFileName);
+    if (!out) {
+        outError = "Could not write artifact manifest under '" +
+                   artifactDir.string() + "'.";
+        return false;
+    }
+    out << "files = " << quoteTomlArray(files) << "\n";
+    return true;
+}
+
+bool parseArtifactManifest(const std::filesystem::path& manifestPath,
+                           std::vector<std::string>& outFiles,
+                           std::string& outError) {
+    outFiles.clear();
+    std::ifstream file(manifestPath);
+    if (!file) {
+        outError = "Could not open artifact manifest '" + manifestPath.string() +
+                   "'.";
+        return false;
+    }
+
+    std::string line;
+    size_t lineNumber = 0;
+    while (std::getline(file, line)) {
+        ++lineNumber;
+        const std::string content = stripComment(line);
+        if (content.empty()) {
+            continue;
+        }
+
+        const size_t equals = content.find('=');
+        if (equals == std::string::npos) {
+            outError = "Invalid artifact manifest line " +
+                       std::to_string(lineNumber) + ": expected key = value.";
+            return false;
+        }
+        const std::string key = trim(std::string_view(content).substr(0, equals));
+        const std::string value =
+            trim(std::string_view(content).substr(equals + 1));
+        if (key != "files") {
+            outError = "Unsupported artifact manifest field '" + key + "'.";
+            return false;
+        }
+        if (!parseQuotedStringArray(value, outFiles, outError)) {
+            outError = "Invalid artifact manifest line " +
+                       std::to_string(lineNumber) + ": " + outError;
+            return false;
+        }
+        outFiles = sortedUniqueStrings(std::move(outFiles));
+        return true;
+    }
+
+    outError = "Artifact manifest is missing files = [...].";
+    return false;
+}
+
+bool loadRegistryAuthTokens(std::unordered_map<std::string, std::string>& outTokens,
+                            std::string& outError) {
+    outTokens.clear();
+    outError.clear();
+
+    const std::filesystem::path authPath = registryAuthPath();
+    if (!fileExists(authPath)) {
+        return true;
+    }
+
+    std::ifstream file(authPath);
+    if (!file) {
+        outError = "Could not open registry auth file '" + authPath.string() + "'.";
+        return false;
+    }
+
+    std::string currentAlias;
+    std::string line;
+    size_t lineNumber = 0;
+    while (std::getline(file, line)) {
+        ++lineNumber;
+        const std::string content = stripComment(line);
+        if (content.empty()) {
+            continue;
+        }
+        if (content.front() == '[' && content.back() == ']') {
+            const std::string section = content.substr(1, content.size() - 2);
+            const std::string prefix = "registries.";
+            currentAlias =
+                section.rfind(prefix, 0) == 0 ? section.substr(prefix.size()) : "";
+            continue;
+        }
+
+        const size_t equals = content.find('=');
+        if (equals == std::string::npos) {
+            outError = "Invalid registry auth line " + std::to_string(lineNumber) +
+                       ": expected key = value.";
+            return false;
+        }
+        if (currentAlias.empty()) {
+            continue;
+        }
+
+        const std::string key = trim(std::string_view(content).substr(0, equals));
+        const std::string value =
+            trim(std::string_view(content).substr(equals + 1));
+        if (key != "token") {
+            continue;
+        }
+        std::string token;
+        if (!parseQuotedString(value, token, outError)) {
+            outError = "Invalid registry auth line " +
+                       std::to_string(lineNumber) + ": " + outError;
+            return false;
+        }
+        outTokens[currentAlias] = token;
+    }
+
+    return true;
+}
+
+bool writeRegistryAuthTokens(
+    const std::unordered_map<std::string, std::string>& tokens,
+    std::string& outError) {
+    const std::filesystem::path authPath = registryAuthPath();
+    std::error_code ec;
+    std::filesystem::create_directories(authPath.parent_path(), ec);
+    if (ec) {
+        outError = "Could not create registry auth directory '" +
+                   authPath.parent_path().string() + "'.";
+        return false;
+    }
+
+    std::ofstream out(authPath);
+    if (!out) {
+        outError = "Could not open registry auth file '" + authPath.string() +
+                   "' for writing.";
+        return false;
+    }
+
+    std::vector<std::string> aliases;
+    aliases.reserve(tokens.size());
+    for (const auto& [alias, token] : tokens) {
+        if (!token.empty()) {
+            aliases.push_back(alias);
+        }
+    }
+    std::sort(aliases.begin(), aliases.end());
+    for (const auto& alias : aliases) {
+        out << "[registries." << alias << "]\n";
+        out << "token = " << quoteTomlString(tokens.at(alias)) << "\n\n";
+    }
+    return true;
+}
+
+bool resolveRegistryAuthToken(std::string_view alias, std::string& outToken,
+                              std::string& outError) {
+    outToken.clear();
+    outError.clear();
+
+    const std::string envAlias =
+        "MOG_REGISTRY_TOKEN_" + normalizeEnvKey(alias);
+    if (const char* specific = std::getenv(envAlias.c_str());
+        specific != nullptr && *specific != '\0') {
+        outToken = specific;
+        return true;
+    }
+    if (const char* generic = std::getenv("MOG_REGISTRY_TOKEN");
+        generic != nullptr && *generic != '\0') {
+        outToken = generic;
+        return true;
+    }
+
+    std::unordered_map<std::string, std::string> tokens;
+    if (!loadRegistryAuthTokens(tokens, outError)) {
+        return false;
+    }
+    auto it = tokens.find(std::string(alias));
+    if (it != tokens.end()) {
+        outToken = it->second;
+    }
+    return true;
+}
+
+bool downloadUrlToFile(std::string_view url, const std::string& token,
+                       const std::filesystem::path& destination,
+                       std::string& outError) {
+    if (!ensureParentDirectory(destination, outError)) {
+        return false;
+    }
+
+    std::ostringstream command;
+    command << "curl -fsSL ";
+    if (!token.empty()) {
+        command << "-H "
+                << shellQuote("Authorization: Bearer " + token) << " ";
+    }
+    command << "-o " << shellQuote(destination.string()) << " "
+            << shellQuote(std::string(url));
+
+    std::string output;
+    if (!runCapturedSystemCommand(command.str(), output, outError)) {
+        outError = trim(output).empty() ? "curl download failed." : trim(output);
+        return false;
+    }
+
+    return true;
+}
+
+bool uploadFileToUrl(const std::filesystem::path& source, std::string_view url,
+                     const std::string& token, std::string& outError) {
+    std::ostringstream command;
+    command << "curl -fsSL -X PUT ";
+    if (!token.empty()) {
+        command << "-H "
+                << shellQuote("Authorization: Bearer " + token) << " ";
+    }
+    command << "--upload-file " << shellQuote(source.string()) << " "
+            << shellQuote(std::string(url));
+
+    std::string output;
+    if (!runCapturedSystemCommand(command.str(), output, outError)) {
+        outError = trim(output).empty() ? "curl upload failed." : trim(output);
+        return false;
+    }
+    return true;
+}
+
+bool uploadDirectoryToUrl(const std::filesystem::path& sourceDir,
+                          std::string_view destinationUrl,
+                          const std::string& token, std::string& outError) {
+    std::error_code ec;
+    for (std::filesystem::recursive_directory_iterator it(sourceDir, ec), end;
+         !ec && it != end; it.increment(ec)) {
+        if (!it->is_regular_file(ec) || ec) {
+            continue;
+        }
+        const std::filesystem::path relative =
+            it->path().lexically_relative(sourceDir);
+        if (!uploadFileToUrl(it->path(),
+                             joinUrlPath(std::string(destinationUrl),
+                                         normalizeRelativePath(
+                                             relative.lexically_normal().string())),
+                             token, outError)) {
+            return false;
+        }
+    }
+    if (ec) {
+        outError = "Could not enumerate publish directory '" +
+                   sourceDir.string() + "'.";
+        return false;
+    }
+    return true;
+}
+
 std::string inferWorkspaceRoot(const std::filesystem::path& packageDir,
                                const PackageRegistryEntry& entry,
                                const std::string& fallbackProjectRoot) {
@@ -1131,6 +1681,17 @@ bool loadPackageEntryFromDir(const std::filesystem::path& packageDir,
         *outDependencies = outEntry.dependencyIds;
     }
 
+    return true;
+}
+
+bool loadPackageManifestDependencies(const std::filesystem::path& packageDir,
+                                     std::vector<DependencySpec>& outDependencies,
+                                     std::string& outError) {
+    PackageManifest manifest;
+    if (!loadPackageManifest(packageDir.string(), manifest, outError)) {
+        return false;
+    }
+    outDependencies = manifest.dependencies;
     return true;
 }
 
@@ -1232,6 +1793,21 @@ bool writeInstallRegistryFile(const std::filesystem::path& outputPath,
         if (!entry.registry.empty()) {
             out << "registry = " << quoteTomlString(entry.registry) << "\n";
         }
+        if (!entry.gitUrl.empty()) {
+            out << "git = " << quoteTomlString(entry.gitUrl) << "\n";
+        }
+        if (!entry.gitRev.empty()) {
+            out << "git_rev = " << quoteTomlString(entry.gitRev) << "\n";
+        }
+        if (!entry.gitTag.empty()) {
+            out << "git_tag = " << quoteTomlString(entry.gitTag) << "\n";
+        }
+        if (!entry.gitBranch.empty()) {
+            out << "git_branch = " << quoteTomlString(entry.gitBranch) << "\n";
+        }
+        if (!entry.gitCommit.empty()) {
+            out << "git_commit = " << quoteTomlString(entry.gitCommit) << "\n";
+        }
         if (!entry.artifactPath.empty()) {
             std::string relativeArtifactPath;
             relativePathString(projectRoot, entry.artifactPath, relativeArtifactPath);
@@ -1310,6 +1886,21 @@ bool writeLockfile(const std::filesystem::path& outputPath,
         }
         if (!entry.registry.empty()) {
             out << "registry = " << quoteTomlString(entry.registry) << "\n";
+        }
+        if (!entry.gitUrl.empty()) {
+            out << "git = " << quoteTomlString(entry.gitUrl) << "\n";
+        }
+        if (!entry.gitRev.empty()) {
+            out << "git_rev = " << quoteTomlString(entry.gitRev) << "\n";
+        }
+        if (!entry.gitTag.empty()) {
+            out << "git_tag = " << quoteTomlString(entry.gitTag) << "\n";
+        }
+        if (!entry.gitBranch.empty()) {
+            out << "git_branch = " << quoteTomlString(entry.gitBranch) << "\n";
+        }
+        if (!entry.gitCommit.empty()) {
+            out << "git_commit = " << quoteTomlString(entry.gitCommit) << "\n";
         }
         if (!entry.artifactPath.empty()) {
             std::string relativeArtifactPath;
@@ -1423,6 +2014,7 @@ struct PackageNode {
     PackageRegistryEntry entry;
     std::filesystem::path packageDir;
     std::vector<RegistryDependencyPin> registryDependencies;
+    std::vector<DependencySpec> manifestDependencies;
 };
 
 struct DependencyRoot {
@@ -1437,6 +2029,11 @@ struct CacheEntryMetadata {
     std::string sourceType;
     std::string sourcePath;
     std::string registry;
+    std::string gitUrl;
+    std::string gitRev;
+    std::string gitTag;
+    std::string gitBranch;
+    std::string gitCommit;
     std::string artifactPath;
     std::string artifactDigest;
     std::string selectedTarget;
@@ -1462,6 +2059,11 @@ bool writeCacheMetadataFile(const std::filesystem::path& outputPath,
     out << "source_type = " << quoteTomlString(entry.sourceType) << "\n";
     out << "source_path = " << quoteTomlString(entry.sourcePath) << "\n";
     out << "registry = " << quoteTomlString(entry.registry) << "\n";
+    out << "git = " << quoteTomlString(entry.gitUrl) << "\n";
+    out << "git_rev = " << quoteTomlString(entry.gitRev) << "\n";
+    out << "git_tag = " << quoteTomlString(entry.gitTag) << "\n";
+    out << "git_branch = " << quoteTomlString(entry.gitBranch) << "\n";
+    out << "git_commit = " << quoteTomlString(entry.gitCommit) << "\n";
     out << "artifact_path = " << quoteTomlString(entry.artifactPath) << "\n";
     out << "artifact_digest = " << quoteTomlString(entry.artifactDigest) << "\n";
     out << "selected_target = " << quoteTomlString(entry.selectedTarget) << "\n";
@@ -1541,6 +2143,16 @@ bool loadCacheMetadataFile(const std::filesystem::path& metadataPath,
             outMetadata.sourcePath = parsed;
         } else if (key == "registry") {
             outMetadata.registry = parsed;
+        } else if (key == "git") {
+            outMetadata.gitUrl = parsed;
+        } else if (key == "git_rev") {
+            outMetadata.gitRev = parsed;
+        } else if (key == "git_tag") {
+            outMetadata.gitTag = parsed;
+        } else if (key == "git_branch") {
+            outMetadata.gitBranch = parsed;
+        } else if (key == "git_commit") {
+            outMetadata.gitCommit = parsed;
         } else if (key == "artifact_path") {
             outMetadata.artifactPath = parsed;
         } else if (key == "artifact_digest") {
@@ -1569,6 +2181,11 @@ bool cacheMetadataMatchesEntry(const CacheEntryMetadata& metadata,
            metadata.sourceType == entry.sourceType &&
            metadata.sourcePath == entry.sourcePath &&
            metadata.registry == entry.registry &&
+           metadata.gitUrl == entry.gitUrl &&
+           metadata.gitRev == entry.gitRev &&
+           metadata.gitTag == entry.gitTag &&
+           metadata.gitBranch == entry.gitBranch &&
+           metadata.gitCommit == entry.gitCommit &&
            metadata.artifactPath == entry.artifactPath &&
            metadata.artifactDigest == entry.artifactDigest &&
            metadata.selectedTarget == entry.selectedTarget &&
@@ -1621,24 +2238,82 @@ bool resolveManifestPath(const std::string& projectRoot,
     return true;
 }
 
+bool resolveRegistryLocation(const std::string& projectRoot,
+                             const ProjectRegistryConfig& config,
+                             RegistryLocation& outLocation,
+                             std::string& outError) {
+    outLocation = RegistryLocation{};
+    outError.clear();
+
+    if (config.index.empty()) {
+        outError = "Registry index path cannot be empty.";
+        return false;
+    }
+
+    if (isHttpUrl(config.index)) {
+        outLocation.isRemote = true;
+        outLocation.remoteIndexUrl = normalizeRegistryIndexUrl(config.index);
+        outLocation.remoteRootUrl = parentUrl(outLocation.remoteIndexUrl);
+        outLocation.localIndexPath =
+            remoteRegistryIndexCachePath(config.alias, outLocation.remoteIndexUrl);
+        outLocation.localRootDir = outLocation.localIndexPath.parent_path();
+        return true;
+    }
+
+    if (!resolveManifestPath(projectRoot, config.index, outLocation.localIndexPath,
+                             outError)) {
+        return false;
+    }
+
+    std::error_code ec;
+    if (std::filesystem::is_directory(outLocation.localIndexPath, ec) && !ec) {
+        outLocation.localIndexPath /= "index.toml";
+    }
+    outLocation.localIndexPath =
+        std::filesystem::weakly_canonical(outLocation.localIndexPath, ec);
+    if (ec) {
+        outLocation.localIndexPath = outLocation.localIndexPath.lexically_normal();
+        ec.clear();
+    }
+    outLocation.localRootDir = outLocation.localIndexPath.parent_path();
+    return true;
+}
+
 bool loadRegistryIndex(const std::string& projectRoot,
                        const ProjectRegistryConfig& config,
+                       const InstallOptions* options,
                        LoadedRegistryIndex& outIndex,
                        std::string& outError) {
     outIndex = LoadedRegistryIndex{};
     outError.clear();
 
-    std::filesystem::path configuredPath;
-    if (!resolveManifestPath(projectRoot, config.index, configuredPath, outError)) {
+    RegistryLocation location;
+    if (!resolveRegistryLocation(projectRoot, config, location, outError)) {
         return false;
     }
 
+    std::filesystem::path configuredPath = location.localIndexPath;
     std::error_code ec;
-    if (std::filesystem::is_directory(configuredPath, ec) && !ec) {
-        configuredPath /= "index.toml";
+    if (location.isRemote) {
+        std::string token;
+        if (!resolveRegistryAuthToken(config.alias, token, outError)) {
+            return false;
+        }
+        const bool offline = options != nullptr && options->offline;
+        if (offline && !fileExists(configuredPath)) {
+            outError = "Registry '" + config.alias +
+                       "' cannot be used with --offline because its index is not cached locally.";
+            return false;
+        }
+        if (!offline || !fileExists(configuredPath)) {
+            if (!downloadUrlToFile(location.remoteIndexUrl, token, configuredPath,
+                                   outError)) {
+                outError = "Registry '" + config.alias +
+                           "' index download failed: " + outError;
+                return false;
+            }
+        }
     }
-
-    configuredPath = std::filesystem::weakly_canonical(configuredPath, ec);
     if (ec || !std::filesystem::exists(configuredPath, ec) || ec) {
         outError = "Registry '" + config.alias + "' index does not exist at '" +
                    configuredPath.lexically_normal().string() + "'.";
@@ -1646,7 +2321,10 @@ bool loadRegistryIndex(const std::string& projectRoot,
     }
 
     outIndex.indexPath = configuredPath;
-    outIndex.rootDir = configuredPath.parent_path();
+    outIndex.rootDir = location.localRootDir;
+    outIndex.isRemote = location.isRemote;
+    outIndex.remoteIndexUrl = location.remoteIndexUrl;
+    outIndex.remoteRootUrl = location.remoteRootUrl;
 
     std::ifstream file(configuredPath);
     if (!file) {
@@ -1834,21 +2512,12 @@ bool resolveRegistryIndexLocation(const std::string& projectRoot,
                                   std::filesystem::path& outIndexPath,
                                   std::filesystem::path& outRootDir,
                                   std::string& outError) {
-    std::filesystem::path configuredPath;
-    if (!resolveManifestPath(projectRoot, config.index, configuredPath, outError)) {
+    RegistryLocation location;
+    if (!resolveRegistryLocation(projectRoot, config, location, outError)) {
         return false;
     }
-
-    std::error_code ec;
-    if (std::filesystem::is_directory(configuredPath, ec) && !ec) {
-        configuredPath /= "index.toml";
-    } else if (!configuredPath.has_filename() ||
-               configuredPath.filename() != "index.toml") {
-        configuredPath /= "index.toml";
-    }
-
-    outIndexPath = configuredPath.lexically_normal();
-    outRootDir = outIndexPath.parent_path();
+    outIndexPath = location.localIndexPath.lexically_normal();
+    outRootDir = location.localRootDir.lexically_normal();
     return true;
 }
 
@@ -1876,6 +2545,10 @@ bool scanPackageDirectories(const std::filesystem::path& root,
         if (!loadPackageEntryFromDir(dir, node.entry, nullptr, outError)) {
             continue;
         }
+        if (!loadPackageManifestDependencies(dir, node.manifestDependencies,
+                                             outError)) {
+            continue;
+        }
         node.packageDir = std::filesystem::path(node.entry.packageDir);
         if (!addAvailableNode(outNodes, std::move(node), outError)) {
             return false;
@@ -1898,6 +2571,12 @@ bool scanWorkspaceMemberPackages(
 
         PackageNode node;
         if (!loadPackageEntryFromDir(memberPath, node.entry, nullptr, outError)) {
+            outError = "Could not load workspace member '" + member + "': " +
+                       outError;
+            return false;
+        }
+        if (!loadPackageManifestDependencies(memberPath, node.manifestDependencies,
+                                             outError)) {
             outError = "Could not load workspace member '" + member + "': " +
                        outError;
             return false;
@@ -2000,6 +2679,94 @@ std::string availableNativeTargetsLabel(const RegistryIndexRecord& record) {
     return out.str();
 }
 
+bool resolveRegistryArtifactDirectory(const LoadedRegistryIndex& index,
+                                      std::string_view registryAlias,
+                                      std::string_view rawArtifactPath,
+                                      std::string_view artifactDigest,
+                                      const InstallOptions* options,
+                                      std::filesystem::path& outArtifactPath,
+                                      std::string& outError) {
+    outArtifactPath.clear();
+    if (!index.isRemote) {
+        if (!resolveManifestPath(index.rootDir.string(), std::string(rawArtifactPath),
+                                 outArtifactPath, outError)) {
+            return false;
+        }
+        outArtifactPath = canonicalOrLexical(outArtifactPath);
+        if (!isDirectory(outArtifactPath)) {
+            outError = "Registry artifact is missing at '" +
+                       outArtifactPath.string() + "'.";
+            return false;
+        }
+        return true;
+    }
+
+    const std::filesystem::path cacheDir =
+        remoteRegistryArtifactCachePath(registryAlias, rawArtifactPath,
+                                        artifactDigest);
+    const bool offline = options != nullptr && options->offline;
+    if (isDirectory(cacheDir) &&
+        digestDirectory(cacheDir) == std::string(artifactDigest)) {
+        outArtifactPath = cacheDir;
+        return true;
+    }
+    if (offline) {
+        outError = "Dependency '" + std::string(registryAlias) +
+                   "' cannot be installed with --offline because registry artifact '" +
+                   std::string(rawArtifactPath) + "' is not cached locally.";
+        return false;
+    }
+
+    if (!removePathIfExists(cacheDir, outError)) {
+        return false;
+    }
+    std::error_code ec;
+    std::filesystem::create_directories(cacheDir, ec);
+    if (ec) {
+        outError = "Could not create registry artifact cache '" +
+                   cacheDir.string() + "'.";
+        return false;
+    }
+
+    std::string token;
+    if (!resolveRegistryAuthToken(registryAlias, token, outError)) {
+        return false;
+    }
+
+    const std::string artifactRootUrl =
+        joinUrlPath(index.remoteRootUrl, rawArtifactPath);
+    const std::filesystem::path manifestPath = cacheDir / kArtifactManifestFileName;
+    if (!downloadUrlToFile(joinUrlPath(artifactRootUrl, kArtifactManifestFileName),
+                           token, manifestPath, outError)) {
+        outError = "Registry artifact download failed for '" +
+                   std::string(rawArtifactPath) + "': " + outError;
+        return false;
+    }
+
+    std::vector<std::string> files;
+    if (!parseArtifactManifest(manifestPath, files, outError)) {
+        return false;
+    }
+    for (const auto& relative : files) {
+        if (!downloadUrlToFile(joinUrlPath(artifactRootUrl, relative), token,
+                               cacheDir / relative, outError)) {
+            outError = "Registry artifact download failed for '" +
+                       std::string(rawArtifactPath) + "': " + outError;
+            return false;
+        }
+    }
+
+    const std::string actualDigest = digestDirectory(cacheDir);
+    if (actualDigest != artifactDigest) {
+        outError = "Registry artifact digest mismatch for cached artifact '" +
+                   std::string(rawArtifactPath) + "'.";
+        return false;
+    }
+
+    outArtifactPath = cacheDir;
+    return true;
+}
+
 bool selectRegistryArtifact(const RegistryIndexRecord& record,
                             std::string_view packageId,
                             const InstallOptions* options,
@@ -2090,7 +2857,7 @@ bool resolveRegistryPackageNode(
     auto indexIt = loadedRegistryIndexes.find(registryAlias);
     if (indexIt == loadedRegistryIndexes.end()) {
         LoadedRegistryIndex loaded;
-        if (!loadRegistryIndex(projectRoot, *registry, loaded, outError)) {
+        if (!loadRegistryIndex(projectRoot, *registry, options, loaded, outError)) {
             return false;
         }
         indexIt = loadedRegistryIndexes.emplace(registryAlias, std::move(loaded)).first;
@@ -2121,14 +2888,14 @@ bool resolveRegistryPackageNode(
         return true;
     }
     std::filesystem::path artifactPath;
-    if (!resolveManifestPath(indexIt->second.rootDir.string(), rawArtifactPath,
-                             artifactPath, outError)) {
-        return false;
-    }
-    artifactPath = canonicalOrLexical(artifactPath);
-    if (!isDirectory(artifactPath)) {
-        outError = "Registry artifact for '" + packageId + "@" + record.version +
-                   "' is missing at '" + artifactPath.string() + "'.";
+    if (!resolveRegistryArtifactDirectory(indexIt->second, registryAlias,
+                                          rawArtifactPath, artifactDigest, options,
+                                          artifactPath, outError)) {
+        if (!outError.empty() &&
+            outError.find("Registry artifact") == std::string::npos) {
+            outError = "Registry artifact for '" + packageId + "@" + record.version +
+                       "' " + outError;
+        }
         return false;
     }
 
@@ -2386,9 +3153,122 @@ std::string formatNativeToolchainRequirement(std::string_view target) {
         return "";
     }
 
-    return " Pass --cmake-toolchain <path> or set " +
-           nativeToolchainSettingLabel(target) +
-           " in mog.toml to enable non-host source-build fallback.";
+    const std::string envName =
+        "MOG_CMAKE_TOOLCHAIN_" + normalizeEnvKey(target);
+    return " Pass --cmake-toolchain <path>, set " +
+           nativeToolchainSettingLabel(target) + ", export $" + envName +
+           ", or place " + std::string(".mog/toolchains/") +
+           std::string(target) + ".cmake to enable non-host source-build fallback.";
+}
+
+bool readGitHeadCommit(const std::filesystem::path& repoDir, std::string& outCommit,
+                       std::string& outError) {
+    outCommit.clear();
+    std::string output;
+    const std::string command =
+        "git -C " + shellQuote(repoDir.string()) + " rev-parse HEAD";
+    if (!runCapturedSystemCommand(command, output, outError)) {
+        outError = "Could not read git commit for '" + repoDir.string() +
+                   "': " + outError;
+        return false;
+    }
+    outCommit = trim(output);
+    if (outCommit.empty()) {
+        outError = "Could not read git commit for '" + repoDir.string() + "'.";
+        return false;
+    }
+    return true;
+}
+
+bool ensureGitDependencySource(const DependencySpec& dependency, bool offline,
+                               std::filesystem::path& outSourceDir,
+                               std::string& outCommit, std::string& outError) {
+    outSourceDir.clear();
+    outCommit.clear();
+
+    if (dependency.git.empty()) {
+        outError = "Missing git dependency URL.";
+        return false;
+    }
+
+    const std::filesystem::path workingDir = gitWorkingCachePath(dependency);
+    const std::string selectorValue =
+        !dependency.gitRev.empty()
+            ? dependency.gitRev
+            : (!dependency.gitTag.empty() ? dependency.gitTag
+                                          : dependency.gitBranch);
+    const bool hasWorkingCopy = isDirectory(workingDir);
+    if (!hasWorkingCopy && offline) {
+        outError = "Dependency '" + dependency.alias +
+                   "' cannot be installed with --offline because its git checkout is not cached locally.";
+        return false;
+    }
+
+    if (!hasWorkingCopy) {
+        if (!removePathIfExists(workingDir, outError)) {
+            return false;
+        }
+        std::error_code ec;
+        std::filesystem::create_directories(workingDir.parent_path(), ec);
+        if (ec) {
+            outError = "Could not create git cache directory '" +
+                       workingDir.parent_path().string() + "'.";
+            return false;
+        }
+
+        std::ostringstream cloneCommand;
+        if (!dependency.gitRev.empty()) {
+            cloneCommand << "git clone " << shellQuote(dependency.git) << " "
+                         << shellQuote(workingDir.string());
+        } else {
+            cloneCommand << "git clone --depth 1 --branch "
+                         << shellQuote(selectorValue) << " "
+                         << shellQuote(dependency.git) << " "
+                         << shellQuote(workingDir.string());
+        }
+
+        std::string output;
+        if (!runCapturedSystemCommand(cloneCommand.str(), output, outError)) {
+            outError = "Git clone failed for '" + dependency.git + "': " +
+                       outError;
+            return false;
+        }
+
+        if (!dependency.gitRev.empty()) {
+            const std::string checkoutCommand =
+                "git -C " + shellQuote(workingDir.string()) + " checkout " +
+                shellQuote(dependency.gitRev);
+            if (!runCapturedSystemCommand(checkoutCommand, output, outError)) {
+                outError = "Git checkout failed for '" + dependency.git + "': " +
+                           outError;
+                return false;
+            }
+        }
+    }
+
+    if (!readGitHeadCommit(workingDir, outCommit, outError)) {
+        return false;
+    }
+
+    const std::filesystem::path resolvedDir =
+        gitResolvedCachePath(dependency, outCommit);
+    if (!isDirectory(resolvedDir)) {
+        if (offline) {
+            outError = "Dependency '" + dependency.alias +
+                       "' cannot be installed with --offline because commit '" +
+                       outCommit + "' is not cached locally.";
+            return false;
+        }
+        if (!removePathIfExists(resolvedDir, outError)) {
+            return false;
+        }
+        if (!copyDirectoryRecursiveExcludingGit(workingDir, resolvedDir, outError)) {
+            return false;
+        }
+    }
+
+    outSourceDir = resolvedDir;
+    return true;
 }
 
 bool buildNativePackageFromSource(const std::string& projectRoot,
@@ -2548,8 +3428,8 @@ bool buildNativePackageFromSource(const std::string& projectRoot,
 bool resolveDependencyNode(
     const std::string& projectRoot, const DependencySpec& dependency,
     const std::unordered_map<std::string, PackageNode>& available,
-    const std::unordered_set<std::string>& workspacePackageIds, PackageNode& outNode,
-    std::string& outError) {
+    const std::unordered_set<std::string>& workspacePackageIds,
+    const InstallOptions* options, PackageNode& outNode, std::string& outError) {
     outNode = PackageNode{};
 
     if (dependency.workspace) {
@@ -2584,10 +3464,44 @@ bool resolveDependencyNode(
         outNode.packageDir = std::filesystem::path(outNode.entry.packageDir);
         outNode.entry.sourceType = "path";
         outNode.entry.sourcePath = canonicalOrLexical(dependencyPath);
+        if (!loadPackageManifestDependencies(dependencyPath,
+                                             outNode.manifestDependencies,
+                                             outError)) {
+            outError = "Could not load dependency '" + dependency.alias + "': " +
+                       outError;
+            return false;
+        }
     } else if (!dependency.git.empty()) {
-        outError = "Dependency '" + dependency.alias +
-                   "' uses git sources, which are recognized but not implemented until Phase 2.";
-        return false;
+        std::filesystem::path gitSourceDir;
+        std::string gitCommit;
+        const bool offline = options != nullptr && options->offline;
+        if (!ensureGitDependencySource(dependency, offline, gitSourceDir, gitCommit,
+                                       outError)) {
+            outError = "Could not load dependency '" + dependency.alias + "': " +
+                       outError;
+            return false;
+        }
+        if (!loadPackageEntryFromDir(gitSourceDir, outNode.entry, nullptr,
+                                     outError)) {
+            outError = "Could not load dependency '" + dependency.alias + "': " +
+                       outError;
+            return false;
+        }
+        if (!loadPackageManifestDependencies(gitSourceDir,
+                                             outNode.manifestDependencies,
+                                             outError)) {
+            outError = "Could not load dependency '" + dependency.alias + "': " +
+                       outError;
+            return false;
+        }
+        outNode.packageDir = std::filesystem::path(outNode.entry.packageDir);
+        outNode.entry.sourceType = "git";
+        outNode.entry.sourcePath = canonicalOrLexical(gitSourceDir);
+        outNode.entry.gitUrl = dependency.git;
+        outNode.entry.gitRev = dependency.gitRev;
+        outNode.entry.gitTag = dependency.gitTag;
+        outNode.entry.gitBranch = dependency.gitBranch;
+        outNode.entry.gitCommit = gitCommit;
     } else if (!dependency.registry.empty()) {
         outError = "Dependency '" + dependency.alias +
                    "' uses named registries, which are recognized but not implemented until Phase 2.";
@@ -2737,7 +3651,43 @@ bool materializeCacheEntry(const PackageRegistryEntry& sourceEntry,
         return false;
     }
 
-    const std::filesystem::path sourceDir(sourceEntry.sourcePath);
+    std::filesystem::path sourceDir(sourceEntry.sourcePath);
+    if (sourceEntry.sourceType == "registry" &&
+        (!isDirectory(sourceDir) || digestDirectory(sourceDir) != sourceEntry.artifactDigest)) {
+        const ProjectRegistryConfig* registry =
+            findRegistryConfig(manifest, sourceEntry.registry);
+        if (registry == nullptr) {
+            outError = "Dependency '" + sourceEntry.packageId +
+                       "' references unknown registry '" +
+                       sourceEntry.registry + "'.";
+            return false;
+        }
+        LoadedRegistryIndex index;
+        if (!loadRegistryIndex(projectRoot, *registry, &options, index, outError)) {
+            return false;
+        }
+        if (!resolveRegistryArtifactDirectory(index, sourceEntry.registry,
+                                              sourceEntry.artifactPath,
+                                              sourceEntry.artifactDigest, &options,
+                                              sourceDir, outError)) {
+            return false;
+        }
+    } else if (sourceEntry.sourceType == "git" && !isDirectory(sourceDir)) {
+        DependencySpec dependency;
+        dependency.alias = sourceEntry.importName;
+        dependency.packageId = sourceEntry.packageId;
+        dependency.version = sourceEntry.version;
+        dependency.git = sourceEntry.gitUrl;
+        dependency.gitRev = sourceEntry.gitRev;
+        dependency.gitTag = sourceEntry.gitTag;
+        dependency.gitBranch = sourceEntry.gitBranch;
+        std::string resolvedCommit;
+        if (!ensureGitDependencySource(dependency, options.offline, sourceDir,
+                                       resolvedCommit, outError)) {
+            return false;
+        }
+    }
+
     if (sourceEntry.kind == "source") {
         if (!copyDirectoryRecursive(sourceDir, cacheDir, outError)) {
             return false;
@@ -2812,6 +3762,11 @@ bool materializeProjectInstall(const PackageRegistryEntry& sourceEntry,
 
     const std::string digestSeed = sourceEntry.version + "|" +
                                    sourceEntry.registry + "|" +
+                                   sourceEntry.gitUrl + "|" +
+                                   sourceEntry.gitRev + "|" +
+                                   sourceEntry.gitTag + "|" +
+                                   sourceEntry.gitBranch + "|" +
+                                   sourceEntry.gitCommit + "|" +
                                    sourceEntry.artifactPath + "|" +
                                    sourceEntry.artifactDigest + "|" +
                                    sourceEntry.selectedTarget + "|" +
@@ -2929,6 +3884,7 @@ bool collectResolvedPackages(
                 !dependency.workspace && dependency.git.empty();
             if (options.offline &&
                 dependency.path.empty() && !dependency.workspace &&
+                dependency.git.empty() &&
                 !isPublishedDependency) {
                 outError = "Dependency '" + dependency.alias +
                            "' cannot be installed with --offline because it is not a local path or workspace dependency.";
@@ -2944,7 +3900,8 @@ bool collectResolvedPackages(
             } else {
                 PackageNode node;
                 if (!resolveDependencyNode(projectRoot, dependency, available,
-                                           workspacePackageIds, node, outError)) {
+                                           workspacePackageIds, &options, node,
+                                           outError)) {
                     return false;
                 }
 
@@ -2982,7 +3939,8 @@ bool collectResolvedPackages(
                 }
 
                 LoadedRegistryIndex loaded;
-                if (!loadRegistryIndex(projectRoot, *registry, loaded, outError)) {
+                if (!loadRegistryIndex(projectRoot, *registry, &options, loaded,
+                                       outError)) {
                     return false;
                 }
                 loadedRegistryIndexes.emplace(registryAlias, std::move(loaded));
@@ -3161,16 +4119,54 @@ bool collectResolvedPackages(
                     }
                 }
             } else {
-                for (const std::string& dependencyId : node.entry.dependencyIds) {
-                    auto dependencyIt = available.find(dependencyId);
-                    if (dependencyIt == available.end()) {
-                        outError = "Package '" + node.entry.packageId +
-                                   "' depends on '" + dependencyId +
-                                   "', but no local package provides it.";
-                        return false;
+                if (!node.manifestDependencies.empty()) {
+                    for (const auto& dependency : node.manifestDependencies) {
+                        const bool isPublishedDependency =
+                            !dependency.packageId.empty() && dependency.path.empty() &&
+                            !dependency.workspace && dependency.git.empty();
+                        if (isPublishedDependency) {
+                            PackageNode dependencyNode;
+                            const std::string registryAlias =
+                                dependency.registry.empty() ? "default"
+                                                            : dependency.registry;
+                            if (!resolveRegistryPackageNode(
+                                    projectRoot, manifest, registryAlias,
+                                    dependency.packageId, dependency.version,
+                                    loadedRegistryIndexes, resolvedRegistryNodes,
+                                    &options, dependencyNode, outError)) {
+                                return false;
+                            }
+                            if (!visit(dependencyNode, group)) {
+                                return false;
+                            }
+                            continue;
+                        }
+
+                        PackageNode dependencyNode;
+                        if (!resolveDependencyNode(projectRoot, dependency, available,
+                                                   workspacePackageIds, &options,
+                                                   dependencyNode, outError)) {
+                            return false;
+                        }
+                        if (!addAvailableNode(available, dependencyNode, outError)) {
+                            return false;
+                        }
+                        if (!visit(dependencyNode, group)) {
+                            return false;
+                        }
                     }
-                    if (!visit(dependencyIt->second, group)) {
-                        return false;
+                } else {
+                    for (const std::string& dependencyId : node.entry.dependencyIds) {
+                        auto dependencyIt = available.find(dependencyId);
+                        if (dependencyIt == available.end()) {
+                            outError = "Package '" + node.entry.packageId +
+                                       "' depends on '" + dependencyId +
+                                       "', but no local package provides it.";
+                            return false;
+                        }
+                        if (!visit(dependencyIt->second, group)) {
+                            return false;
+                        }
                     }
                 }
             }
@@ -3227,6 +4223,11 @@ bool packageEntryMatchesResolution(const PackageRegistryEntry& expected,
            expected.sourceType == actual.sourceType &&
            expected.sourcePath == actual.sourcePath &&
            expected.registry == actual.registry &&
+           expected.gitUrl == actual.gitUrl &&
+           expected.gitRev == actual.gitRev &&
+           expected.gitTag == actual.gitTag &&
+           expected.gitBranch == actual.gitBranch &&
+           expected.gitCommit == actual.gitCommit &&
            expected.artifactPath == actual.artifactPath &&
            expected.artifactDigest == actual.artifactDigest &&
            expected.selectedTarget == actual.selectedTarget &&
@@ -3256,6 +4257,15 @@ bool dependencyMatchesLockedEntry(const DependencySpec& dependency,
 
     if (!dependency.packageId.empty() &&
         lockedEntry.packageId != dependency.packageId) {
+        outError = "mog.lock is out of date for dependency '" + dependency.alias +
+                   "'. Run 'mog update' to refresh it.";
+        return false;
+    }
+    if (!dependency.git.empty() &&
+        (lockedEntry.sourceType != "git" || lockedEntry.gitUrl != dependency.git ||
+         lockedEntry.gitRev != dependency.gitRev ||
+         lockedEntry.gitTag != dependency.gitTag ||
+         lockedEntry.gitBranch != dependency.gitBranch)) {
         outError = "mog.lock is out of date for dependency '" + dependency.alias +
                    "'. Run 'mog update' to refresh it.";
         return false;
@@ -3309,6 +4319,29 @@ bool validateLockedEntriesAgainstManifest(
             const bool isPublishedDependency =
                 !dependency.packageId.empty() && dependency.path.empty() &&
                 !dependency.workspace && dependency.git.empty();
+            if (!dependency.git.empty()) {
+                auto lockedIt = std::find_if(
+                    lockedEntries.begin(), lockedEntries.end(),
+                    [&](const PackageRegistryEntry& entry) {
+                        if (entry.sourceType != "git") {
+                            return false;
+                        }
+                        if (!dependency.packageId.empty()) {
+                            return entry.packageId == dependency.packageId;
+                        }
+                        return entry.importName == dependency.alias;
+                    });
+                if (lockedIt == lockedEntries.end()) {
+                    outError = "mog.lock is missing git dependency '" +
+                               dependency.alias + "'.";
+                    return false;
+                }
+                if (!dependencyMatchesLockedEntry(dependency, *lockedIt,
+                                                 outError)) {
+                    return false;
+                }
+                continue;
+            }
             if (isPublishedDependency) {
                 auto lockedIt = lockedById.find(dependency.packageId);
                 if (lockedIt == lockedById.end()) {
@@ -3347,7 +4380,8 @@ bool validateLockedEntriesAgainstManifest(
 
             PackageNode resolved;
             if (!resolveDependencyNode(projectRoot, dependency, available,
-                                       workspacePackageIds, resolved, outError)) {
+                                       workspacePackageIds, &options, resolved,
+                                       outError)) {
                 return false;
             }
 
@@ -3524,6 +4558,27 @@ void writeDependencyTable(std::ofstream& out, const char* tableName,
                 out << ", ";
             }
             out << "git = " << quoteTomlString(dependency.git);
+            needsComma = true;
+        }
+        if (!dependency.gitRev.empty()) {
+            if (needsComma) {
+                out << ", ";
+            }
+            out << "rev = " << quoteTomlString(dependency.gitRev);
+            needsComma = true;
+        }
+        if (!dependency.gitTag.empty()) {
+            if (needsComma) {
+                out << ", ";
+            }
+            out << "tag = " << quoteTomlString(dependency.gitTag);
+            needsComma = true;
+        }
+        if (!dependency.gitBranch.empty()) {
+            if (needsComma) {
+                out << ", ";
+            }
+            out << "branch = " << quoteTomlString(dependency.gitBranch);
             needsComma = true;
         }
         if (!dependency.registry.empty()) {
@@ -4048,21 +5103,45 @@ bool publishProjectPackage(const std::string& projectRoot,
                   return lhs.version < rhs.version;
               });
 
-    std::filesystem::path indexPath;
-    std::filesystem::path registryRoot;
-    if (!resolveRegistryIndexLocation(projectRoot, *registry, indexPath, registryRoot,
-                                      outError)) {
+    RegistryLocation registryLocation;
+    if (!resolveRegistryLocation(projectRoot, *registry, registryLocation,
+                                 outError)) {
         return false;
+    }
+    std::filesystem::path indexPath = registryLocation.localIndexPath;
+    std::filesystem::path registryRoot = registryLocation.localRootDir;
+    std::filesystem::path stagedRegistryRoot;
+    ScopedPathCleanup stagedRegistryCleanup;
+    if (registryLocation.isRemote) {
+        if (!createTemporaryDirectory("mog-publish-registry", stagedRegistryRoot,
+                                      outError)) {
+            return false;
+        }
+        stagedRegistryCleanup.path = stagedRegistryRoot;
+        indexPath = stagedRegistryRoot / "index.toml";
+        registryRoot = stagedRegistryRoot;
     }
 
     LoadedRegistryIndex existingIndex;
     std::vector<RegistryIndexRecord> records;
-    if (fileExists(indexPath)) {
-        if (!loadRegistryIndex(projectRoot, *registry, existingIndex, outError)) {
+    if (!registryLocation.isRemote && fileExists(indexPath)) {
+        if (!loadRegistryIndex(projectRoot, *registry, nullptr, existingIndex,
+                               outError)) {
             return false;
         }
         for (const auto& [key, record] : existingIndex.recordsByKey) {
             records.push_back(record);
+        }
+    } else if (registryLocation.isRemote) {
+        if (loadRegistryIndex(projectRoot, *registry, nullptr, existingIndex,
+                              outError)) {
+            for (const auto& [key, record] : existingIndex.recordsByKey) {
+                records.push_back(record);
+            }
+        } else if (!fileExists(registryLocation.localIndexPath)) {
+            outError.clear();
+        } else {
+            return false;
         }
     }
 
@@ -4086,7 +5165,7 @@ bool publishProjectPackage(const std::string& projectRoot,
                                   .lexically_normal()
                                   .string());
 
-    std::filesystem::path sourceArtifactSource = packagePath;
+    std::filesystem::path sourceArtifactSource;
     std::filesystem::path nativeArtifactSource;
     ScopedPathCleanup stagedSourceArtifactCleanup;
     ScopedPathCleanup stagedNativeArtifactCleanup;
@@ -4102,6 +5181,23 @@ bool publishProjectPackage(const std::string& projectRoot,
             return false;
         }
         stagedNativeArtifactCleanup.path = nativeArtifactSource;
+    } else {
+        if (!createTemporaryDirectory("mog-publish-source", sourceArtifactSource,
+                                      outError)) {
+            return false;
+        }
+        stagedSourceArtifactCleanup.path = sourceArtifactSource;
+        if (!copyDirectoryRecursive(packagePath, sourceArtifactSource, outError)) {
+            return false;
+        }
+    }
+
+    if (!writeArtifactManifest(sourceArtifactSource, outError)) {
+        return false;
+    }
+    if (packageEntry.kind == "native" &&
+        !writeArtifactManifest(nativeArtifactSource, outError)) {
+        return false;
     }
 
     const std::string sourceArtifactDigest = digestDirectory(sourceArtifactSource);
@@ -4242,7 +5338,101 @@ bool publishProjectPackage(const std::string& projectRoot,
         }
     }
 
-    return writeRegistryIndexFile(indexPath, std::move(records), outError);
+    if (!writeRegistryIndexFile(indexPath, std::move(records), outError)) {
+        return false;
+    }
+
+    if (!registryLocation.isRemote) {
+        return true;
+    }
+
+    std::string token;
+    if (!resolveRegistryAuthToken(effectiveRegistryAlias, token, outError)) {
+        return false;
+    }
+    if (token.empty()) {
+        outError = "Hosted publish requires a stored token. Run 'mog login " +
+                   effectiveRegistryAlias + "'.";
+        return false;
+    }
+
+    if (!uploadDirectoryToUrl(sourceArtifactDir, joinUrlPath(registryLocation.remoteRootUrl,
+                                                             relativeSourceArtifactPath),
+                              token, outError)) {
+        return false;
+    }
+    if (packageEntry.kind == "native" &&
+        !uploadDirectoryToUrl(nativeArtifactDir,
+                              joinUrlPath(registryLocation.remoteRootUrl,
+                                          relativeNativeArtifactPath),
+                              token, outError)) {
+        return false;
+    }
+    return uploadFileToUrl(indexPath, registryLocation.remoteIndexUrl, token,
+                           outError);
+}
+
+bool loginProjectRegistry(const std::string& projectRoot,
+                          const std::string& registryAlias,
+                          const std::string& token,
+                          std::string& outError) {
+    outError.clear();
+    if (registryAlias.empty()) {
+        outError = "Registry alias cannot be empty.";
+        return false;
+    }
+    if (token.empty()) {
+        outError = "Registry token cannot be empty.";
+        return false;
+    }
+
+    ProjectManifestData manifest;
+    if (!loadProjectManifestData(projectRoot, manifest, outError)) {
+        return false;
+    }
+    const ProjectRegistryConfig* registry = findRegistryConfig(manifest, registryAlias);
+    if (registry == nullptr) {
+        outError = "Unknown registry '" + registryAlias + "'.";
+        return false;
+    }
+    if (!isHttpUrl(registry->index)) {
+        outError = "Registry '" + registryAlias +
+                   "' does not use a hosted http(s) index.";
+        return false;
+    }
+
+    std::unordered_map<std::string, std::string> tokens;
+    if (!loadRegistryAuthTokens(tokens, outError)) {
+        return false;
+    }
+    tokens[registryAlias] = token;
+    return writeRegistryAuthTokens(tokens, outError);
+}
+
+bool logoutProjectRegistry(const std::string& projectRoot,
+                           const std::string& registryAlias,
+                           std::string& outError) {
+    outError.clear();
+    if (registryAlias.empty()) {
+        outError = "Registry alias cannot be empty.";
+        return false;
+    }
+
+    ProjectManifestData manifest;
+    if (!loadProjectManifestData(projectRoot, manifest, outError)) {
+        return false;
+    }
+    if (findRegistryConfig(manifest, registryAlias) == nullptr) {
+        outError = "Unknown registry '" + registryAlias + "'.";
+        return false;
+    }
+
+    std::unordered_map<std::string, std::string> tokens;
+    if (!loadRegistryAuthTokens(tokens, outError)) {
+        return false;
+    }
+    tokens.erase(registryAlias);
+    return writeRegistryAuthTokens(tokens, outError);
 }
 
 bool installProjectPackages(const std::string& projectRoot,

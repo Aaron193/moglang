@@ -65,6 +65,15 @@ bool publishProjectPackage(const std::string& projectRoot,
                            const std::string& registryAlias,
                            std::string& outError);
 
+bool loginProjectRegistry(const std::string& projectRoot,
+                          const std::string& registryAlias,
+                          const std::string& token,
+                          std::string& outError);
+
+bool logoutProjectRegistry(const std::string& projectRoot,
+                           const std::string& registryAlias,
+                           std::string& outError);
+
 bool installProjectPackages(const std::string& projectRoot,
                             std::vector<PackageRegistryEntry>& outEntries,
                             const InstallOptions& options,

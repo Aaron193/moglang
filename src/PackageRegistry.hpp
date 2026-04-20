@@ -27,6 +27,11 @@ struct PackageRegistryEntry {
     std::string sourceType;
     std::string sourcePath;
     std::string registry;
+    std::string gitUrl;
+    std::string gitRev;
+    std::string gitTag;
+    std::string gitBranch;
+    std::string gitCommit;
     std::string artifactPath;
     std::string artifactDigest;
     std::string selectedTarget;

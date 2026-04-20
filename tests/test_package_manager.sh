@@ -35,7 +35,15 @@ NATIVE_SYSDEP_FAIL_DIR=""
 NATIVE_TARGET_DIR=""
 NATIVE_TARGET_FAIL_DIR=""
 WINDOW_PUBLISH_DIR=""
-trap 'rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}"' EXIT
+NATIVE_CROSS_TARGET_ENV_DIR=""
+HOSTED_REGISTRY_DIR=""
+HOSTED_PUBLISH_WORKSPACE=""
+HOSTED_CONSUMER_DIR=""
+GIT_REPO_DIR=""
+GIT_CONSUMER_DIR=""
+GIT_OFFLINE_FAIL_DIR=""
+HOSTED_SERVER_PID=""
+trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}"' EXIT
 
 detect_host_target() {
     local os
@@ -136,8 +144,85 @@ index = 'schema_version = "registry.v1"\n\n' + "\n".join(records)
 PY
 }
 
+start_hosted_registry_server() {
+    local registry_dir="$1"
+    local token="$2"
+    local server_script="$TEMP_DIR/hosted_registry_server.py"
+    local port
+    port="$(python3 - <<'PY'
+import socket
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()
+PY
+)"
+
+    cat > "$server_script" <<'PY'
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+from pathlib import Path
+import os
+import sys
+
+root = Path(sys.argv[1]).resolve()
+port = int(sys.argv[2])
+token = sys.argv[3]
+
+class Handler(SimpleHTTPRequestHandler):
+    def translate_path(self, path):
+        path = path.split("?", 1)[0].split("#", 1)[0]
+        path = path.lstrip("/")
+        return str((root / path).resolve())
+
+    def _authorized(self):
+        return self.headers.get("Authorization", "") == f"Bearer {token}"
+
+    def do_GET(self):
+        if not self._authorized():
+            self.send_response(401)
+            self.end_headers()
+            self.wfile.write(b"unauthorized")
+            return
+        super().do_GET()
+
+    def do_PUT(self):
+        if not self._authorized():
+            self.send_response(401)
+            self.end_headers()
+            self.wfile.write(b"unauthorized")
+            return
+        target = Path(self.translate_path(self.path))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        length = int(self.headers.get("Content-Length", "0"))
+        with open(target, "wb") as handle:
+            remaining = length
+            while remaining > 0:
+                chunk = self.rfile.read(min(65536, remaining))
+                if not chunk:
+                    break
+                handle.write(chunk)
+                remaining -= len(chunk)
+        self.send_response(201)
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def log_message(self, format, *args):
+        pass
+
+server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+server.serve_forever()
+PY
+
+    python3 "$server_script" "$registry_dir" "$port" "$token" \
+        >"$TEMP_DIR/hosted_registry_server.log" 2>&1 &
+    HOSTED_SERVER_PID=$!
+    sleep 1
+    printf '%s\n' "$port"
+}
+
 ln -s "$PROJECT_ROOT/packages" "$TEMP_DIR/packages"
 export MOG_CACHE_DIR="$TEMP_DIR/cache-root"
+export XDG_CONFIG_HOME="$TEMP_DIR/xdg-config"
 
 pushd "$TEMP_DIR" >/dev/null
 
@@ -1202,6 +1287,34 @@ if ! (cd "$NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR" && \
     exit 1
 fi
 
+NATIVE_CROSS_TARGET_ENV_DIR="$(mktemp -d)"
+cat > "$NATIVE_CROSS_TARGET_ENV_DIR/mog.toml" <<EOF_NATIVE_CROSS_TARGET_ENV
+kind = "project"
+name = "native-cross-target-env"
+version = "0.1.0"
+description = "native cross target env"
+
+[registries.default]
+index = "$REGISTRY_DIR"
+
+[dependencies]
+counter = { package = "examples:counter", version = "0.1.0" }
+EOF_NATIVE_CROSS_TARGET_ENV
+
+mkdir -p "$NATIVE_CROSS_TARGET_ENV_DIR/.mog/toolchains"
+printf '# env-discovered toolchain for package-manager tests\n' \
+    > "$TEMP_DIR/env-cross-target-toolchain.cmake"
+cp "$NATIVE_CONSUMER_DIR/app.mog" "$NATIVE_CROSS_TARGET_ENV_DIR/app.mog"
+
+ENV_TOOLCHAIN_NAME="MOG_CMAKE_TOOLCHAIN_$(printf '%s' "$ALT_TARGET" | tr '[:lower:]-.' '[:upper:]__')"
+if ! (cd "$NATIVE_CROSS_TARGET_ENV_DIR" && \
+      env "$ENV_TOOLCHAIN_NAME=$TEMP_DIR/env-cross-target-toolchain.cmake" \
+      MOG_CACHE_DIR="$TEMP_DIR/env-target-cache" \
+      "$MOG" install --target "$ALT_TARGET" >/dev/null); then
+    echo "[FAIL] install should auto-discover non-host native toolchains from the environment"
+    exit 1
+fi
+
 NATIVE_CROSS_TARGET_NO_BUILD_DIR="$(mktemp -d)"
 cat > "$NATIVE_CROSS_TARGET_NO_BUILD_DIR/mog.toml" <<EOF_NATIVE_CROSS_TARGET_NO_BUILD
 kind = "project"
@@ -1826,25 +1939,189 @@ if ! grep -Eq "built library|shared library" /tmp/mog_native_missing_failure.txt
     exit 1
 fi
 
-cat > "$REMOTE_DIR/mog.toml" <<'EOF_GIT'
+HOSTED_REGISTRY_DIR="$(mktemp -d)"
+HOSTED_TOKEN="secret-token"
+HOSTED_PORT="$(start_hosted_registry_server "$HOSTED_REGISTRY_DIR" "$HOSTED_TOKEN")"
+
+HOSTED_PUBLISH_WORKSPACE="$(mktemp -d)"
+mkdir -p "$HOSTED_PUBLISH_WORKSPACE/pkg/src"
+cat > "$HOSTED_PUBLISH_WORKSPACE/mog.toml" <<EOF_HOSTED_PUBLISH_ROOT
 kind = "project"
-name = "git-test"
+name = "hosted-publish-root"
 version = "0.1.0"
-description = "git source test"
+description = "hosted publish root"
 
-[dependencies]
-remote = { git = "https://example.com/acme/http.git", package = "acme:http", version = "1.0.0" }
-EOF_GIT
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
+EOF_HOSTED_PUBLISH_ROOT
 
-if (cd "$REMOTE_DIR" && "$MOG" install >/tmp/mog_git_failure.txt 2>&1); then
-    echo "[FAIL] install should reject git dependencies until a later Phase 2 slice"
-    cat /tmp/mog_git_failure.txt
+cat > "$HOSTED_PUBLISH_WORKSPACE/pkg/mog.toml" <<'EOF_HOSTED_PACKAGE'
+kind = "source"
+import_name = "hosted_util"
+namespace = "acme"
+name = "hosted-util"
+version = "1.0.0"
+author = "Hosted registry test"
+description = "Hosted utility package."
+entry = "src/main.mog"
+dependencies = []
+EOF_HOSTED_PACKAGE
+
+cat > "$HOSTED_PUBLISH_WORKSPACE/pkg/src/main.mog" <<'EOF_HOSTED_PACKAGE_SRC'
+const MESSAGE str = "utility from hosted registry"
+
+fn Name() str {
+    return MESSAGE
+}
+EOF_HOSTED_PACKAGE_SRC
+
+if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && "$MOG" login default --token "$HOSTED_TOKEN" >/dev/null); then
+    echo "[FAIL] login should store a hosted registry token"
     exit 1
 fi
 
-if ! grep -Fq "not implemented until Phase 2" /tmp/mog_git_failure.txt; then
-    echo "[FAIL] install should explain git dependency support is still deferred"
-    cat /tmp/mog_git_failure.txt
+if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && "$MOG" publish pkg >/dev/null); then
+    echo "[FAIL] publish should upload a hosted registry package"
+    exit 1
+fi
+
+HOSTED_CONSUMER_DIR="$(mktemp -d)"
+cat > "$HOSTED_CONSUMER_DIR/mog.toml" <<EOF_HOSTED_CONSUMER
+kind = "project"
+name = "hosted-consumer"
+version = "0.1.0"
+description = "hosted consumer"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
+
+[dependencies]
+hosted_util = { package = "acme:hosted-util", version = "1.0.0" }
+EOF_HOSTED_CONSUMER
+
+cat > "$HOSTED_CONSUMER_DIR/app.mog" <<'EOF_HOSTED_APP'
+const hosted_util = @import("hosted_util")
+print(hosted_util.Name())
+EOF_HOSTED_APP
+
+if ! (cd "$HOSTED_CONSUMER_DIR" && "$MOG" install >/dev/null); then
+    echo "[FAIL] install should download hosted registry packages"
+    exit 1
+fi
+
+HOSTED_OUTPUT="$("$MOG" run "$HOSTED_CONSUMER_DIR/app.mog")"
+if [[ "$HOSTED_OUTPUT" != *"utility from hosted registry"* ]]; then
+    echo "[FAIL] run should execute hosted registry packages"
+    echo "$HOSTED_OUTPUT"
+    exit 1
+fi
+
+if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && "$MOG" logout default >/dev/null); then
+    echo "[FAIL] logout should clear a hosted registry token"
+    exit 1
+fi
+
+HOSTED_UNAUTH_DIR="$TEMP_DIR/hosted-unauth"
+mkdir -p "$HOSTED_UNAUTH_DIR"
+cp "$HOSTED_CONSUMER_DIR/mog.toml" "$HOSTED_UNAUTH_DIR/mog.toml"
+cp "$HOSTED_CONSUMER_DIR/app.mog" "$HOSTED_UNAUTH_DIR/app.mog"
+if (cd "$HOSTED_UNAUTH_DIR" && \
+    XDG_CONFIG_HOME="$TEMP_DIR/hosted-empty-config" \
+    MOG_CACHE_DIR="$TEMP_DIR/hosted-empty-cache" \
+    "$MOG" install >/tmp/mog_hosted_auth_failure.txt 2>&1); then
+    echo "[FAIL] install should reject hosted registry downloads without credentials"
+    cat /tmp/mog_hosted_auth_failure.txt
+    exit 1
+fi
+
+if ! grep -Eq "401|download failed|unauthorized" /tmp/mog_hosted_auth_failure.txt; then
+    echo "[FAIL] install should surface hosted registry auth failures"
+    cat /tmp/mog_hosted_auth_failure.txt
+    exit 1
+fi
+
+GIT_REPO_DIR="$(mktemp -d)"
+mkdir -p "$GIT_REPO_DIR/src"
+cat > "$GIT_REPO_DIR/mog.toml" <<'EOF_GIT_PACKAGE'
+kind = "source"
+import_name = "githello"
+namespace = "acme"
+name = "git-hello"
+version = "1.0.0"
+author = "Git dependency test"
+description = "Git-sourced package."
+entry = "src/main.mog"
+dependencies = []
+EOF_GIT_PACKAGE
+
+cat > "$GIT_REPO_DIR/src/main.mog" <<'EOF_GIT_PACKAGE_SRC'
+const MESSAGE str = "hello from git dependency"
+
+fn Name() str {
+    return MESSAGE
+}
+EOF_GIT_PACKAGE_SRC
+
+git -C "$GIT_REPO_DIR" init --initial-branch=main >/dev/null
+git -C "$GIT_REPO_DIR" config user.email "mog-tests@example.com"
+git -C "$GIT_REPO_DIR" config user.name "Mog Tests"
+git -C "$GIT_REPO_DIR" add . >/dev/null
+git -C "$GIT_REPO_DIR" commit -m "init" >/dev/null
+
+GIT_CONSUMER_DIR="$(mktemp -d)"
+cat > "$GIT_CONSUMER_DIR/mog.toml" <<EOF_GIT_CONSUMER
+kind = "project"
+name = "git-consumer"
+version = "0.1.0"
+description = "git consumer"
+
+[dependencies]
+githello = { git = "$GIT_REPO_DIR", branch = "main", package = "acme:git-hello", version = "1.0.0" }
+EOF_GIT_CONSUMER
+
+cat > "$GIT_CONSUMER_DIR/app.mog" <<'EOF_GIT_APP'
+const githello = @import("githello")
+print(githello.Name())
+EOF_GIT_APP
+
+if ! (cd "$GIT_CONSUMER_DIR" && "$MOG" install >/dev/null); then
+    echo "[FAIL] install should resolve git dependencies"
+    exit 1
+fi
+
+GIT_OUTPUT="$("$MOG" run "$GIT_CONSUMER_DIR/app.mog")"
+if [[ "$GIT_OUTPUT" != *"hello from git dependency"* ]]; then
+    echo "[FAIL] run should execute git dependencies"
+    echo "$GIT_OUTPUT"
+    exit 1
+fi
+
+if ! grep -Fq 'source_type = "git"' "$GIT_CONSUMER_DIR/mog.lock" || \
+   ! grep -Fq 'git_commit = "' "$GIT_CONSUMER_DIR/mog.lock"; then
+    echo "[FAIL] git dependencies should be recorded in mog.lock"
+    cat "$GIT_CONSUMER_DIR/mog.lock"
+    exit 1
+fi
+
+if ! (cd "$GIT_CONSUMER_DIR" && "$MOG" install --offline >/dev/null); then
+    echo "[FAIL] install --offline should succeed for cached git dependencies"
+    exit 1
+fi
+
+GIT_OFFLINE_FAIL_DIR="$(mktemp -d)"
+cp "$GIT_CONSUMER_DIR/mog.toml" "$GIT_OFFLINE_FAIL_DIR/mog.toml"
+cp "$GIT_CONSUMER_DIR/app.mog" "$GIT_OFFLINE_FAIL_DIR/app.mog"
+if (cd "$GIT_OFFLINE_FAIL_DIR" && \
+    MOG_CACHE_DIR="$TEMP_DIR/git-empty-cache" \
+    "$MOG" install --offline >/tmp/mog_git_offline_failure.txt 2>&1); then
+    echo "[FAIL] install --offline should reject uncached git dependencies"
+    cat /tmp/mog_git_offline_failure.txt
+    exit 1
+fi
+
+if ! grep -Eq "offline|cached locally" /tmp/mog_git_offline_failure.txt; then
+    echo "[FAIL] install --offline should explain missing cached git dependencies"
+    cat /tmp/mog_git_offline_failure.txt
     exit 1
 fi
 

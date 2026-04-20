@@ -8,6 +8,9 @@ struct DependencySpec {
     std::string path;
     std::string version;
     std::string git;
+    std::string gitRev;
+    std::string gitTag;
+    std::string gitBranch;
     std::string registry;
     bool workspace = false;
 };
