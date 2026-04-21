@@ -520,7 +520,8 @@ allowed_native_namespaces = ["mog"]
 require_locked_in_ci = true
 
 [registries.default]
-index = "./registry"
+index = "./registry/index.toml"
+trusted_keys = ["release-key:BASE64_DER_PUBLIC_KEY"]
 
 [native.toolchains."linux-arm64-gnu"]
 cmake_toolchain = "./toolchains/linux-arm64.cmake"
@@ -539,12 +540,32 @@ When `[policy]` is present, Mog enforces it during `install` and install-aware
 `require_locked_in_ci = true` requires `--locked` whenever the `CI`
 environment variable is set.
 
+Hosted `http(s)` registries now require trust configuration by default.
+Projects can pin trusted Ed25519 registry keys with
+`[registries.<alias>].trusted_keys = ["<key_id>:<base64-der-public-key>"]`.
+Use `allow_insecure = true` only for explicitly unsigned hosted registries.
+
+Registry publishing can sign `registry.v2` indexes with a `registry-key.v1`
+file:
+
+```bash
+./build/interpreter publish --signing-key ./keys/release.toml ./packages/mog/window
+```
+
+Lockfile-based vulnerability checks are also available:
+
+```bash
+./build/interpreter audit
+./build/interpreter audit --offline
+```
+
 The official `mog:window` publish helper can run locally with flags or in CI
 with environment variables:
 
 ```bash
 ./scripts/publish_official_window.sh --registry-path ./dist/registry
 MOG_PUBLISH_REGISTRY_PATH=./dist/registry ./scripts/publish_official_window.sh
+./scripts/publish_official_window.sh --registry-path ./dist/registry --signing-key ./keys/release.toml
 ```
 
 Validate a package directory against its manifest and compiled shared library:

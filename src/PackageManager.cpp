@@ -7,11 +7,13 @@
 #include <fstream>
 #include <functional>
 #include <iomanip>
+#include <optional>
 #include <sstream>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
+#include "Crypto.hpp"
 #include "NativePackage.hpp"
 #include "PackageManifest.hpp"
 
@@ -389,14 +391,41 @@ struct RegistryIndexRecord {
     std::vector<RegistryDependencyPin> dependencies;
 };
 
+struct RegistryTrustedKey {
+    std::string keyId;
+    std::string publicKeyDerBase64;
+};
+
 struct LoadedRegistryIndex {
     std::filesystem::path indexPath;
     std::filesystem::path rootDir;
     bool isRemote = false;
     std::string remoteIndexUrl;
     std::string remoteRootUrl;
+    std::string schemaVersion = "registry.v1";
+    std::string signingKeyId;
+    std::string signatureBase64;
     std::unordered_map<std::string, RegistryIndexRecord> recordsByKey;
     std::unordered_map<std::string, std::vector<RegistryIndexRecord>> recordsByPackageId;
+};
+
+struct AdvisoryRecord {
+    std::string id;
+    std::string packageId;
+    std::string affected;
+    std::string severity;
+    std::string summary;
+    std::string fixedVersion;
+    std::string url;
+};
+
+struct LoadedRegistryAdvisories {
+    std::filesystem::path advisoriesPath;
+    bool isRemote = false;
+    std::string schemaVersion = "advisories.v1";
+    std::string signingKeyId;
+    std::string signatureBase64;
+    std::vector<AdvisoryRecord> records;
 };
 
 struct RegistryLocation {
@@ -429,6 +458,29 @@ struct NativeToolchainSelection {
     std::string sourceDescription;
     std::vector<std::string> checkedSources;
 };
+
+struct RegistrySigningKeyFile {
+    std::string keyId;
+    std::string algorithm;
+    std::string privateKeyDerBase64;
+    std::string publicKeyDerBase64;
+};
+
+bool parseTrustedRegistryKey(std::string_view raw,
+                             RegistryTrustedKey& outKey,
+                             std::string& outError) {
+    outKey = RegistryTrustedKey{};
+    const size_t colon = raw.find(':');
+    if (colon == std::string_view::npos || colon == 0 ||
+        colon + 1 >= raw.size()) {
+        outError = "Trusted registry keys must use '<key_id>:<base64-der-public-key>' format.";
+        return false;
+    }
+
+    outKey.keyId = std::string(raw.substr(0, colon));
+    outKey.publicKeyDerBase64 = std::string(raw.substr(colon + 1));
+    return true;
+}
 
 std::string registryRecordKey(std::string_view packageId,
                               std::string_view version) {
@@ -928,19 +980,16 @@ std::string readFileText(const std::filesystem::path& path) {
 }
 
 std::string hashString(std::string_view text) {
-    uint64_t hash = 1469598103934665603ull;
-    for (unsigned char ch : text) {
-        hash ^= static_cast<uint64_t>(ch);
-        hash *= 1099511628211ull;
-    }
-
-    std::ostringstream out;
-    out << std::hex << std::setfill('0') << std::setw(16) << hash;
-    return out.str();
+    return secureHashHex(text);
 }
 
 std::string digestFile(const std::filesystem::path& path) {
-    return hashString(readFileText(path));
+    std::string digest;
+    std::string error;
+    if (!secureFileDigest(path, digest, error)) {
+        return "";
+    }
+    return digest;
 }
 
 std::string manifestDigestForDir(const std::filesystem::path& packageDir) {
@@ -958,41 +1007,304 @@ std::string manifestDigestForDir(const std::filesystem::path& packageDir) {
 }
 
 std::string digestDirectory(const std::filesystem::path& root) {
-    std::error_code ec;
-    if (!std::filesystem::exists(root, ec) || ec) {
+    std::string digest;
+    std::string error;
+    if (!secureDirectoryDigest(root, digest, error, "")) {
         return "";
     }
-
-    std::vector<std::filesystem::path> files;
-    for (std::filesystem::recursive_directory_iterator it(root, ec), end;
-         !ec && it != end; it.increment(ec)) {
-        if (!it->is_regular_file(ec)) {
-            continue;
-        }
-        files.push_back(it->path());
-    }
-    if (ec) {
-        return "";
-    }
-
-    std::sort(files.begin(), files.end());
-
-    std::string seed;
-    for (const auto& file : files) {
-        const std::filesystem::path relative = file.lexically_relative(root);
-        seed += normalizeRelativePath(relative.string());
-        seed += '\n';
-        seed += readFileText(file);
-        seed += '\n';
-    }
-
-    return hashString(seed);
+    return digest;
 }
 
 std::vector<std::string> sortedUniqueStrings(std::vector<std::string> values) {
     std::sort(values.begin(), values.end());
     values.erase(std::unique(values.begin(), values.end()), values.end());
     return values;
+}
+
+bool isSecureDigest(std::string_view digest) {
+    return digest.rfind("sha256:", 0) == 0 && digest.size() == 71;
+}
+
+std::filesystem::path registryCacheRoot();
+
+std::string registrySignatureEnvelopePath(std::string_view rawIndexPath) {
+    return normalizeRelativePath(std::string(rawIndexPath) + ".sig");
+}
+
+std::filesystem::path remoteRegistryAdvisoriesCachePath(std::string_view alias,
+                                                        std::string_view rootUrl) {
+    return registryCacheRoot() / "advisories" / normalizeEnvKey(alias) /
+           hashString(rootUrl) / "advisories.toml";
+}
+
+std::string quoteTomlMultilineString(std::string_view text) {
+    std::string out = "\"\"\"\n";
+    out.append(text);
+    if (out.empty() || out.back() != '\n') {
+        out.push_back('\n');
+    }
+    out += "\"\"\"";
+    return out;
+}
+
+bool parseMultilineStringValue(const std::string& initialValue, std::ifstream& file,
+                               std::string& outValue, size_t& inOutLineNumber,
+                               std::string& outError) {
+    if (initialValue == "\"\"\"\"\"\"") {
+        outValue.clear();
+        return true;
+    }
+    if (initialValue.rfind("\"\"\"", 0) != 0) {
+        outError = "Expected multiline string value.";
+        return false;
+    }
+
+    std::string remaining = initialValue.substr(3);
+    outValue.clear();
+    const size_t closing = remaining.find("\"\"\"");
+    if (closing != std::string::npos) {
+        outValue = remaining.substr(0, closing);
+        return true;
+    }
+
+    if (!remaining.empty()) {
+        outValue += remaining;
+    }
+
+    std::string line;
+    bool firstLine = remaining.empty();
+    while (std::getline(file, line)) {
+        ++inOutLineNumber;
+        const size_t found = line.find("\"\"\"");
+        if (found != std::string::npos) {
+            if (!firstLine || !outValue.empty()) {
+                outValue.push_back('\n');
+            }
+            outValue += line.substr(0, found);
+            return true;
+        }
+        if (!firstLine || !outValue.empty()) {
+            outValue.push_back('\n');
+        }
+        outValue += line;
+        firstLine = false;
+    }
+
+    outError = "Unterminated multiline string value.";
+    return false;
+}
+
+std::string canonicalRegistryIndexPayload(std::vector<RegistryIndexRecord> records) {
+    std::sort(records.begin(), records.end(),
+              [](const RegistryIndexRecord& lhs,
+                 const RegistryIndexRecord& rhs) {
+                  if (lhs.packageId != rhs.packageId) {
+                      return lhs.packageId < rhs.packageId;
+                  }
+                  return compareSemanticVersions(lhs.parsedVersion,
+                                                 rhs.parsedVersion) < 0;
+              });
+
+    std::ostringstream out;
+    out << "schema_version = " << quoteTomlString("registry.v2") << "\n";
+    for (const auto& record : records) {
+        out << "\n[[package]]\n";
+        out << "package_id = " << quoteTomlString(record.packageId) << "\n";
+        out << "version = " << quoteTomlString(record.version) << "\n";
+        if (!record.artifactPath.empty()) {
+            out << "artifact_path = " << quoteTomlString(record.artifactPath) << "\n";
+        }
+        if (!record.artifactDigest.empty()) {
+            out << "artifact_digest = " << quoteTomlString(record.artifactDigest) << "\n";
+        }
+
+        if (!record.nativeTargets.empty()) {
+            std::vector<size_t> indexes(record.nativeTargets.size());
+            for (size_t index = 0; index < indexes.size(); ++index) {
+                indexes[index] = index;
+            }
+            std::sort(indexes.begin(), indexes.end(),
+                      [&](size_t lhs, size_t rhs) {
+                          return record.nativeTargets[lhs] < record.nativeTargets[rhs];
+                      });
+            std::vector<std::string> targets;
+            std::vector<std::string> paths;
+            std::vector<std::string> digests;
+            for (size_t index : indexes) {
+                targets.push_back(record.nativeTargets[index]);
+                paths.push_back(record.nativeArtifactPaths[index]);
+                digests.push_back(record.nativeArtifactDigests[index]);
+            }
+            out << "native_targets = " << quoteTomlArray(targets) << "\n";
+            out << "native_artifact_paths = " << quoteTomlArray(paths) << "\n";
+            out << "native_artifact_digests = " << quoteTomlArray(digests) << "\n";
+        }
+
+        std::vector<std::string> pins;
+        pins.reserve(record.dependencies.size());
+        for (const auto& dependency : record.dependencies) {
+            pins.push_back(registryRecordKey(dependency.packageId, dependency.version));
+        }
+        out << "dependencies = " << quoteTomlArray(pins) << "\n";
+    }
+    return out.str();
+}
+
+std::string canonicalAdvisoriesPayload(std::vector<AdvisoryRecord> records) {
+    std::sort(records.begin(), records.end(),
+              [](const AdvisoryRecord& lhs, const AdvisoryRecord& rhs) {
+                  if (lhs.packageId != rhs.packageId) {
+                      return lhs.packageId < rhs.packageId;
+                  }
+                  return lhs.id < rhs.id;
+              });
+
+    std::ostringstream out;
+    out << "schema_version = " << quoteTomlString("advisories.v1") << "\n";
+    for (const auto& record : records) {
+        out << "\n[[advisory]]\n";
+        out << "id = " << quoteTomlString(record.id) << "\n";
+        out << "package_id = " << quoteTomlString(record.packageId) << "\n";
+        out << "affected = " << quoteTomlString(record.affected) << "\n";
+        out << "severity = " << quoteTomlString(record.severity) << "\n";
+        out << "summary = " << quoteTomlMultilineString(record.summary) << "\n";
+        if (!record.fixedVersion.empty()) {
+            out << "fixed_version = " << quoteTomlString(record.fixedVersion) << "\n";
+        }
+        if (!record.url.empty()) {
+            out << "url = " << quoteTomlString(record.url) << "\n";
+        }
+    }
+    return out.str();
+}
+
+bool loadRegistrySigningKeyFile(const std::filesystem::path& keyPath,
+                                RegistrySigningKeyFile& outKey,
+                                std::string& outError) {
+    outKey = RegistrySigningKeyFile{};
+    std::ifstream file(keyPath);
+    if (!file) {
+        outError = "Could not open signing key file '" + keyPath.string() + "'.";
+        return false;
+    }
+
+    std::string line;
+    size_t lineNumber = 0;
+    while (std::getline(file, line)) {
+        ++lineNumber;
+        const std::string content = stripComment(line);
+        if (content.empty()) {
+            continue;
+        }
+
+        const size_t equals = content.find('=');
+        if (equals == std::string::npos) {
+            outError = "Invalid signing key line " + std::to_string(lineNumber) +
+                       ": expected key = value.";
+            return false;
+        }
+
+        const std::string key = trim(std::string_view(content).substr(0, equals));
+        const std::string value = trim(std::string_view(content).substr(equals + 1));
+        std::string parseError;
+        std::string parsed;
+        if (value.rfind("\"\"\"", 0) == 0) {
+            if (!parseMultilineStringValue(value, file, parsed, lineNumber, parseError)) {
+                outError = "Invalid signing key field '" + key + "': " + parseError;
+                return false;
+            }
+        } else if (!parseQuotedString(value, parsed, parseError)) {
+            outError = "Invalid signing key field '" + key + "': " + parseError;
+            return false;
+        }
+
+        if (key == "schema_version") {
+            if (parsed != "registry-key.v1") {
+                outError = "Signing key file must declare schema_version = \"registry-key.v1\".";
+                return false;
+            }
+        } else if (key == "key_id") {
+            outKey.keyId = parsed;
+        } else if (key == "algorithm") {
+            outKey.algorithm = parsed;
+        } else if (key == "private_key") {
+            outKey.privateKeyDerBase64 = parsed;
+        } else if (key == "public_key") {
+            outKey.publicKeyDerBase64 = parsed;
+        } else {
+            outError = "Unsupported signing key field '" + key + "'.";
+            return false;
+        }
+    }
+
+    if (outKey.keyId.empty() || outKey.privateKeyDerBase64.empty() ||
+        outKey.publicKeyDerBase64.empty()) {
+        outError = "Signing key file must define key_id, private_key, and public_key.";
+        return false;
+    }
+    if (outKey.algorithm.empty()) {
+        outKey.algorithm = "ed25519";
+    }
+    if (outKey.algorithm != "ed25519") {
+        outError = "Signing key algorithm must be 'ed25519'.";
+        return false;
+    }
+    return true;
+}
+
+bool registryRequiresTrustedSignatures(const ProjectRegistryConfig& config,
+                                       bool isRemote) {
+    return !config.trustedKeys.empty() || (isRemote && !config.allowInsecure);
+}
+
+bool verifyRegistrySignatureEnvelope(const ProjectRegistryConfig& config,
+                                     bool isRemote,
+                                     std::string_view signingKeyId,
+                                     std::string_view signatureBase64,
+                                     std::string_view canonicalPayload,
+                                     std::string& outError) {
+    if (!registryRequiresTrustedSignatures(config, isRemote)) {
+        return true;
+    }
+    if (signingKeyId.empty() || signatureBase64.empty()) {
+        outError = "Registry '" + config.alias +
+                   "' requires a signed index, but the registry metadata is unsigned.";
+        return false;
+    }
+    if (config.trustedKeys.empty()) {
+        outError = "Registry '" + config.alias +
+                   "' requires trusted_keys unless allow_insecure = true is set.";
+        return false;
+    }
+
+    RegistryTrustedKey trustedKey;
+    bool foundKey = false;
+    for (const std::string& rawTrustedKey : config.trustedKeys) {
+        RegistryTrustedKey parsedKey;
+        if (!parseTrustedRegistryKey(rawTrustedKey, parsedKey, outError)) {
+            outError = "Registry '" + config.alias + "' has invalid trusted_keys: " +
+                       outError;
+            return false;
+        }
+        if (parsedKey.keyId == signingKeyId) {
+            trustedKey = std::move(parsedKey);
+            foundKey = true;
+            break;
+        }
+    }
+    if (!foundKey) {
+        outError = "Registry '" + config.alias + "' was signed by unknown key '" +
+                   std::string(signingKeyId) + "'.";
+        return false;
+    }
+
+    if (!verifyEd25519Message(trustedKey.publicKeyDerBase64, canonicalPayload,
+                              signatureBase64, outError)) {
+        outError = "Registry '" + config.alias + "' signature verification failed: " +
+                   outError;
+        return false;
+    }
+    return true;
 }
 
 bool removePathIfExists(const std::filesystem::path& path, std::string& outError) {
@@ -1777,7 +2089,7 @@ bool writeInstallRegistryFile(const std::filesystem::path& outputPath,
     }
 
     out << kLockfileHeader << "\n";
-    out << "schema_version = " << quoteTomlString("install.v2") << "\n";
+    out << "schema_version = " << quoteTomlString("install.v3") << "\n";
     for (const auto& entry : entries) {
         out << "\n[[package]]\n";
         out << "name = " << quoteTomlString(entry.importName) << "\n";
@@ -1826,6 +2138,10 @@ bool writeInstallRegistryFile(const std::filesystem::path& outputPath,
         }
         if (!entry.artifactDigest.empty()) {
             out << "artifact_digest = " << quoteTomlString(entry.artifactDigest)
+                << "\n";
+        }
+        if (!entry.registryKeyId.empty()) {
+            out << "registry_key_id = " << quoteTomlString(entry.registryKeyId)
                 << "\n";
         }
         if (!entry.selectedTarget.empty()) {
@@ -1877,7 +2193,7 @@ bool writeLockfile(const std::filesystem::path& outputPath,
     }
 
     out << kLockfileHeader << "\n";
-    out << "schema_version = " << quoteTomlString("lock.v2") << "\n";
+    out << "schema_version = " << quoteTomlString("lock.v3") << "\n";
     for (const auto& entry : entries) {
         out << "\n[[package]]\n";
         out << "name = " << quoteTomlString(entry.importName) << "\n";
@@ -1922,6 +2238,10 @@ bool writeLockfile(const std::filesystem::path& outputPath,
             out << "artifact_digest = " << quoteTomlString(entry.artifactDigest)
                 << "\n";
         }
+        if (!entry.registryKeyId.empty()) {
+            out << "registry_key_id = " << quoteTomlString(entry.registryKeyId)
+                << "\n";
+        }
         if (!entry.selectedTarget.empty()) {
             out << "selected_target = " << quoteTomlString(entry.selectedTarget)
                 << "\n";
@@ -1944,6 +2264,7 @@ bool writeLockfile(const std::filesystem::path& outputPath,
 
 bool writeRegistryIndexFile(const std::filesystem::path& outputPath,
                             std::vector<RegistryIndexRecord> records,
+                            const RegistrySigningKeyFile* signingKey,
                             std::string& outError) {
     std::sort(records.begin(), records.end(),
               [](const RegistryIndexRecord& lhs,
@@ -1968,6 +2289,21 @@ bool writeRegistryIndexFile(const std::filesystem::path& outputPath,
         outError = "Could not open registry index '" + outputPath.string() +
                    "' for writing.";
         return false;
+    }
+
+    if (signingKey != nullptr) {
+        const std::string canonicalPayload = canonicalRegistryIndexPayload(records);
+        std::string signatureBase64;
+        if (!signEd25519Message(signingKey->privateKeyDerBase64, canonicalPayload,
+                                signatureBase64, outError)) {
+            outError = "Could not sign registry index: " + outError;
+            return false;
+        }
+        out << "schema_version = " << quoteTomlString("registry.v2") << "\n";
+        out << "signing_key_id = " << quoteTomlString(signingKey->keyId) << "\n";
+        out << "signature = " << quoteTomlString(signatureBase64) << "\n";
+        out << canonicalPayload.substr(canonicalPayload.find('\n') + 1);
+        return true;
     }
 
     out << "schema_version = " << quoteTomlString("registry.v1") << "\n";
@@ -2046,6 +2382,7 @@ struct CacheEntryMetadata {
     std::string gitCommit;
     std::string artifactPath;
     std::string artifactDigest;
+    std::string registryKeyId;
     std::string selectedTarget;
     bool buildFromSource = false;
     std::string manifestDigest;
@@ -2076,6 +2413,7 @@ bool writeCacheMetadataFile(const std::filesystem::path& outputPath,
     out << "git_commit = " << quoteTomlString(entry.gitCommit) << "\n";
     out << "artifact_path = " << quoteTomlString(entry.artifactPath) << "\n";
     out << "artifact_digest = " << quoteTomlString(entry.artifactDigest) << "\n";
+    out << "registry_key_id = " << quoteTomlString(entry.registryKeyId) << "\n";
     out << "selected_target = " << quoteTomlString(entry.selectedTarget) << "\n";
     out << "build_from_source = "
         << (entry.buildFromSource ? "true" : "false") << "\n";
@@ -2167,6 +2505,8 @@ bool loadCacheMetadataFile(const std::filesystem::path& metadataPath,
             outMetadata.artifactPath = parsed;
         } else if (key == "artifact_digest") {
             outMetadata.artifactDigest = parsed;
+        } else if (key == "registry_key_id") {
+            outMetadata.registryKeyId = parsed;
         } else if (key == "selected_target") {
             outMetadata.selectedTarget = parsed;
         } else if (key == "manifest_digest") {
@@ -2198,6 +2538,7 @@ bool cacheMetadataMatchesEntry(const CacheEntryMetadata& metadata,
            metadata.gitCommit == entry.gitCommit &&
            metadata.artifactPath == entry.artifactPath &&
            metadata.artifactDigest == entry.artifactDigest &&
+           metadata.registryKeyId == entry.registryKeyId &&
            metadata.selectedTarget == entry.selectedTarget &&
            metadata.buildFromSource == entry.buildFromSource &&
            metadata.manifestDigest == entry.manifestDigest &&
@@ -2368,11 +2709,25 @@ bool loadRegistryIndex(const std::string& projectRoot,
                        "' source artifact entries must define both artifact_path and artifact_digest.";
             return false;
         }
+        if (!current.artifactDigest.empty() && !isSecureDigest(current.artifactDigest)) {
+            outError = "Registry '" + config.alias + "' package '" +
+                       current.packageId +
+                       "' must use sha256-prefixed artifact digests.";
+            return false;
+        }
         if (current.nativeTargets.size() != current.nativeArtifactPaths.size() ||
             current.nativeTargets.size() != current.nativeArtifactDigests.size()) {
             outError = "Registry '" + config.alias +
                        "' native artifact fields must define the same number of targets, paths, and digests.";
             return false;
+        }
+        for (const std::string& nativeDigest : current.nativeArtifactDigests) {
+            if (!isSecureDigest(nativeDigest)) {
+                outError = "Registry '" + config.alias + "' package '" +
+                           current.packageId +
+                           "' must use sha256-prefixed native artifact digests.";
+                return false;
+            }
         }
         if (!isExactPublishedVersion(current.version)) {
             outError = "Registry '" + config.alias + "' package '" +
@@ -2424,6 +2779,27 @@ bool loadRegistryIndex(const std::string& projectRoot,
 
         if (!hasCurrent) {
             if (key == "schema_version") {
+                if (!parseQuotedString(value, outIndex.schemaVersion, outError)) {
+                    outError = "Invalid registry index line " +
+                               std::to_string(lineNumber) + ": " + outError;
+                    return false;
+                }
+                continue;
+            }
+            if (key == "signing_key_id") {
+                if (!parseQuotedString(value, outIndex.signingKeyId, outError)) {
+                    outError = "Invalid registry index line " +
+                               std::to_string(lineNumber) + ": " + outError;
+                    return false;
+                }
+                continue;
+            }
+            if (key == "signature") {
+                if (!parseQuotedString(value, outIndex.signatureBase64, outError)) {
+                    outError = "Invalid registry index line " +
+                               std::to_string(lineNumber) + ": " + outError;
+                    return false;
+                }
                 continue;
             }
             outError = "Invalid registry index line " + std::to_string(lineNumber) +
@@ -2493,8 +2869,6 @@ bool loadRegistryIndex(const std::string& projectRoot,
             current.artifactPath = parsed;
         } else if (key == "artifact_digest") {
             current.artifactDigest = parsed;
-        } else if (key == "schema_version") {
-            continue;
         } else {
             outError = "Unsupported registry index field '" + key + "'.";
             return false;
@@ -2514,6 +2888,33 @@ bool loadRegistryIndex(const std::string& projectRoot,
                   });
     }
 
+    if (outIndex.schemaVersion != "registry.v1" &&
+        outIndex.schemaVersion != "registry.v2") {
+        outError = "Registry '" + config.alias + "' uses unsupported schema '" +
+                   outIndex.schemaVersion + "'.";
+        return false;
+    }
+
+    if (outIndex.schemaVersion == "registry.v2") {
+        std::vector<RegistryIndexRecord> canonicalRecords;
+        canonicalRecords.reserve(outIndex.recordsByKey.size());
+        for (const auto& [key, record] : outIndex.recordsByKey) {
+            canonicalRecords.push_back(record);
+        }
+        const std::string canonicalPayload =
+            canonicalRegistryIndexPayload(std::move(canonicalRecords));
+        if (!verifyRegistrySignatureEnvelope(config, location.isRemote,
+                                             outIndex.signingKeyId,
+                                             outIndex.signatureBase64,
+                                             canonicalPayload, outError)) {
+            return false;
+        }
+    } else if (registryRequiresTrustedSignatures(config, location.isRemote)) {
+        outError = "Registry '" + config.alias +
+                   "' requires a signed registry.v2 index, but the registry is unsigned.";
+        return false;
+    }
+
     return true;
 }
 
@@ -2528,6 +2929,239 @@ bool resolveRegistryIndexLocation(const std::string& projectRoot,
     }
     outIndexPath = location.localIndexPath.lexically_normal();
     outRootDir = location.localRootDir.lexically_normal();
+    return true;
+}
+
+bool writeAdvisoriesFile(const std::filesystem::path& outputPath,
+                         const std::vector<AdvisoryRecord>& records,
+                         const RegistrySigningKeyFile& signingKey,
+                         std::string& outError) {
+    std::error_code ec;
+    std::filesystem::create_directories(outputPath.parent_path(), ec);
+    if (ec) {
+        outError = "Could not create advisory directory '" +
+                   outputPath.parent_path().string() + "'.";
+        return false;
+    }
+
+    const std::string canonicalPayload = canonicalAdvisoriesPayload(records);
+    std::string signatureBase64;
+    if (!signEd25519Message(signingKey.privateKeyDerBase64, canonicalPayload,
+                            signatureBase64, outError)) {
+        outError = "Could not sign advisories: " + outError;
+        return false;
+    }
+
+    std::ofstream out(outputPath);
+    if (!out) {
+        outError = "Could not open advisory file '" + outputPath.string() +
+                   "' for writing.";
+        return false;
+    }
+
+    out << "schema_version = " << quoteTomlString("advisories.v1") << "\n";
+    out << "signing_key_id = " << quoteTomlString(signingKey.keyId) << "\n";
+    out << "signature = " << quoteTomlString(signatureBase64) << "\n";
+    out << canonicalPayload.substr(canonicalPayload.find('\n') + 1);
+    return true;
+}
+
+bool advisoryMatchesVersion(const AdvisoryRecord& record,
+                            std::string_view version,
+                            std::string& outError) {
+    VersionRequirement requirement;
+    if (!parseVersionRequirement(record.affected, requirement, outError)) {
+        return false;
+    }
+    SemanticVersion parsedVersion;
+    if (!parseSemanticVersion(std::string(version), parsedVersion)) {
+        outError = "Installed package version '" + std::string(version) +
+                   "' is not a valid semantic version.";
+        return false;
+    }
+    return versionSatisfiesRequirement(parsedVersion, requirement);
+}
+
+bool loadRegistryAdvisories(const std::string& projectRoot,
+                            const ProjectRegistryConfig& config,
+                            const AuditOptions& options,
+                            LoadedRegistryAdvisories& outAdvisories,
+                            std::string& outError) {
+    outAdvisories = LoadedRegistryAdvisories{};
+    outError.clear();
+
+    RegistryLocation location;
+    if (!resolveRegistryLocation(projectRoot, config, location, outError)) {
+        return false;
+    }
+
+    std::filesystem::path advisoriesPath = location.isRemote
+                                               ? remoteRegistryAdvisoriesCachePath(
+                                                     config.alias, location.remoteRootUrl)
+                                               : location.localRootDir / "advisories.toml";
+
+    if (location.isRemote) {
+        std::string token;
+        if (!resolveRegistryAuthToken(config.alias, token, outError)) {
+            return false;
+        }
+        if (options.offline && !fileExists(advisoriesPath)) {
+            outError = "Registry '" + config.alias +
+                       "' cannot be audited with --offline because advisories are not cached locally.";
+            return false;
+        }
+        if (!options.offline || !fileExists(advisoriesPath)) {
+            std::string downloadError;
+            if (!downloadUrlToFile(joinUrlPath(location.remoteRootUrl, "advisories.toml"),
+                                   token, advisoriesPath, downloadError)) {
+                if (downloadError.find("404") != std::string::npos) {
+                    return true;
+                }
+                outError = "Registry '" + config.alias +
+                           "' advisory download failed: " + downloadError;
+                return false;
+            }
+        }
+    } else if (!fileExists(advisoriesPath)) {
+        return true;
+    }
+
+    outAdvisories.advisoriesPath = advisoriesPath;
+    outAdvisories.isRemote = location.isRemote;
+
+    std::ifstream file(advisoriesPath);
+    if (!file) {
+        outError = "Could not open advisory file '" + advisoriesPath.string() + "'.";
+        return false;
+    }
+
+    AdvisoryRecord current;
+    bool hasCurrent = false;
+    std::string line;
+    size_t lineNumber = 0;
+
+    auto flushCurrent = [&]() -> bool {
+        if (!hasCurrent) {
+            return true;
+        }
+        if (current.id.empty() || current.packageId.empty() || current.affected.empty() ||
+            current.severity.empty() || current.summary.empty()) {
+            outError = "Registry '" + config.alias +
+                       "' advisory entries must define id, package_id, affected, severity, and summary.";
+            return false;
+        }
+        outAdvisories.records.push_back(current);
+        current = AdvisoryRecord{};
+        hasCurrent = false;
+        return true;
+    };
+
+    while (std::getline(file, line)) {
+        ++lineNumber;
+        const std::string content = stripComment(line);
+        if (content.empty()) {
+            continue;
+        }
+
+        if (content == "[[advisory]]") {
+            if (!flushCurrent()) {
+                return false;
+            }
+            hasCurrent = true;
+            continue;
+        }
+
+        const size_t equals = content.find('=');
+        if (equals == std::string::npos) {
+            outError = "Invalid advisory line " + std::to_string(lineNumber) +
+                       ": expected key = value.";
+            return false;
+        }
+
+        const std::string key = trim(std::string_view(content).substr(0, equals));
+        const std::string value = trim(std::string_view(content).substr(equals + 1));
+
+        if (!hasCurrent) {
+            std::string parsed;
+            if (!parseQuotedString(value, parsed, outError)) {
+                outError = "Invalid advisory line " + std::to_string(lineNumber) +
+                           ": " + outError;
+                return false;
+            }
+            if (key == "schema_version") {
+                outAdvisories.schemaVersion = parsed;
+            } else if (key == "signing_key_id") {
+                outAdvisories.signingKeyId = parsed;
+            } else if (key == "signature") {
+                outAdvisories.signatureBase64 = parsed;
+            } else {
+                outError = "Invalid advisory line " + std::to_string(lineNumber) +
+                           ": entries must appear inside [[advisory]].";
+                return false;
+            }
+            continue;
+        }
+
+        std::string parsed;
+        if (key == "summary" && value.rfind("\"\"\"", 0) == 0) {
+            if (!parseMultilineStringValue(value, file, parsed, lineNumber, outError)) {
+                outError = "Invalid advisory line " + std::to_string(lineNumber) +
+                           ": " + outError;
+                return false;
+            }
+        } else if (!parseQuotedString(value, parsed, outError)) {
+            outError = "Invalid advisory line " + std::to_string(lineNumber) +
+                       ": " + outError;
+            return false;
+        }
+
+        if (key == "id") {
+            current.id = parsed;
+        } else if (key == "package_id") {
+            current.packageId = parsed;
+        } else if (key == "affected") {
+            current.affected = parsed;
+        } else if (key == "severity") {
+            current.severity = parsed;
+        } else if (key == "summary") {
+            current.summary = parsed;
+        } else if (key == "fixed_version") {
+            current.fixedVersion = parsed;
+        } else if (key == "url") {
+            current.url = parsed;
+        } else {
+            outError = "Unsupported advisory field '" + key + "'.";
+            return false;
+        }
+    }
+
+    if (!flushCurrent()) {
+        return false;
+    }
+
+    if (outAdvisories.schemaVersion != "advisories.v1") {
+        outError = "Registry '" + config.alias + "' uses unsupported advisory schema '" +
+                   outAdvisories.schemaVersion + "'.";
+        return false;
+    }
+
+    if (!outAdvisories.records.empty()) {
+        const std::string canonicalPayload =
+            canonicalAdvisoriesPayload(outAdvisories.records);
+        if (!verifyRegistrySignatureEnvelope(config, location.isRemote,
+                                             outAdvisories.signingKeyId,
+                                             outAdvisories.signatureBase64,
+                                             canonicalPayload, outError)) {
+            return false;
+        }
+    } else if (registryRequiresTrustedSignatures(config, location.isRemote) &&
+               (outAdvisories.signingKeyId.empty() ||
+                outAdvisories.signatureBase64.empty())) {
+        outError = "Registry '" + config.alias +
+                   "' requires signed advisories metadata when advisories.toml is present.";
+        return false;
+    }
+
     return true;
 }
 
@@ -2956,6 +3590,7 @@ bool resolveRegistryPackageNode(
     node.entry.registry = registryAlias;
     node.entry.artifactPath = artifactPath.string();
     node.entry.artifactDigest = artifactDigest;
+    node.entry.registryKeyId = indexIt->second.signingKeyId;
     node.entry.selectedTarget.clear();
     node.entry.buildFromSource = false;
     if (node.entry.kind == "native") {
@@ -4259,6 +4894,7 @@ bool packageEntryMatchesResolution(const PackageRegistryEntry& expected,
            expected.gitCommit == actual.gitCommit &&
            expected.artifactPath == actual.artifactPath &&
            expected.artifactDigest == actual.artifactDigest &&
+           expected.registryKeyId == actual.registryKeyId &&
            expected.selectedTarget == actual.selectedTarget &&
            expected.buildFromSource == actual.buildFromSource &&
            expected.manifestDigest == actual.manifestDigest &&
@@ -4735,6 +5371,13 @@ void writeRegistryTables(std::ofstream& out,
     for (const auto& registry : registries) {
         out << "\n[registries." << registry.alias << "]\n";
         out << "index = " << quoteTomlString(registry.index) << "\n";
+        if (!registry.trustedKeys.empty()) {
+            out << "trusted_keys = "
+                << quoteTomlArray(sortedUniqueStrings(registry.trustedKeys)) << "\n";
+        }
+        if (registry.allowInsecure) {
+            out << "allow_insecure = true\n";
+        }
     }
 }
 
@@ -4978,27 +5621,38 @@ bool loadProjectManifestData(const std::string& projectRoot,
         }
 
         if (section == Section::REGISTRY) {
-            if (key != "index") {
-                outError = "Unsupported registry field '" + key + "'.";
-                return false;
-            }
-
-            ProjectRegistryConfig registry;
-            registry.alias = currentRegistryAlias;
-            if (!parseQuotedString(value, registry.index, parseError)) {
-                outError = "Invalid registry field '" + key + "': " + parseError;
-                return false;
-            }
-
             auto existing = std::find_if(
                 outManifest.registries.begin(), outManifest.registries.end(),
                 [&](const ProjectRegistryConfig& candidate) {
-                    return candidate.alias == registry.alias;
+                    return candidate.alias == currentRegistryAlias;
                 });
-            if (existing != outManifest.registries.end()) {
-                *existing = std::move(registry);
-            } else {
+            if (existing == outManifest.registries.end()) {
+                ProjectRegistryConfig registry;
+                registry.alias = currentRegistryAlias;
                 outManifest.registries.push_back(std::move(registry));
+                existing = std::prev(outManifest.registries.end());
+            }
+
+            if (key == "index") {
+                if (!parseQuotedString(value, existing->index, parseError)) {
+                    outError = "Invalid registry field '" + key + "': " + parseError;
+                    return false;
+                }
+            } else if (key == "trusted_keys") {
+                if (!parseQuotedStringArray(value, existing->trustedKeys, parseError)) {
+                    outError = "Invalid registry field '" + key + "': " + parseError;
+                    return false;
+                }
+                existing->trustedKeys =
+                    sortedUniqueStrings(std::move(existing->trustedKeys));
+            } else if (key == "allow_insecure") {
+                if (!parseBoolValue(value, existing->allowInsecure, parseError)) {
+                    outError = "Invalid registry field '" + key + "': " + parseError;
+                    return false;
+                }
+            } else {
+                outError = "Unsupported registry field '" + key + "'.";
+                return false;
             }
             continue;
         }
@@ -5229,6 +5883,7 @@ bool addProjectDependency(const std::string& projectRoot,
 bool publishProjectPackage(const std::string& projectRoot,
                            const std::string& packageDir,
                            const std::string& registryAlias,
+                           const std::string& signingKeyPath,
                            std::string& outError) {
     ProjectManifestData projectManifest;
     if (!loadProjectManifestData(projectRoot, projectManifest, outError)) {
@@ -5248,6 +5903,47 @@ bool publishProjectPackage(const std::string& projectRoot,
         findRegistryConfig(projectManifest, effectiveRegistryAlias);
     if (registry == nullptr) {
         outError = "Unknown registry '" + effectiveRegistryAlias + "'.";
+        return false;
+    }
+
+    RegistryLocation registryLocation;
+    if (!resolveRegistryLocation(projectRoot, *registry, registryLocation,
+                                 outError)) {
+        return false;
+    }
+
+    RegistrySigningKeyFile signingKey;
+    const RegistrySigningKeyFile* signingKeyPtr = nullptr;
+    if (!signingKeyPath.empty()) {
+        if (!loadRegistrySigningKeyFile(signingKeyPath, signingKey, outError)) {
+            return false;
+        }
+        signingKeyPtr = &signingKey;
+        if (!registry->trustedKeys.empty()) {
+            bool trusted = false;
+            for (const std::string& rawTrustedKey : registry->trustedKeys) {
+                RegistryTrustedKey trustedKey;
+                if (!parseTrustedRegistryKey(rawTrustedKey, trustedKey, outError)) {
+                    outError = "Registry '" + effectiveRegistryAlias +
+                               "' has invalid trusted_keys: " + outError;
+                    return false;
+                }
+                if (trustedKey.keyId == signingKey.keyId &&
+                    trustedKey.publicKeyDerBase64 == signingKey.publicKeyDerBase64) {
+                    trusted = true;
+                    break;
+                }
+            }
+            if (!trusted) {
+                outError = "Signing key '" + signingKey.keyId +
+                           "' is not present in [registries." +
+                           effectiveRegistryAlias + "].trusted_keys.";
+                return false;
+            }
+        }
+    } else if (registryRequiresTrustedSignatures(*registry, registryLocation.isRemote)) {
+        outError = "Registry '" + effectiveRegistryAlias +
+                   "' requires --signing-key because it is configured for trusted signatures.";
         return false;
     }
 
@@ -5310,11 +6006,6 @@ bool publishProjectPackage(const std::string& projectRoot,
                   return lhs.version < rhs.version;
               });
 
-    RegistryLocation registryLocation;
-    if (!resolveRegistryLocation(projectRoot, *registry, registryLocation,
-                                 outError)) {
-        return false;
-    }
     std::filesystem::path indexPath = registryLocation.localIndexPath;
     std::filesystem::path registryRoot = registryLocation.localRootDir;
     std::filesystem::path stagedRegistryRoot;
@@ -5545,7 +6236,8 @@ bool publishProjectPackage(const std::string& projectRoot,
         }
     }
 
-    if (!writeRegistryIndexFile(indexPath, std::move(records), outError)) {
+    if (!writeRegistryIndexFile(indexPath, std::move(records), signingKeyPtr,
+                                outError)) {
         return false;
     }
 
@@ -5774,4 +6466,112 @@ bool ensureProjectPackagesInstalled(const std::string& projectRoot,
 
     std::vector<PackageRegistryEntry> installedEntries;
     return installProjectPackages(projectRoot, installedEntries, options, outError);
+}
+
+bool auditProjectPackages(const std::string& projectRoot,
+                          const AuditOptions& options,
+                          std::string& outReport,
+                          bool& outHasFindings,
+                          std::string& outError) {
+    outReport.clear();
+    outHasFindings = false;
+    outError.clear();
+
+    ProjectManifestData manifest;
+    if (!loadProjectManifestData(projectRoot, manifest, outError)) {
+        return false;
+    }
+
+    std::vector<PackageRegistryEntry> lockedEntries;
+    if (!loadProjectLockfile(projectRoot, lockedEntries, outError)) {
+        return false;
+    }
+
+    std::vector<std::string> registryAliases;
+    for (const auto& entry : lockedEntries) {
+        if (entry.sourceType == "registry" && !entry.registry.empty()) {
+            registryAliases.push_back(entry.registry);
+        }
+    }
+    registryAliases = sortedUniqueStrings(std::move(registryAliases));
+
+    if (registryAliases.empty()) {
+        outReport = "No registry-sourced packages found in mog.lock.";
+        return true;
+    }
+
+    std::unordered_map<std::string, LoadedRegistryAdvisories> advisoriesByRegistry;
+    for (const std::string& alias : registryAliases) {
+        const ProjectRegistryConfig* registry = findRegistryConfig(manifest, alias);
+        if (registry == nullptr) {
+            outError = "mog.lock references unknown registry '" + alias + "'.";
+            return false;
+        }
+
+        LoadedRegistryAdvisories advisories;
+        if (!loadRegistryAdvisories(projectRoot, *registry, options, advisories,
+                                    outError)) {
+            return false;
+        }
+        advisoriesByRegistry.emplace(alias, std::move(advisories));
+    }
+
+    std::vector<std::string> findings;
+    for (const auto& entry : lockedEntries) {
+        if (entry.sourceType != "registry" || entry.registry.empty()) {
+            continue;
+        }
+
+        const auto advisoriesIt = advisoriesByRegistry.find(entry.registry);
+        if (advisoriesIt == advisoriesByRegistry.end()) {
+            continue;
+        }
+
+        for (const auto& advisory : advisoriesIt->second.records) {
+            if (advisory.packageId != entry.packageId) {
+                continue;
+            }
+
+            std::string advisoryError;
+            const bool matches = advisoryMatchesVersion(advisory, entry.version,
+                                                       advisoryError);
+            if (!advisoryError.empty()) {
+                outError = "Could not evaluate advisory '" + advisory.id +
+                           "': " + advisoryError;
+                return false;
+            }
+            if (!matches) {
+                continue;
+            }
+
+            std::ostringstream line;
+            line << advisory.id << " [" << advisory.severity << "] "
+                 << advisory.packageId << "@" << entry.version << ": "
+                 << advisory.summary;
+            if (!advisory.fixedVersion.empty()) {
+                line << " Fixed in " << advisory.fixedVersion << ".";
+            }
+            if (!advisory.url.empty()) {
+                line << " " << advisory.url;
+            }
+            findings.push_back(line.str());
+        }
+    }
+
+    findings = sortedUniqueStrings(std::move(findings));
+    if (findings.empty()) {
+        outReport = "No known vulnerable packages found.";
+        return true;
+    }
+
+    outHasFindings = true;
+    std::ostringstream report;
+    for (size_t index = 0; index < findings.size(); ++index) {
+        report << findings[index];
+        if (index + 1 < findings.size()) {
+            report << "\n";
+        }
+    }
+    outReport = report.str();
+    return true;
 }

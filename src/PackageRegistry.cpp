@@ -531,6 +531,8 @@ bool loadLockfileEntries(const std::filesystem::path& lockfilePath,
             current.artifactPath = parsed;
         } else if (key == "artifact_digest") {
             current.artifactDigest = parsed;
+        } else if (key == "registry_key_id") {
+            current.registryKeyId = parsed;
         } else if (key == "selected_target") {
             current.selectedTarget = parsed;
         } else if (key == "manifest_digest") {

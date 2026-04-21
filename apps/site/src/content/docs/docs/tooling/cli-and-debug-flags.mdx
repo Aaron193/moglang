@@ -73,6 +73,14 @@ For package-managed native dependencies, `mog install`, `mog update`, and
 - `--no-native-build` to reject source-build fallback
 - `--cmake-toolchain <path>` to enable non-host native source-build fallback
 
+Registry publishing accepts:
+
+- `--signing-key <path>` to sign a trusted `registry.v2` index during `mog publish`
+
+Dependency auditing accepts:
+
+- `--offline` to reuse cached advisory metadata during `mog audit`
+
 ## Frontend timings
 
 `--frontend-timings` reports a readable phase summary that includes parse,

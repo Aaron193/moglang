@@ -34,6 +34,7 @@ struct PackageRegistryEntry {
     std::string gitCommit;
     std::string artifactPath;
     std::string artifactDigest;
+    std::string registryKeyId;
     std::string selectedTarget;
     bool buildFromSource = false;
     std::string manifestDigest;

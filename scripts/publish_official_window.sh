@@ -11,24 +11,27 @@ WINDOW_DYLIB="$PROJECT_ROOT/build/packages/mog/window/package.dylib"
 usage() {
     cat <<'EOF'
 Usage:
-  scripts/publish_official_window.sh --registry-path <dir>
-  scripts/publish_official_window.sh --registry <alias> [--workspace <dir>]
+  scripts/publish_official_window.sh --registry-path <dir> [--signing-key <file>]
+  scripts/publish_official_window.sh --registry <alias> [--workspace <dir>] [--signing-key <file>]
 
 Options:
   --registry-path <dir>  Publish using a temporary workspace rooted at <dir>.
   --registry <alias>     Publish through an existing workspace registry alias.
   --workspace <dir>      Workspace directory to use with --registry. Defaults to $PWD.
+  --signing-key <file>   Sign the registry index with the given registry-key.v1 file.
 
 Environment:
   MOG_PUBLISH_REGISTRY_PATH  Like --registry-path <dir>.
   MOG_PUBLISH_REGISTRY       Like --registry <alias>.
   MOG_PUBLISH_WORKSPACE      Like --workspace <dir>.
+  MOG_PUBLISH_SIGNING_KEY    Like --signing-key <file>.
 EOF
 }
 
 registry_path="${MOG_PUBLISH_REGISTRY_PATH:-}"
 registry_alias="${MOG_PUBLISH_REGISTRY:-}"
 workspace_dir="${MOG_PUBLISH_WORKSPACE:-$PWD}"
+signing_key="${MOG_PUBLISH_SIGNING_KEY:-}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -69,6 +72,19 @@ while [[ $# -gt 0 ]]; do
             ;;
         --workspace=*)
             workspace_dir="${1#*=}"
+            shift
+            ;;
+        --signing-key)
+            if [[ $# -lt 2 ]]; then
+                echo "Missing value for --signing-key." >&2
+                usage >&2
+                exit 1
+            fi
+            signing_key="$2"
+            shift 2
+            ;;
+        --signing-key=*)
+            signing_key="${1#*=}"
             shift
             ;;
         --help|-h)
@@ -147,6 +163,10 @@ else
         exit 1
     fi
     publish_args=(--registry "$registry_alias")
+fi
+
+if [[ -n "$signing_key" ]]; then
+    publish_args+=(--signing-key "$signing_key")
 fi
 
 (

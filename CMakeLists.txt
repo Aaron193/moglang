@@ -6,6 +6,8 @@ cmake_minimum_required(VERSION 3.10)
 
 project(interpreter VERSION 1.0)
 
+find_package(OpenSSL REQUIRED)
+
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     message(FATAL_ERROR
             "This project requires GCC or Clang (computed-goto VM dispatch relies on GNU labels-as-values).")
@@ -44,6 +46,7 @@ list(REMOVE_ITEM CORE_SOURCES
 add_library(interpreter_core STATIC ${CORE_SOURCES})
 target_include_directories(interpreter_core
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_link_libraries(interpreter_core PUBLIC OpenSSL::Crypto)
 
 add_executable(interpreter
     src/main.cpp

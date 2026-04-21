@@ -9,6 +9,8 @@
 struct ProjectRegistryConfig {
     std::string alias;
     std::string index;
+    std::vector<std::string> trustedKeys;
+    bool allowInsecure = false;
 };
 
 struct ProjectNativeToolchainConfig {
@@ -46,6 +48,10 @@ struct InstallOptions {
     std::string cmakeToolchainFile;
 };
 
+struct AuditOptions {
+    bool offline = false;
+};
+
 bool loadProjectManifestData(const std::string& projectRoot,
                              ProjectManifestData& outManifest,
                              std::string& outError);
@@ -70,6 +76,7 @@ bool addProjectDependency(const std::string& projectRoot,
 bool publishProjectPackage(const std::string& projectRoot,
                            const std::string& packageDir,
                            const std::string& registryAlias,
+                           const std::string& signingKeyPath,
                            std::string& outError);
 
 bool loginProjectRegistry(const std::string& projectRoot,
@@ -89,3 +96,9 @@ bool installProjectPackages(const std::string& projectRoot,
 bool ensureProjectPackagesInstalled(const std::string& projectRoot,
                                     const InstallOptions& options,
                                     std::string& outError);
+
+bool auditProjectPackages(const std::string& projectRoot,
+                          const AuditOptions& options,
+                          std::string& outReport,
+                          bool& outHasFindings,
+                          std::string& outError);

@@ -33,7 +33,8 @@ static void printUsage(const char* executable) {
         << "  login <registry> [--token <token>]\n"
         << "                         Store a hosted-registry bearer token\n"
         << "  logout <registry>      Remove a hosted-registry bearer token\n"
-        << "  publish [options] [dir] Publish a package to a configured file registry\n"
+        << "  publish [options] [dir] Publish a package to a configured registry\n"
+        << "  audit [--offline]      Check locked registry packages against advisories\n"
         << "  run [flags] <file>     Install dependencies if needed, then run a program\n"
         << "  validate-package <dir> Validate a package directory\n"
         << "Flags for install/update/run:\n"
@@ -163,10 +164,12 @@ static bool parseInstallArgs(int argc, char** argv, int startIndex,
 static bool parsePublishArgs(int argc, char** argv, int startIndex,
                              std::string& outRegistryAlias,
                              std::string& outPackageDir,
+                             std::string& outSigningKeyPath,
                              std::string& outError) {
     outError.clear();
     outRegistryAlias.clear();
     outPackageDir.clear();
+    outSigningKeyPath.clear();
 
     for (int index = startIndex; index < argc; ++index) {
         const std::string arg = argv[index];
@@ -178,6 +181,14 @@ static bool parsePublishArgs(int argc, char** argv, int startIndex,
             outRegistryAlias = argv[++index];
         } else if (arg.rfind("--registry=", 0) == 0) {
             outRegistryAlias = arg.substr(11);
+        } else if (arg == "--signing-key") {
+            if (index + 1 >= argc) {
+                outError = "Missing value for --signing-key.";
+                return false;
+            }
+            outSigningKeyPath = argv[++index];
+        } else if (arg.rfind("--signing-key=", 0) == 0) {
+            outSigningKeyPath = arg.substr(14);
         } else if (arg == "--help" || arg == "-h") {
             outError = "help";
             return false;
@@ -192,6 +203,25 @@ static bool parsePublishArgs(int argc, char** argv, int startIndex,
         }
     }
 
+    return true;
+}
+
+static bool parseAuditArgs(int argc, char** argv, int startIndex,
+                           AuditOptions& options, std::string& outError) {
+    outError.clear();
+    options = AuditOptions{};
+    for (int index = startIndex; index < argc; ++index) {
+        const std::string arg = argv[index];
+        if (arg == "--offline") {
+            options.offline = true;
+        } else if (arg == "--help" || arg == "-h") {
+            outError = "help";
+            return false;
+        } else {
+            outError = "Unknown option: " + arg;
+            return false;
+        }
+    }
     return true;
 }
 
@@ -480,8 +510,10 @@ static int runAddCommand(int argc, char** argv) {
 static int runPublishCommand(int argc, char** argv) {
     std::string registryAlias;
     std::string packageDir;
+    std::string signingKeyPath;
     std::string parseError;
-    if (!parsePublishArgs(argc, argv, 2, registryAlias, packageDir, parseError)) {
+    if (!parsePublishArgs(argc, argv, 2, registryAlias, packageDir,
+                          signingKeyPath, parseError)) {
         if (parseError == "help") {
             printUsage(argv[0]);
             return 0;
@@ -497,13 +529,41 @@ static int runPublishCommand(int argc, char** argv) {
 
     std::string error;
     if (!publishProjectPackage(currentManagedProjectRoot(), packageDir, registryAlias,
-                               error)) {
+                               signingKeyPath, error)) {
         std::cerr << "Publish failed: " << error << std::endl;
         return 1;
     }
 
     std::cout << "Published package from " << packageDir << std::endl;
     return 0;
+}
+
+static int runAuditCommand(int argc, char** argv) {
+    AuditOptions options;
+    std::string parseError;
+    if (!parseAuditArgs(argc, argv, 2, options, parseError)) {
+        if (parseError == "help") {
+            printUsage(argv[0]);
+            return 0;
+        }
+        std::cerr << parseError << std::endl;
+        printUsage(argv[0]);
+        return 1;
+    }
+
+    std::string report;
+    bool hasFindings = false;
+    std::string error;
+    if (!auditProjectPackages(currentManagedProjectRoot(), options, report,
+                              hasFindings, error)) {
+        std::cerr << "Audit failed: " << error << std::endl;
+        return 1;
+    }
+
+    if (!report.empty()) {
+        std::cout << report << std::endl;
+    }
+    return hasFindings ? 1 : 0;
 }
 
 static int runLoginCommand(int argc, char** argv) {
@@ -605,6 +665,9 @@ int main(int argc, char** argv) {
     }
     if (command == "publish") {
         return runPublishCommand(argc, argv);
+    }
+    if (command == "audit") {
+        return runAuditCommand(argc, argv);
     }
     if (command == "login") {
         return runLoginCommand(argc, argv);

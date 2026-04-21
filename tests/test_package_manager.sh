@@ -99,6 +99,7 @@ write_registry_index() {
     local mode="${2:-correct}"
     python3 - "$registry_dir" "$mode" <<'PY'
 from pathlib import Path
+import hashlib
 import sys
 
 registry_dir = Path(sys.argv[1])
@@ -112,11 +113,7 @@ def digest_directory(root: Path) -> str:
         seed.extend(b"\n")
         seed.extend(path.read_bytes())
         seed.extend(b"\n")
-    value = 1469598103934665603
-    for byte in seed:
-        value ^= byte
-        value = (value * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-    return f"{value:016x}"
+    return "sha256:" + hashlib.sha256(seed).hexdigest()
 
 records = []
 for package_dir in sorted((registry_dir / "packages").glob("*/*/*")):
@@ -126,7 +123,7 @@ for package_dir in sorted((registry_dir / "packages").glob("*/*/*")):
     package_id = f"{namespace}:{package_name}"
     digest = digest_directory(package_dir)
     if mode == "digest-mismatch" and package_id == "acme:http" and version == "1.0.0":
-        digest = "0000000000000000"
+        digest = "sha256:" + ("0" * 64)
 
     dependencies = []
     if package_id == "acme:http":
@@ -144,6 +141,130 @@ dependencies = {dependencies!r}
 
 index = 'schema_version = "registry.v1"\n\n' + "\n".join(records)
 (registry_dir / "index.toml").write_text(index.replace("'", '"'), encoding="utf-8")
+PY
+}
+
+create_signing_key() {
+    local key_file="$1"
+    local key_id="$2"
+    local pem_file="${key_file%.toml}.pem"
+
+    openssl genpkey -algorithm Ed25519 -out "$pem_file" >/dev/null 2>&1
+
+    local private_der_b64
+    private_der_b64="$(openssl pkey -in "$pem_file" -outform DER | \
+        python3 -c 'import base64,sys; sys.stdout.write(base64.b64encode(sys.stdin.buffer.read()).decode("ascii"))')"
+
+    local public_der_b64
+    public_der_b64="$(openssl pkey -in "$pem_file" -pubout -outform DER | \
+        python3 -c 'import base64,sys; sys.stdout.write(base64.b64encode(sys.stdin.buffer.read()).decode("ascii"))')"
+
+    cat > "$key_file" <<EOF
+schema_version = "registry-key.v1"
+key_id = "$key_id"
+algorithm = "ed25519"
+private_key = "$private_der_b64"
+public_key = "$public_der_b64"
+EOF
+}
+
+trusted_key_spec() {
+    python3 - "$1" <<'PY'
+from pathlib import Path
+import sys
+
+key_file = Path(sys.argv[1])
+fields = {}
+for line in key_file.read_text(encoding="utf-8").splitlines():
+    if "=" not in line:
+        continue
+    key, value = line.split("=", 1)
+    fields[key.strip()] = value.strip().strip('"')
+print(f'{fields["key_id"]}:{fields["public_key"]}')
+PY
+}
+
+write_signed_advisories() {
+    local registry_dir="$1"
+    local key_file="$2"
+    local advisory_id="$3"
+    local package_id="$4"
+    local affected="$5"
+    local severity="$6"
+    local summary="$7"
+    local fixed_version="${8:-}"
+    local url="${9:-}"
+    local pem_file="${key_file%.toml}.pem"
+    local payload_path="$TEMP_DIR/advisories_payload.toml"
+    local sig_path="$TEMP_DIR/advisories.sig"
+    local key_id
+    key_id="$(python3 - "$key_file" <<'PY'
+from pathlib import Path
+import sys
+
+fields = {}
+for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    if "=" not in line:
+        continue
+    key, value = line.split("=", 1)
+    fields[key.strip()] = value.strip().strip('"')
+print(fields["key_id"])
+PY
+)"
+
+    python3 - "$payload_path" "$advisory_id" "$package_id" "$affected" \
+        "$severity" "$summary" "$fixed_version" "$url" <<'PY'
+from pathlib import Path
+import sys
+
+payload_path = Path(sys.argv[1])
+advisory_id, package_id, affected, severity, summary, fixed_version, url = sys.argv[2:9]
+
+parts = ['schema_version = "advisories.v1"', '', '[[advisory]]']
+parts.append(f'id = "{advisory_id}"')
+parts.append(f'package_id = "{package_id}"')
+parts.append(f'affected = "{affected}"')
+parts.append(f'severity = "{severity}"')
+parts.append('summary = """')
+parts.append(summary)
+parts.append('"""')
+if fixed_version:
+    parts.append(f'fixed_version = "{fixed_version}"')
+if url:
+    parts.append(f'url = "{url}"')
+payload_path.write_text("\n".join(parts) + "\n", encoding="utf-8")
+PY
+
+    openssl pkeyutl -sign -inkey "$pem_file" -rawin -in "$payload_path" \
+        -out "$sig_path" >/dev/null 2>&1
+
+    local signature_b64
+    signature_b64="$(python3 - "$sig_path" <<'PY'
+from pathlib import Path
+import base64
+import sys
+sys.stdout.write(base64.b64encode(Path(sys.argv[1]).read_bytes()).decode("ascii"))
+PY
+)"
+
+    python3 - "$registry_dir/advisories.toml" "$key_id" "$signature_b64" \
+        "$payload_path" <<'PY'
+from pathlib import Path
+import sys
+
+output_path = Path(sys.argv[1])
+key_id = sys.argv[2]
+signature = sys.argv[3]
+payload_path = Path(sys.argv[4])
+payload = payload_path.read_text(encoding="utf-8")
+body = payload.split("\n", 1)[1] if "\n" in payload else ""
+output_path.write_text(
+    f'schema_version = "advisories.v1"\n'
+    f'signing_key_id = "{key_id}"\n'
+    f'signature = "{signature}"\n'
+    f'{body}',
+    encoding="utf-8",
+)
 PY
 }
 
@@ -274,13 +395,13 @@ if [[ ! -f "$TEMP_DIR/.mog/install/registry.toml" ]]; then
     exit 1
 fi
 
-if ! grep -Fq 'schema_version = "lock.v2"' "$TEMP_DIR/mog.lock"; then
+if ! grep -Fq 'schema_version = "lock.v3"' "$TEMP_DIR/mog.lock"; then
     echo "[FAIL] lockfile did not write the new lock schema"
     cat "$TEMP_DIR/mog.lock"
     exit 1
 fi
 
-if ! grep -Fq 'schema_version = "install.v2"' "$TEMP_DIR/.mog/install/registry.toml"; then
+if ! grep -Fq 'schema_version = "install.v3"' "$TEMP_DIR/.mog/install/registry.toml"; then
     echo "[FAIL] install registry did not write the new install schema"
     cat "$TEMP_DIR/.mog/install/registry.toml"
     exit 1
@@ -1033,6 +1154,7 @@ fi
 
 python3 - "$REGISTRY_DIR" <<'PY'
 from pathlib import Path
+import hashlib
 import sys
 import tomllib
 
@@ -1443,6 +1565,7 @@ EOF_BAD_BUILD_CPP
 
 python3 - "$REGISTRY_DIR" <<'PY'
 from pathlib import Path
+import hashlib
 import sys
 import tomllib
 
@@ -1458,11 +1581,7 @@ def digest_directory(root: Path) -> str:
         seed.extend(b"\n")
         seed.extend(path.read_bytes())
         seed.extend(b"\n")
-    value = 1469598103934665603
-    for byte in seed:
-        value ^= byte
-        value = (value * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-    return f"{value:016x}"
+    return "sha256:" + hashlib.sha256(seed).hexdigest()
 
 packages = data.get("package", [])
 packages.append({
@@ -1559,6 +1678,7 @@ EOF_SYSDEP_CMAKE
 
 python3 - "$REGISTRY_DIR" <<'PY'
 from pathlib import Path
+import hashlib
 import sys
 import tomllib
 
@@ -1574,11 +1694,7 @@ def digest_directory(root: Path) -> str:
         seed.extend(b"\n")
         seed.extend(path.read_bytes())
         seed.extend(b"\n")
-    value = 1469598103934665603
-    for byte in seed:
-        value ^= byte
-        value = (value * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-    return f"{value:016x}"
+    return "sha256:" + hashlib.sha256(seed).hexdigest()
 
 packages = data.get("package", [])
 packages.append({
@@ -1639,6 +1755,7 @@ cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/package.so" \
 
 python3 - "$REGISTRY_DIR" "$HOST_TARGET" "$ALT_TARGET" <<'PY'
 from pathlib import Path
+import hashlib
 import sys
 import tomllib
 
@@ -1656,11 +1773,7 @@ def digest_directory(root: Path) -> str:
         seed.extend(b"\n")
         seed.extend(path.read_bytes())
         seed.extend(b"\n")
-    value = 1469598103934665603
-    for byte in seed:
-        value ^= byte
-        value = (value * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-    return f"{value:016x}"
+    return "sha256:" + hashlib.sha256(seed).hexdigest()
 
 packages = data.get("package", [])
 for package in packages:
@@ -1829,6 +1942,7 @@ EOF_MISSING_NATIVE_API
 
 python3 - "$REGISTRY_DIR" "$HOST_TARGET" <<'PY'
 from pathlib import Path
+import hashlib
 import sys
 import tomllib
 
@@ -1845,11 +1959,7 @@ def digest_directory(root: Path) -> str:
         seed.extend(b"\n")
         seed.extend(path.read_bytes())
         seed.extend(b"\n")
-    value = 1469598103934665603
-    for byte in seed:
-        value ^= byte
-        value = (value * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-    return f"{value:016x}"
+    return "sha256:" + hashlib.sha256(seed).hexdigest()
 
 packages = data.get("package", [])
 packages.append({
@@ -1947,6 +2057,9 @@ HOSTED_TOKEN="secret-token"
 HOSTED_PORT="$(start_hosted_registry_server "$HOSTED_REGISTRY_DIR" "$HOSTED_TOKEN")"
 
 HOSTED_PUBLISH_WORKSPACE="$(mktemp -d)"
+HOSTED_KEY_FILE="$HOSTED_PUBLISH_WORKSPACE/hosted-registry-key.toml"
+create_signing_key "$HOSTED_KEY_FILE" "hosted-registry"
+HOSTED_TRUSTED_KEY="$(trusted_key_spec "$HOSTED_KEY_FILE")"
 mkdir -p "$HOSTED_PUBLISH_WORKSPACE/pkg/src"
 cat > "$HOSTED_PUBLISH_WORKSPACE/mog.toml" <<EOF_HOSTED_PUBLISH_ROOT
 kind = "project"
@@ -1956,6 +2069,7 @@ description = "hosted publish root"
 
 [registries.default]
 index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
+trusted_keys = ["$HOSTED_TRUSTED_KEY"]
 EOF_HOSTED_PUBLISH_ROOT
 
 cat > "$HOSTED_PUBLISH_WORKSPACE/pkg/mog.toml" <<'EOF_HOSTED_PACKAGE'
@@ -1983,7 +2097,8 @@ if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && "$MOG" login default --token "$HOSTED_TO
     exit 1
 fi
 
-if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && "$MOG" publish pkg >/dev/null); then
+if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && \
+    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg >/dev/null); then
     echo "[FAIL] publish should upload a hosted registry package"
     exit 1
 fi
@@ -1997,6 +2112,7 @@ description = "hosted consumer"
 
 [registries.default]
 index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
+trusted_keys = ["$HOSTED_TRUSTED_KEY"]
 
 [dependencies]
 hosted_util = { package = "acme:hosted-util", version = "1.0.0" }
@@ -2016,6 +2132,37 @@ HOSTED_OUTPUT="$("$MOG" run "$HOSTED_CONSUMER_DIR/app.mog")"
 if [[ "$HOSTED_OUTPUT" != *"utility from hosted registry"* ]]; then
     echo "[FAIL] run should execute hosted registry packages"
     echo "$HOSTED_OUTPUT"
+    exit 1
+fi
+
+write_registry_index "$HOSTED_REGISTRY_DIR"
+
+HOSTED_UNTRUSTED_DIR="$TEMP_DIR/hosted-untrusted"
+mkdir -p "$HOSTED_UNTRUSTED_DIR"
+cat > "$HOSTED_UNTRUSTED_DIR/mog.toml" <<EOF_HOSTED_UNTRUSTED
+kind = "project"
+name = "hosted-untrusted"
+version = "0.1.0"
+description = "hosted untrusted"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
+
+[dependencies]
+hosted_util = { package = "acme:hosted-util", version = "1.0.0" }
+EOF_HOSTED_UNTRUSTED
+cp "$HOSTED_CONSUMER_DIR/app.mog" "$HOSTED_UNTRUSTED_DIR/app.mog"
+
+if (cd "$HOSTED_UNTRUSTED_DIR" && "$MOG" install \
+    >/tmp/mog_hosted_untrusted_failure.txt 2>&1); then
+    echo "[FAIL] hosted registries should require trusted_keys by default"
+    cat /tmp/mog_hosted_untrusted_failure.txt
+    exit 1
+fi
+
+if ! grep -Eq "trusted_keys|signed registry.v2" /tmp/mog_hosted_untrusted_failure.txt; then
+    echo "[FAIL] hosted trust failure should explain the missing trusted_keys requirement"
+    cat /tmp/mog_hosted_untrusted_failure.txt
     exit 1
 fi
 
@@ -2040,6 +2187,151 @@ fi
 if ! grep -Eq "401|download failed|unauthorized" /tmp/mog_hosted_auth_failure.txt; then
     echo "[FAIL] install should surface hosted registry auth failures"
     cat /tmp/mog_hosted_auth_failure.txt
+    exit 1
+fi
+
+HOSTED_INSECURE_DIR="$TEMP_DIR/hosted-insecure"
+mkdir -p "$HOSTED_INSECURE_DIR"
+cat > "$HOSTED_INSECURE_DIR/mog.toml" <<EOF_HOSTED_INSECURE
+kind = "project"
+name = "hosted-insecure"
+version = "0.1.0"
+description = "hosted insecure"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
+allow_insecure = true
+
+[dependencies]
+hosted_util = { package = "acme:hosted-util", version = "1.0.0" }
+EOF_HOSTED_INSECURE
+cp "$HOSTED_CONSUMER_DIR/app.mog" "$HOSTED_INSECURE_DIR/app.mog"
+
+if ! (cd "$HOSTED_INSECURE_DIR" && \
+    XDG_CONFIG_HOME="$TEMP_DIR/xdg-config" \
+    "$MOG" login default --token "$HOSTED_TOKEN" >/dev/null && \
+    XDG_CONFIG_HOME="$TEMP_DIR/xdg-config" \
+    MOG_CACHE_DIR="$TEMP_DIR/hosted-insecure-cache" \
+    "$MOG" install >/dev/null); then
+    echo "[FAIL] allow_insecure should permit unsigned hosted registry installs"
+    exit 1
+fi
+
+HOSTED_INSECURE_OUTPUT="$("$MOG" run "$HOSTED_INSECURE_DIR/app.mog")"
+if [[ "$HOSTED_INSECURE_OUTPUT" != *"utility from hosted registry"* ]]; then
+    echo "[FAIL] allow_insecure hosted install should still run downloaded packages"
+    echo "$HOSTED_INSECURE_OUTPUT"
+    exit 1
+fi
+
+AUDIT_ROOT="$TEMP_DIR/audit-root"
+AUDIT_REGISTRY_DIR="$AUDIT_ROOT/registry"
+AUDIT_PUBLISH_WORKSPACE="$AUDIT_ROOT/publish"
+AUDIT_CONSUMER_DIR="$AUDIT_ROOT/consumer"
+AUDIT_KEY_FILE="$AUDIT_ROOT/audit-registry-key.toml"
+mkdir -p "$AUDIT_PUBLISH_WORKSPACE/pkg/src" "$AUDIT_CONSUMER_DIR"
+mkdir -p "$AUDIT_REGISTRY_DIR"
+create_signing_key "$AUDIT_KEY_FILE" "audit-registry"
+AUDIT_TRUSTED_KEY="$(trusted_key_spec "$AUDIT_KEY_FILE")"
+
+cat > "$AUDIT_PUBLISH_WORKSPACE/mog.toml" <<EOF_AUDIT_PUBLISH_ROOT
+kind = "project"
+name = "audit-publish-root"
+version = "0.1.0"
+description = "audit publish root"
+
+[registries.default]
+index = "$AUDIT_REGISTRY_DIR/index.toml"
+trusted_keys = ["$AUDIT_TRUSTED_KEY"]
+EOF_AUDIT_PUBLISH_ROOT
+
+cat > "$AUDIT_PUBLISH_WORKSPACE/pkg/mog.toml" <<'EOF_AUDIT_PACKAGE'
+kind = "source"
+import_name = "audit_util"
+namespace = "acme"
+name = "audit-util"
+version = "1.0.0"
+author = "Audit registry test"
+description = "Audit utility package."
+entry = "src/main.mog"
+dependencies = []
+EOF_AUDIT_PACKAGE
+
+cat > "$AUDIT_PUBLISH_WORKSPACE/pkg/src/main.mog" <<'EOF_AUDIT_PACKAGE_SRC'
+const MESSAGE str = "utility from audit registry"
+
+fn Name() str {
+    return MESSAGE
+}
+EOF_AUDIT_PACKAGE_SRC
+
+if ! (cd "$AUDIT_PUBLISH_WORKSPACE" && \
+    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" pkg >/dev/null); then
+    echo "[FAIL] signed local registry publish should succeed for audit tests"
+    exit 1
+fi
+
+cat > "$AUDIT_CONSUMER_DIR/mog.toml" <<EOF_AUDIT_CONSUMER
+kind = "project"
+name = "audit-consumer"
+version = "0.1.0"
+description = "audit consumer"
+
+[registries.default]
+index = "$AUDIT_REGISTRY_DIR/index.toml"
+trusted_keys = ["$AUDIT_TRUSTED_KEY"]
+
+[dependencies]
+audit_util = { package = "acme:audit-util", version = "1.0.0" }
+EOF_AUDIT_CONSUMER
+
+cat > "$AUDIT_CONSUMER_DIR/app.mog" <<'EOF_AUDIT_APP'
+const audit_util = @import("audit_util")
+print(audit_util.Name())
+EOF_AUDIT_APP
+
+if ! (cd "$AUDIT_CONSUMER_DIR" && "$MOG" install >/dev/null); then
+    echo "[FAIL] signed local registry install should succeed for audit tests"
+    exit 1
+fi
+
+AUDIT_CLEAN_OUTPUT="$(
+    cd "$AUDIT_CONSUMER_DIR" && "$MOG" audit
+)"
+if [[ "$AUDIT_CLEAN_OUTPUT" != *"No known vulnerable packages found."* ]]; then
+    echo "[FAIL] audit should report a clean result when no advisories match"
+    echo "$AUDIT_CLEAN_OUTPUT"
+    exit 1
+fi
+
+write_signed_advisories \
+    "$AUDIT_REGISTRY_DIR" \
+    "$AUDIT_KEY_FILE" \
+    "MOG-2026-0001" \
+    "acme:audit-util" \
+    "1.0.0" \
+    "high" \
+    "Audit test advisory." \
+    "1.0.1" \
+    "https://example.invalid/advisories/MOG-2026-0001"
+
+set +e
+AUDIT_FINDINGS_OUTPUT="$(
+    cd "$AUDIT_CONSUMER_DIR" && "$MOG" audit
+)"
+AUDIT_FINDINGS_STATUS=$?
+set -e
+
+if [[ $AUDIT_FINDINGS_STATUS -eq 0 ]]; then
+    echo "[FAIL] audit should exit non-zero when a locked package is vulnerable"
+    echo "$AUDIT_FINDINGS_OUTPUT"
+    exit 1
+fi
+
+if [[ "$AUDIT_FINDINGS_OUTPUT" != *"MOG-2026-0001 [high] acme:audit-util@1.0.0"* ]] || \
+   [[ "$AUDIT_FINDINGS_OUTPUT" != *"Fixed in 1.0.1."* ]]; then
+    echo "[FAIL] audit should report advisory id, severity, package, and remediation"
+    echo "$AUDIT_FINDINGS_OUTPUT"
     exit 1
 fi
 

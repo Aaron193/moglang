@@ -12,9 +12,10 @@ Phase snapshot:
 - Phase 2 registry and publishing: partially implemented
 - Phase 3 native artifact distribution: in progress (broader native toolchain
   policy and full hosted official-package release automation remain)
-- Phase 4 enterprise and security features: started (root-manifest policy
-  enforcement for allowed registries, allowed native namespaces, and
-  CI-locked installs is implemented; signature and audit work remain)
+- Phase 4 enterprise and security features: in progress (policy baseline,
+  signed registry/advisory metadata, hosted-registry trust enforcement, and
+  lockfile-based `mog audit` are implemented; richer private-registry
+  bootstrap/trust workflows and broader enterprise policy remain)
 
 Phase 1 local package-management work is now substantially implemented in the
 repository. The current codebase supports:
@@ -98,23 +99,39 @@ repository. The current codebase supports:
 - policy enforcement during `mog install` and install-aware `mog run`,
   including pre-resolution registry allowlist checks and final resolved-graph
   native/registry policy validation
+- SHA-256-prefixed artifact, manifest, API, and cache digests
+- signed `registry.v2` metadata using Ed25519 signing keys passed through
+  `mog publish --signing-key <registry-key.v1>`
+- trusted hosted-registry verification through
+  `[registries.<name>].trusted_keys = ["<key_id>:<base64-der-public-key>"]`
+- explicit hosted-registry compatibility override through
+  `[registries.<name>].allow_insecure = true`
+- lock/install metadata pinning of the registry signing key via
+  `registry_key_id`
+- signed `advisories.v1` metadata plus lockfile-based `mog audit`
+  and `mog audit --offline`
+- signed-registry and audit coverage in `tests/test_package_manager.sh`
 
 Not implemented yet:
 
-- signed metadata or artifact verification
 - richer hosted-registry service contracts beyond the current `index.toml` +
   artifact upload/download workflow
 - broader official-package hosted release automation beyond the current static
   artifact workflow
 - richer enterprise policy workflows beyond the current root-manifest registry,
   native-namespace, and CI-locked install controls
+- private-registry trust/bootstrap workflows beyond project-declared trusted
+  keys, bearer tokens, and `allow_insecure`
+- detached artifact-signature workflows, transparency/revocation, or other
+  richer supply-chain trust features beyond the current signed metadata +
+  SHA-256 artifact digest model
 
 This document describes the target package architecture for Mog, the required
 user-facing workflows, internal invariants, security posture, and a phased
 implementation plan. It is written against the current repository state, where
 packages already support local installation and managed resolution, while
 remote distribution, published-version dependency solving, and registry trust
-features are not yet complete.
+features are only partially complete.
 
 ## Background
 
@@ -769,16 +786,17 @@ Recommended supporting flags:
 Current implementation status:
 
 - implemented commands: `init`, `add`, `install`, `update`, `publish`, `run`,
-  `validate-package`, `login`, `logout`
+  `validate-package`, `login`, `logout`, `audit`
 - implemented compatibility path: `mog <file>`
 - implemented legacy flag compatibility: `--validate-package`
 - implemented package-manager flags: `--locked`, `--offline`,
-  `--no-native-build`, `--prefer-prebuilt`, and `--target`
+  `--no-native-build`, `--prefer-prebuilt`, `--target`, and
+  `publish --signing-key`
 - implemented root-manifest policy controls:
-  `allowed_registries`, `allowed_native_namespaces`, and
+  `allowed_registries`, `allowed_native_namespaces`,
+  registry `trusted_keys`, registry `allow_insecure`, and
   `require_locked_in_ci`
-- not implemented yet: `remove`, `test`, `build`, `registry`, `cache`, and
-  `audit`
+- not implemented yet: `remove`, `test`, `build`, `registry`, and `cache`
 
 ## Tooling Integration
 
@@ -1055,8 +1073,8 @@ Deliver:
 
 Current status:
 
-- started
-- shipped in the current policy-baseline slice:
+- in progress
+- shipped in the current policy/trust-baseline slice:
   - root-manifest `[policy]` parsing and persistence
   - registry allowlist enforcement for published dependencies before registry
     resolution/download
@@ -1064,11 +1082,22 @@ Current status:
     native-package namespace allowlists
   - `require_locked_in_ci` enforcement for `mog install` and install-aware
     `mog run`
+  - SHA-256-prefixed digest generation for published artifacts and generated
+    package metadata
+  - signed `registry.v2` metadata verification for trusted registries
+  - hosted-registry default trust enforcement with
+    `[registries.<alias>].trusted_keys`
+  - explicit hosted-registry unsigned compatibility through
+    `[registries.<alias>].allow_insecure = true`
+  - `mog publish --signing-key <registry-key.v1>` for signed registry writes
+  - lock/install metadata pinning of `registry_key_id`
+  - signed `advisories.v1` metadata loading and lockfile-based `mog audit`
+  - `mog audit --offline` using cached advisory metadata
 - not yet complete inside Phase 4:
-  - signed metadata and artifacts
-  - `mog audit`
-  - private-registry trust/bootstrap workflows beyond the current alias and
-    token configuration
+  - private-registry trust/bootstrap workflows beyond the current alias,
+    bearer-token, project-trusted-key, and `allow_insecure` configuration
+  - richer supply-chain trust features such as detached artifact signatures,
+    transparency, key rotation/revocation, and policy-enforced signature modes
 
 ## Recommended Immediate Decisions
 

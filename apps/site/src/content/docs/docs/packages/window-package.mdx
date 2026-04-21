@@ -91,12 +91,14 @@ The repo now carries a scripted publish path for the official package:
 
 ```bash
 ./scripts/publish_official_window.sh --registry-path /tmp/mog-registry
+./scripts/publish_official_window.sh --registry-path /tmp/mog-registry --signing-key ./keys/release.toml
 ```
 
 The script:
 
 - checks that `build/packages/mog/window/package.so` or `package.dylib` exists
 - uses the existing `mog publish` flow under the hood
+- can sign the generated registry index with `--signing-key <registry-key.v1>`
 - can also publish through an existing registry alias with
   `--registry <alias> --workspace <dir>`
 
