@@ -412,6 +412,16 @@ const ProjectRegistryConfig* findRegistryConfig(
 const ProjectNativeToolchainConfig* findNativeToolchainConfig(
     const ProjectManifestData& manifest, std::string_view target);
 std::string normalizeEnvKey(std::string_view text);
+bool enforceAllowedRegistryPolicy(const ProjectPolicyConfig& policy,
+                                  std::string_view registryAlias,
+                                  std::string_view packageId,
+                                  std::string& outError);
+bool enforceResolvedEntryPolicies(const ProjectManifestData& manifest,
+                                  const std::vector<PackageRegistryEntry>& entries,
+                                  std::string& outError);
+bool enforceCiLockedPolicy(const ProjectManifestData& manifest,
+                           const InstallOptions& options,
+                           std::string& outError);
 
 struct NativeToolchainSelection {
     std::string target;
@@ -2846,6 +2856,11 @@ bool resolveRegistryPackageNode(
         return false;
     }
 
+    if (!enforceAllowedRegistryPolicy(manifest.policy, registryAlias, packageId,
+                                      outError)) {
+        return false;
+    }
+
     const ProjectRegistryConfig* registry =
         findRegistryConfig(manifest, registryAlias);
     if (registry == nullptr) {
@@ -3894,6 +3909,11 @@ bool collectResolvedPackages(
             if (isPublishedDependency) {
                 const std::string registryAlias =
                     dependency.registry.empty() ? "default" : dependency.registry;
+                if (!enforceAllowedRegistryPolicy(manifest.policy, registryAlias,
+                                                  dependency.packageId,
+                                                  outError)) {
+                    return false;
+                }
                 publishedRoots.push_back(PublishedRootConstraint{
                     dependency.packageId, dependency.version, registryAlias,
                     groupName});
@@ -3929,6 +3949,10 @@ bool collectResolvedPackages(
                 if (loadedRegistryIndexes.find(registryAlias) !=
                     loadedRegistryIndexes.end()) {
                     return true;
+                }
+                if (!enforceAllowedRegistryPolicy(manifest.policy, registryAlias,
+                                                  "", outError)) {
+                    return false;
                 }
                 const ProjectRegistryConfig* registry =
                     findRegistryConfig(manifest, registryAlias);
@@ -4129,6 +4153,11 @@ bool collectResolvedPackages(
                             const std::string registryAlias =
                                 dependency.registry.empty() ? "default"
                                                             : dependency.registry;
+                            if (!enforceAllowedRegistryPolicy(
+                                    manifest.policy, registryAlias,
+                                    dependency.packageId, outError)) {
+                                return false;
+                            }
                             if (!resolveRegistryPackageNode(
                                     projectRoot, manifest, registryAlias,
                                     dependency.packageId, dependency.version,
@@ -4518,6 +4547,112 @@ void sortNativeToolchains(
               });
 }
 
+bool isCiEnvironment() {
+    const char* raw = std::getenv("CI");
+    if (raw == nullptr) {
+        return false;
+    }
+
+    const std::string value = trim(raw);
+    if (value.empty()) {
+        return false;
+    }
+
+    std::string lowered;
+    lowered.reserve(value.size());
+    for (char ch : value) {
+        lowered.push_back(static_cast<char>(
+            std::tolower(static_cast<unsigned char>(ch))));
+    }
+    return lowered != "0" && lowered != "false" && lowered != "no" &&
+           lowered != "off";
+}
+
+bool manifestHasInstallDependencies(const ProjectManifestData& manifest,
+                                    const InstallOptions& options) {
+    return !manifest.dependencies.empty() ||
+           (options.includeDevDependencies && !manifest.devDependencies.empty());
+}
+
+bool policyAllowsRegistry(const ProjectPolicyConfig& policy,
+                          std::string_view registryAlias) {
+    if (policy.allowedRegistries.empty()) {
+        return true;
+    }
+    return std::find(policy.allowedRegistries.begin(),
+                     policy.allowedRegistries.end(),
+                     registryAlias) != policy.allowedRegistries.end();
+}
+
+bool policyAllowsNativeNamespace(const ProjectPolicyConfig& policy,
+                                 std::string_view packageNamespace) {
+    if (policy.allowedNativeNamespaces.empty()) {
+        return true;
+    }
+    return std::find(policy.allowedNativeNamespaces.begin(),
+                     policy.allowedNativeNamespaces.end(),
+                     packageNamespace) != policy.allowedNativeNamespaces.end();
+}
+
+bool enforceCiLockedPolicy(const ProjectManifestData& manifest,
+                           const InstallOptions& options,
+                           std::string& outError) {
+    outError.clear();
+    if (!manifest.policy.requireLockedInCi || !isCiEnvironment() ||
+        !manifestHasInstallDependencies(manifest, options)) {
+        return true;
+    }
+    if (options.locked) {
+        return true;
+    }
+
+    outError =
+        "Project policy requires --locked installs when CI is set in the environment.";
+    return false;
+}
+
+bool enforceAllowedRegistryPolicy(const ProjectPolicyConfig& policy,
+                                  std::string_view registryAlias,
+                                  std::string_view packageId,
+                                  std::string& outError) {
+    outError.clear();
+    if (policyAllowsRegistry(policy, registryAlias)) {
+        return true;
+    }
+
+    if (packageId.empty()) {
+        outError = "Project policy disallows registry '" +
+                   std::string(registryAlias) + "'.";
+    } else {
+        outError = "Project policy disallows registry '" +
+                   std::string(registryAlias) + "' for package '" +
+                   std::string(packageId) + "'.";
+    }
+    return false;
+}
+
+bool enforceResolvedEntryPolicies(const ProjectManifestData& manifest,
+                                  const std::vector<PackageRegistryEntry>& entries,
+                                  std::string& outError) {
+    outError.clear();
+    for (const auto& entry : entries) {
+        if (entry.sourceType == "registry" &&
+            !enforceAllowedRegistryPolicy(manifest.policy, entry.registry,
+                                          entry.packageId, outError)) {
+            return false;
+        }
+        if (entry.kind == "native" &&
+            !policyAllowsNativeNamespace(manifest.policy,
+                                         entry.packageNamespace)) {
+            outError = "Project policy disallows native package '" +
+                       entry.packageId + "' from namespace '" +
+                       entry.packageNamespace + "'.";
+            return false;
+        }
+    }
+    return true;
+}
+
 void writeDependencyTable(std::ofstream& out, const char* tableName,
                           const std::vector<DependencySpec>& dependencies) {
     if (dependencies.empty()) {
@@ -4603,6 +4738,30 @@ void writeRegistryTables(std::ofstream& out,
     }
 }
 
+void writePolicyTable(std::ofstream& out, const ProjectPolicyConfig& policy) {
+    if (policy.allowedRegistries.empty() &&
+        policy.allowedNativeNamespaces.empty() &&
+        !policy.requireLockedInCi) {
+        return;
+    }
+
+    out << "\n[policy]\n";
+    if (!policy.allowedRegistries.empty()) {
+        out << "allowed_registries = "
+            << quoteTomlArray(sortedUniqueStrings(policy.allowedRegistries))
+            << "\n";
+    }
+    if (!policy.allowedNativeNamespaces.empty()) {
+        out << "allowed_native_namespaces = "
+            << quoteTomlArray(
+                   sortedUniqueStrings(policy.allowedNativeNamespaces))
+            << "\n";
+    }
+    if (policy.requireLockedInCi) {
+        out << "require_locked_in_ci = true\n";
+    }
+}
+
 void writeNativeToolchainTables(
     std::ofstream& out,
     const std::vector<ProjectNativeToolchainConfig>& nativeToolchains) {
@@ -4640,6 +4799,7 @@ bool loadProjectManifestData(const std::string& projectRoot,
     enum class Section {
         ROOT,
         WORKSPACE,
+        POLICY,
         REGISTRY,
         NATIVE_TOOLCHAIN,
         DEPENDENCIES,
@@ -4668,6 +4828,10 @@ bool loadProjectManifestData(const std::string& projectRoot,
         }
         if (content == "[workspace]") {
             section = Section::WORKSPACE;
+            continue;
+        }
+        if (content == "[policy]") {
+            section = Section::POLICY;
             continue;
         }
         if (content.rfind("[registries.", 0) == 0 && content.back() == ']') {
@@ -4773,6 +4937,43 @@ bool loadProjectManifestData(const std::string& projectRoot,
             }
             outManifest.workspaceMembers =
                 sortedUniqueStrings(std::move(outManifest.workspaceMembers));
+            continue;
+        }
+
+        if (section == Section::POLICY) {
+            if (key == "allowed_registries") {
+                if (!parseQuotedStringArray(value,
+                                            outManifest.policy.allowedRegistries,
+                                            parseError)) {
+                    outError =
+                        "Invalid policy field '" + key + "': " + parseError;
+                    return false;
+                }
+                outManifest.policy.allowedRegistries = sortedUniqueStrings(
+                    std::move(outManifest.policy.allowedRegistries));
+            } else if (key == "allowed_native_namespaces") {
+                if (!parseQuotedStringArray(
+                        value, outManifest.policy.allowedNativeNamespaces,
+                        parseError)) {
+                    outError =
+                        "Invalid policy field '" + key + "': " + parseError;
+                    return false;
+                }
+                outManifest.policy.allowedNativeNamespaces =
+                    sortedUniqueStrings(
+                        std::move(outManifest.policy.allowedNativeNamespaces));
+            } else if (key == "require_locked_in_ci") {
+                if (!parseBoolValue(value,
+                                    outManifest.policy.requireLockedInCi,
+                                    parseError)) {
+                    outError =
+                        "Invalid policy field '" + key + "': " + parseError;
+                    return false;
+                }
+            } else {
+                outError = "Unsupported policy field '" + key + "'.";
+                return false;
+            }
             continue;
         }
 
@@ -4889,11 +5090,17 @@ bool writeProjectManifestData(const std::string& projectRoot,
         manifest.nativeToolchains;
     std::vector<DependencySpec> dependencies = manifest.dependencies;
     std::vector<DependencySpec> devDependencies = manifest.devDependencies;
+    ProjectPolicyConfig policy = manifest.policy;
     sortRegistries(registries);
     sortNativeToolchains(nativeToolchains);
     sortDependencies(dependencies);
     sortDependencies(devDependencies);
+    policy.allowedRegistries =
+        sortedUniqueStrings(std::move(policy.allowedRegistries));
+    policy.allowedNativeNamespaces =
+        sortedUniqueStrings(std::move(policy.allowedNativeNamespaces));
 
+    writePolicyTable(out, policy);
     writeRegistryTables(out, registries);
     writeNativeToolchainTables(out, nativeToolchains);
     writeDependencyTable(out, "dependencies", dependencies);
@@ -5443,6 +5650,9 @@ bool installProjectPackages(const std::string& projectRoot,
     if (!loadProjectManifestData(projectRoot, manifest, outError)) {
         return false;
     }
+    if (!enforceCiLockedPolicy(manifest, options, outError)) {
+        return false;
+    }
 
     std::vector<PackageRegistryEntry> resolvedEntries;
     bool usingLockfile = false;
@@ -5481,6 +5691,10 @@ bool installProjectPackages(const std::string& projectRoot,
         }
     }
 
+    if (!enforceResolvedEntryPolicies(manifest, resolvedEntries, outError)) {
+        return false;
+    }
+
     if (!materializeInstalledPackages(projectRoot, manifest, resolvedEntries,
                                       options,
                                       outEntries, outError)) {
@@ -5514,6 +5728,9 @@ bool ensureProjectPackagesInstalled(const std::string& projectRoot,
 
     ProjectManifestData manifest;
     if (!loadProjectManifestData(projectRoot, manifest, outError)) {
+        return false;
+    }
+    if (!enforceCiLockedPolicy(manifest, options, outError)) {
         return false;
     }
 

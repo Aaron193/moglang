@@ -506,13 +506,18 @@ for editor navigation, readable package API docs, and public opaque type
 declarations.
 
 Projects can also declare published registries and target-specific native
-toolchains in `mog.toml`:
+toolchains, plus install policy controls, in `mog.toml`:
 
 ```toml
 kind = "project"
 name = "demo"
 version = "0.1.0"
 description = "demo project"
+
+[policy]
+allowed_registries = ["default"]
+allowed_native_namespaces = ["mog"]
+require_locked_in_ci = true
 
 [registries.default]
 index = "./registry"
@@ -527,6 +532,12 @@ window = { package = "mog:window", version = "0.1.0" }
 For native source-build fallback, Mog uses `--cmake-toolchain` first. If that
 flag is not provided for a non-host target, it then checks
 `[native.toolchains."<target>"].cmake_toolchain` in the project manifest.
+
+When `[policy]` is present, Mog enforces it during `install` and install-aware
+`run` workflows. `allowed_registries` restricts registry-sourced dependencies,
+`allowed_native_namespaces` restricts native packages regardless of source, and
+`require_locked_in_ci = true` requires `--locked` whenever the `CI`
+environment variable is set.
 
 The official `mog:window` publish helper can run locally with flags or in CI
 with environment variables:

@@ -4,7 +4,7 @@
 
 In progress.
 
-Last updated: 2026-04-19.
+Last updated: 2026-04-21.
 
 Phase snapshot:
 
@@ -12,8 +12,9 @@ Phase snapshot:
 - Phase 2 registry and publishing: partially implemented
 - Phase 3 native artifact distribution: in progress (broader native toolchain
   policy and full hosted official-package release automation remain)
-- Phase 4 enterprise and security features: not started beyond local
-  `--locked` / `--offline` workflows
+- Phase 4 enterprise and security features: started (root-manifest policy
+  enforcement for allowed registries, allowed native namespaces, and
+  CI-locked installs is implemented; signature and audit work remain)
 
 Phase 1 local package-management work is now substantially implemented in the
 repository. The current codebase supports:
@@ -92,6 +93,11 @@ repository. The current codebase supports:
 - GitHub Actions workflow that builds, validates, and publishes a static
   file-registry artifact for the official `mog:window` package on supported
   host runners
+- root-manifest `[policy]` support with `allowed_registries`,
+  `allowed_native_namespaces`, and `require_locked_in_ci`
+- policy enforcement during `mog install` and install-aware `mog run`,
+  including pre-resolution registry allowlist checks and final resolved-graph
+  native/registry policy validation
 
 Not implemented yet:
 
@@ -100,8 +106,8 @@ Not implemented yet:
   artifact upload/download workflow
 - broader official-package hosted release automation beyond the current static
   artifact workflow
-- enterprise policy workflows beyond the current local `--locked` / `--offline`
-  support
+- richer enterprise policy workflows beyond the current root-manifest registry,
+  native-namespace, and CI-locked install controls
 
 This document describes the target package architecture for Mog, the required
 user-facing workflows, internal invariants, security posture, and a phased
@@ -763,13 +769,16 @@ Recommended supporting flags:
 Current implementation status:
 
 - implemented commands: `init`, `add`, `install`, `update`, `publish`, `run`,
-  `validate-package`
+  `validate-package`, `login`, `logout`
 - implemented compatibility path: `mog <file>`
 - implemented legacy flag compatibility: `--validate-package`
 - implemented package-manager flags: `--locked`, `--offline`,
   `--no-native-build`, `--prefer-prebuilt`, and `--target`
-- not implemented yet: `remove`, `test`, `build`, `login`, `registry`,
-  `cache`, and `audit`
+- implemented root-manifest policy controls:
+  `allowed_registries`, `allowed_native_namespaces`, and
+  `require_locked_in_ci`
+- not implemented yet: `remove`, `test`, `build`, `registry`, `cache`, and
+  `audit`
 
 ## Tooling Integration
 
@@ -1046,8 +1055,20 @@ Deliver:
 
 Current status:
 
-- not started as a distinct feature slice beyond the local `--locked` /
-  `--offline` baseline already shipped in earlier phases
+- started
+- shipped in the current policy-baseline slice:
+  - root-manifest `[policy]` parsing and persistence
+  - registry allowlist enforcement for published dependencies before registry
+    resolution/download
+  - final resolved-graph policy enforcement for registry-sourced packages and
+    native-package namespace allowlists
+  - `require_locked_in_ci` enforcement for `mog install` and install-aware
+    `mog run`
+- not yet complete inside Phase 4:
+  - signed metadata and artifacts
+  - `mog audit`
+  - private-registry trust/bootstrap workflows beyond the current alias and
+    token configuration
 
 ## Recommended Immediate Decisions
 

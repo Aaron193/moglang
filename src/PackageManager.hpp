@@ -16,12 +16,19 @@ struct ProjectNativeToolchainConfig {
     std::string cmakeToolchain;
 };
 
+struct ProjectPolicyConfig {
+    std::vector<std::string> allowedRegistries;
+    std::vector<std::string> allowedNativeNamespaces;
+    bool requireLockedInCi = false;
+};
+
 struct ProjectManifestData {
     std::string kind = "project";
     std::string name;
     std::string version = "0.1.0";
     std::string description;
     std::vector<std::string> workspaceMembers;
+    ProjectPolicyConfig policy;
     std::vector<ProjectRegistryConfig> registries;
     std::vector<ProjectNativeToolchainConfig> nativeToolchains;
     std::vector<DependencySpec> dependencies;

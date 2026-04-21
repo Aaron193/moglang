@@ -42,8 +42,11 @@ HOSTED_CONSUMER_DIR=""
 GIT_REPO_DIR=""
 GIT_CONSUMER_DIR=""
 GIT_OFFLINE_FAIL_DIR=""
+POLICY_REGISTRY_DIR=""
+POLICY_NATIVE_DIR=""
+POLICY_CI_DIR=""
 HOSTED_SERVER_PID=""
-trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}"' EXIT
+trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}" "${POLICY_REGISTRY_DIR:-}" "${POLICY_NATIVE_DIR:-}" "${POLICY_CI_DIR:-}"' EXIT
 
 detect_host_target() {
     local os
@@ -2122,6 +2125,119 @@ fi
 if ! grep -Eq "offline|cached locally" /tmp/mog_git_offline_failure.txt; then
     echo "[FAIL] install --offline should explain missing cached git dependencies"
     cat /tmp/mog_git_offline_failure.txt
+    exit 1
+fi
+
+POLICY_REGISTRY_DIR="$(mktemp -d)"
+cat > "$POLICY_REGISTRY_DIR/mog.toml" <<EOF_POLICY_REGISTRY
+kind = "project"
+name = "policy-registry-test"
+version = "0.1.0"
+description = "policy registry test"
+
+[policy]
+allowed_registries = ["internal"]
+
+[registries.default]
+index = "$REGISTRY_DIR"
+
+[dependencies]
+http = { package = "acme:http", version = "1.0.0" }
+EOF_POLICY_REGISTRY
+
+if (cd "$POLICY_REGISTRY_DIR" && "$MOG" install >/tmp/mog_policy_registry_failure.txt 2>&1); then
+    echo "[FAIL] install should reject dependencies from registries outside policy allowlists"
+    cat /tmp/mog_policy_registry_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "Project policy disallows registry 'default' for package 'acme:http'." /tmp/mog_policy_registry_failure.txt; then
+    echo "[FAIL] registry policy failure should name the rejected registry and package"
+    cat /tmp/mog_policy_registry_failure.txt
+    exit 1
+fi
+
+POLICY_NATIVE_DIR="$(mktemp -d)"
+cat > "$POLICY_NATIVE_DIR/mog.toml" <<EOF_POLICY_NATIVE
+kind = "project"
+name = "policy-native-test"
+version = "0.1.0"
+description = "policy native test"
+
+[policy]
+allowed_native_namespaces = ["mog"]
+
+[dependencies]
+math = { path = "$PROJECT_ROOT/packages/examples/math", package = "examples:math", version = "0.1.0" }
+EOF_POLICY_NATIVE
+
+if (cd "$POLICY_NATIVE_DIR" && "$MOG" install >/tmp/mog_policy_native_failure.txt 2>&1); then
+    echo "[FAIL] install should reject native packages outside allowed namespaces"
+    cat /tmp/mog_policy_native_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "Project policy disallows native package 'examples:math' from namespace 'examples'." /tmp/mog_policy_native_failure.txt; then
+    echo "[FAIL] native namespace policy failure should name the rejected package"
+    cat /tmp/mog_policy_native_failure.txt
+    exit 1
+fi
+
+POLICY_CI_DIR="$(mktemp -d)"
+cat > "$POLICY_CI_DIR/mog.toml" <<EOF_POLICY_CI
+kind = "project"
+name = "policy-ci-test"
+version = "0.1.0"
+description = "policy ci test"
+
+[policy]
+require_locked_in_ci = true
+
+[dependencies]
+hello = { path = "$PROJECT_ROOT/packages/examples/hello", package = "examples:hello", version = "0.1.0" }
+EOF_POLICY_CI
+
+cat > "$POLICY_CI_DIR/app.mog" <<'EOF_POLICY_CI_APP'
+const hello = @import("hello")
+print(hello.Greet())
+EOF_POLICY_CI_APP
+
+if ! (cd "$POLICY_CI_DIR" && "$MOG" install >/dev/null); then
+    echo "[FAIL] baseline install should succeed before CI locked policy is enforced"
+    exit 1
+fi
+
+if (cd "$POLICY_CI_DIR" && CI=1 "$MOG" install >/tmp/mog_policy_ci_install_failure.txt 2>&1); then
+    echo "[FAIL] CI installs should require --locked when policy enables it"
+    cat /tmp/mog_policy_ci_install_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "Project policy requires --locked installs when CI is set in the environment." /tmp/mog_policy_ci_install_failure.txt; then
+    echo "[FAIL] CI locked-policy failure should explain the required flag"
+    cat /tmp/mog_policy_ci_install_failure.txt
+    exit 1
+fi
+
+if ! (cd "$POLICY_CI_DIR" && CI=1 "$MOG" install --locked >/dev/null); then
+    echo "[FAIL] install --locked should satisfy the CI locked policy"
+    exit 1
+fi
+
+if (cd "$POLICY_CI_DIR" && CI=1 "$MOG" run app.mog >/tmp/mog_policy_ci_run_failure.txt 2>&1); then
+    echo "[FAIL] CI runs should require --locked when policy enables it"
+    cat /tmp/mog_policy_ci_run_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "Project policy requires --locked installs when CI is set in the environment." /tmp/mog_policy_ci_run_failure.txt; then
+    echo "[FAIL] CI run failure should explain the required flag"
+    cat /tmp/mog_policy_ci_run_failure.txt
+    exit 1
+fi
+
+if [[ "$(cd "$POLICY_CI_DIR" && CI=1 "$MOG" run --locked app.mog)" != *"hello from source package"* ]]; then
+    echo "[FAIL] run --locked should satisfy the CI locked policy"
     exit 1
 fi
 
