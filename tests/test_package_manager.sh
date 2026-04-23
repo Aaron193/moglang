@@ -21,6 +21,7 @@ PUBLISH_WORKSPACE=""
 PUBLISHED_GREETER_DIR=""
 DIGEST_DIR=""
 NATIVE_PUBLISH_WORKSPACE=""
+NATIVE_EXTERNAL_BUNDLE_DIR=""
 NATIVE_CONSUMER_DIR=""
 NATIVE_BAD_DIR=""
 NATIVE_SOURCE_DIR=""
@@ -35,6 +36,7 @@ NATIVE_SYSDEP_FAIL_DIR=""
 NATIVE_TARGET_DIR=""
 NATIVE_TARGET_FAIL_DIR=""
 WINDOW_PUBLISH_DIR=""
+WINDOW_BUNDLE_ROOT=""
 NATIVE_CROSS_TARGET_ENV_DIR=""
 HOSTED_REGISTRY_DIR=""
 HOSTED_PUBLISH_WORKSPACE=""
@@ -46,7 +48,7 @@ POLICY_REGISTRY_DIR=""
 POLICY_NATIVE_DIR=""
 POLICY_CI_DIR=""
 HOSTED_SERVER_PID=""
-trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}" "${POLICY_REGISTRY_DIR:-}" "${POLICY_NATIVE_DIR:-}" "${POLICY_CI_DIR:-}"' EXIT
+trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_EXTERNAL_BUNDLE_DIR:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${WINDOW_BUNDLE_ROOT:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}" "${POLICY_REGISTRY_DIR:-}" "${POLICY_NATIVE_DIR:-}" "${POLICY_CI_DIR:-}"' EXIT
 
 detect_host_target() {
     local os
@@ -857,6 +859,21 @@ if ! (cd "$PUBLISH_WORKSPACE" && "$MOG" publish "$PUBLISH_PACKAGE_DIR" >/dev/nul
     exit 1
 fi
 
+if (cd "$PUBLISH_WORKSPACE" && \
+    "$MOG" publish --target "$ALT_TARGET" "$PUBLISH_PACKAGE_DIR" \
+    >/tmp/mog_source_publish_native_flag_failure.txt 2>&1); then
+    echo "[FAIL] publish should reject native artifact flags for source packages"
+    cat /tmp/mog_source_publish_native_flag_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "Only native packages accept --target or --native-artifact-dir." \
+    /tmp/mog_source_publish_native_flag_failure.txt; then
+    echo "[FAIL] source publish flag failures should explain native-only options"
+    cat /tmp/mog_source_publish_native_flag_failure.txt
+    exit 1
+fi
+
 if ! grep -Fq 'package_id = "demo:greeter"' "$REGISTRY_DIR/index.toml" || \
    ! grep -Fq 'dependencies = ["acme:util@1.1.0"]' "$REGISTRY_DIR/index.toml"; then
     echo "[FAIL] publish should pin direct published dependencies exactly in the registry index"
@@ -981,6 +998,38 @@ if ! (cd "$NATIVE_PUBLISH_WORKSPACE" && \
     exit 1
 fi
 
+NATIVE_EXTERNAL_BUNDLE_DIR="$(mktemp -d)"
+cp "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/package.toml" \
+   "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/package.api.mog" \
+   "$NATIVE_EXTERNAL_BUNDLE_DIR/"
+cp "$NATIVE_PUBLISH_WORKSPACE/build/packages/examples/counter/package.so" \
+   "$NATIVE_EXTERNAL_BUNDLE_DIR/package.so"
+
+if (cd "$NATIVE_PUBLISH_WORKSPACE" && \
+    "$MOG" publish \
+      --native-artifact-dir "$NATIVE_EXTERNAL_BUNDLE_DIR" \
+      "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" \
+      >/tmp/mog_native_publish_missing_target.txt 2>&1); then
+    echo "[FAIL] publish should require --target when --native-artifact-dir is used"
+    cat /tmp/mog_native_publish_missing_target.txt
+    exit 1
+fi
+
+if ! grep -Fq "requires --target" /tmp/mog_native_publish_missing_target.txt; then
+    echo "[FAIL] native publish should explain missing --target for external artifact directories"
+    cat /tmp/mog_native_publish_missing_target.txt
+    exit 1
+fi
+
+if ! (cd "$NATIVE_PUBLISH_WORKSPACE" && \
+      "$MOG" publish \
+        --target "$ALT_TARGET" \
+        --native-artifact-dir "$NATIVE_EXTERNAL_BUNDLE_DIR" \
+        "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" >/dev/null); then
+    echo "[FAIL] publish should accept external native artifact bundles for a second target"
+    exit 1
+fi
+
 if ! grep -Fq 'package_id = "examples:counter"' "$REGISTRY_DIR/index.toml"; then
     echo "[FAIL] publish should record the native package in the registry index"
     cat "$REGISTRY_DIR/index.toml"
@@ -989,9 +1038,10 @@ fi
 
 if ! grep -Fq 'artifact_path = "packages/examples/counter/0.1.0/source"' \
       "$REGISTRY_DIR/index.toml" || \
-   ! grep -Fq "native_targets = [\"$HOST_TARGET\"]" "$REGISTRY_DIR/index.toml" || \
-   ! grep -Fq "native_artifact_paths = [\"packages/examples/counter/0.1.0/$HOST_TARGET\"]" \
-      "$REGISTRY_DIR/index.toml"; then
+   ! grep -Fq "\"$HOST_TARGET\"" "$REGISTRY_DIR/index.toml" || \
+   ! grep -Fq "\"$ALT_TARGET\"" "$REGISTRY_DIR/index.toml" || \
+   ! grep -Fq "packages/examples/counter/0.1.0/$HOST_TARGET" "$REGISTRY_DIR/index.toml" || \
+   ! grep -Fq "packages/examples/counter/0.1.0/$ALT_TARGET" "$REGISTRY_DIR/index.toml"; then
     echo "[FAIL] publish should record source and target-keyed native artifact metadata"
     cat "$REGISTRY_DIR/index.toml"
     exit 1
@@ -1064,6 +1114,32 @@ if [[ -n "$WINDOW_PACKAGE_LIBRARY" ]]; then
     if ! MOG_PUBLISH_REGISTRY_PATH="$REGISTRY_DIR" \
         "$WINDOW_PUBLISH_SCRIPT" >/dev/null; then
         echo "[FAIL] publish script should support CI-style registry-path configuration via environment"
+        exit 1
+    fi
+
+    WINDOW_BUNDLE_ROOT="$(mktemp -d)"
+    mkdir -p "$WINDOW_BUNDLE_ROOT/host" "$WINDOW_BUNDLE_ROOT/alt"
+    cp "$PROJECT_ROOT/packages/mog/window/mog.toml" \
+       "$PROJECT_ROOT/packages/mog/window/package.api.mog" \
+       "$WINDOW_BUNDLE_ROOT/host/"
+    cp "$PROJECT_ROOT/packages/mog/window/mog.toml" \
+       "$PROJECT_ROOT/packages/mog/window/package.api.mog" \
+       "$WINDOW_BUNDLE_ROOT/alt/"
+    cp "$WINDOW_PACKAGE_LIBRARY" "$WINDOW_BUNDLE_ROOT/host/$(basename "$WINDOW_PACKAGE_LIBRARY")"
+    cp "$WINDOW_PACKAGE_LIBRARY" "$WINDOW_BUNDLE_ROOT/alt/$(basename "$WINDOW_PACKAGE_LIBRARY")"
+    printf '%s\n' "$HOST_TARGET" > "$WINDOW_BUNDLE_ROOT/host/publish-target.txt"
+    printf '%s\n' "$ALT_TARGET" > "$WINDOW_BUNDLE_ROOT/alt/publish-target.txt"
+
+    if ! "$WINDOW_PUBLISH_SCRIPT" --registry-path "$REGISTRY_DIR" \
+        --bundle-root "$WINDOW_BUNDLE_ROOT" >/dev/null; then
+        echo "[FAIL] publish script should accept prepared bundle roots"
+        exit 1
+    fi
+
+    if ! grep -Fq "\"$ALT_TARGET\"" "$REGISTRY_DIR/index.toml" || \
+       ! grep -Fq "packages/mog/window/0.1.0/$ALT_TARGET" "$REGISTRY_DIR/index.toml"; then
+        echo "[FAIL] publish script bundle mode should add additional target artifacts"
+        cat "$REGISTRY_DIR/index.toml"
         exit 1
     fi
 

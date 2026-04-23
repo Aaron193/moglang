@@ -11,7 +11,7 @@ Phase snapshot:
 - Phase 1 local package-management baseline: mostly complete
 - Phase 2 registry and publishing: partially implemented
 - Phase 3 native artifact distribution: in progress (broader native toolchain
-  policy and full hosted official-package release automation remain)
+  policy remains)
 - Phase 4 enterprise and security features: in progress (policy baseline,
   signed registry/advisory metadata, hosted-registry trust enforcement,
   lockfile-based `mog audit`, and user-level registry bootstrap/trust flows
@@ -91,10 +91,14 @@ repository. The current codebase supports:
 - SDL-gated file-registry publish/install smoke coverage for the official
   `mog:window` package
 - repo-local `scripts/publish_official_window.sh` workflow for publishing the
-  official `mog:window` package to the current static file-registry format
-- GitHub Actions workflow that builds, validates, and publishes a static
-  file-registry artifact for the official `mog:window` package on supported
-  host runners
+  official `mog:window` package to a local registry path, an existing registry
+  alias, or a prepared multi-target bundle root
+- native-package `mog publish --target <triple> --native-artifact-dir <dir>`
+  support for cross-target prebuilt publishing into an existing registry
+  package record
+- GitHub Actions workflow that builds, validates, uploads per-runner native
+  publish bundles, and aggregates them into a hosted official-package publish
+  step for `mog:window`
 - root-manifest `[policy]` support with `allowed_registries`,
   `allowed_native_namespaces`, and `require_locked_in_ci`
 - policy enforcement during `mog install` and install-aware `mog run`,
@@ -125,8 +129,6 @@ Not implemented yet:
 
 - richer hosted-registry service contracts beyond the current `index.toml` +
   artifact upload/download workflow
-- broader official-package hosted release automation beyond the current static
-  artifact workflow
 - richer enterprise policy workflows beyond the current root-manifest registry,
   native-namespace, and CI-locked install controls
 - detached artifact-signature workflows, transparency/revocation, or other
@@ -1045,6 +1047,8 @@ Current status:
   - cached `--offline` reinstalls for previously fetched registry native
     packages
   - lockfile-first `mog run --locked` reuse of cached native registry artifacts
+  - native-package `mog publish --target <triple> --native-artifact-dir <dir>`
+    for publishing prepared cross-target prebuilt bundles
 - native `[system-dependencies]` metadata parsing for published native
   packages
 - install-time native source-build diagnostics that surface selected targets,
@@ -1058,15 +1062,14 @@ Current status:
   toolchain files
 - SDL-gated publish/install smoke coverage for the official `mog:window`
   package through the current static file-registry format
-- scripted repo-local publish workflow for the official `mog:window` package
-- GitHub Actions workflow that builds, validates, and publishes a static
-  file-registry artifact for the official `mog:window` package on supported
-  host runners
+- scripted repo-local and bundle-root publish workflow for the official
+  `mog:window` package
+- GitHub Actions workflow that builds, validates, uploads per-target native
+  bundles, and aggregates them into a hosted official-package publish step for
+  `mog:window`
 - not yet complete inside Phase 3:
   - broader native toolchain policy beyond the current CMake toolchain
     discovery contract
-  - hosted official-package deployment automation beyond the current static
-    registry artifact workflow and generic hosted publish support
 
 ### Phase 4: Enterprise and Security Features
 

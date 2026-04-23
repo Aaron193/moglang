@@ -50,6 +50,11 @@ static void printUsage(const char* executable) {
         << "  --locked --offline --prefer-prebuilt --no-native-build\n"
         << "  --target <triple> | --target=<triple>\n"
         << "  --cmake-toolchain <path> | --cmake-toolchain=<path>\n"
+        << "Flags for publish:\n"
+        << "  --registry <alias> | --registry=<alias>\n"
+        << "  --signing-key <path> | --signing-key=<path>\n"
+        << "  --target <triple> | --target=<triple>\n"
+        << "  --native-artifact-dir <dir> | --native-artifact-dir=<dir>\n"
         << "Additional flags for run:\n"
         << "  --trace --show-return --disassemble --frontend-timings --frontend-timings-json\n"
         << "  --package-path <dir> | --package-path=<dir>\n"
@@ -171,14 +176,12 @@ static bool parseInstallArgs(int argc, char** argv, int startIndex,
 }
 
 static bool parsePublishArgs(int argc, char** argv, int startIndex,
-                             std::string& outRegistryAlias,
+                             PublishOptions& options,
                              std::string& outPackageDir,
-                             std::string& outSigningKeyPath,
                              std::string& outError) {
     outError.clear();
-    outRegistryAlias.clear();
     outPackageDir.clear();
-    outSigningKeyPath.clear();
+    options = PublishOptions{};
 
     for (int index = startIndex; index < argc; ++index) {
         const std::string arg = argv[index];
@@ -187,17 +190,33 @@ static bool parsePublishArgs(int argc, char** argv, int startIndex,
                 outError = "Missing value for --registry.";
                 return false;
             }
-            outRegistryAlias = argv[++index];
+            options.registryAlias = argv[++index];
         } else if (arg.rfind("--registry=", 0) == 0) {
-            outRegistryAlias = arg.substr(11);
+            options.registryAlias = arg.substr(11);
         } else if (arg == "--signing-key") {
             if (index + 1 >= argc) {
                 outError = "Missing value for --signing-key.";
                 return false;
             }
-            outSigningKeyPath = argv[++index];
+            options.signingKeyPath = argv[++index];
         } else if (arg.rfind("--signing-key=", 0) == 0) {
-            outSigningKeyPath = arg.substr(14);
+            options.signingKeyPath = arg.substr(14);
+        } else if (arg == "--target") {
+            if (index + 1 >= argc) {
+                outError = "Missing value for --target.";
+                return false;
+            }
+            options.target = argv[++index];
+        } else if (arg.rfind("--target=", 0) == 0) {
+            options.target = arg.substr(9);
+        } else if (arg == "--native-artifact-dir") {
+            if (index + 1 >= argc) {
+                outError = "Missing value for --native-artifact-dir.";
+                return false;
+            }
+            options.nativeArtifactDir = argv[++index];
+        } else if (arg.rfind("--native-artifact-dir=", 0) == 0) {
+            options.nativeArtifactDir = arg.substr(22);
         } else if (arg == "--help" || arg == "-h") {
             outError = "help";
             return false;
@@ -517,12 +536,10 @@ static int runAddCommand(int argc, char** argv) {
 }
 
 static int runPublishCommand(int argc, char** argv) {
-    std::string registryAlias;
+    PublishOptions options;
     std::string packageDir;
-    std::string signingKeyPath;
     std::string parseError;
-    if (!parsePublishArgs(argc, argv, 2, registryAlias, packageDir,
-                          signingKeyPath, parseError)) {
+    if (!parsePublishArgs(argc, argv, 2, options, packageDir, parseError)) {
         if (parseError == "help") {
             printUsage(argv[0]);
             return 0;
@@ -537,8 +554,8 @@ static int runPublishCommand(int argc, char** argv) {
     }
 
     std::string error;
-    if (!publishProjectPackage(currentManagedProjectRoot(), packageDir, registryAlias,
-                               signingKeyPath, error)) {
+    if (!publishProjectPackage(currentManagedProjectRoot(), packageDir, options,
+                               error)) {
         std::cerr << "Publish failed: " << error << std::endl;
         return 1;
     }

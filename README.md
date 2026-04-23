@@ -550,6 +550,7 @@ file:
 
 ```bash
 ./build/interpreter publish --signing-key ./keys/release.toml ./packages/mog/window
+./build/interpreter publish --target linux-arm64-gnu --native-artifact-dir ./dist/window-bundle ./packages/mog/window
 ```
 
 Lockfile-based vulnerability checks are also available:
@@ -566,6 +567,7 @@ with environment variables:
 ./scripts/publish_official_window.sh --registry-path ./dist/registry
 MOG_PUBLISH_REGISTRY_PATH=./dist/registry ./scripts/publish_official_window.sh
 ./scripts/publish_official_window.sh --registry-path ./dist/registry --signing-key ./keys/release.toml
+./scripts/publish_official_window.sh --registry release --workspace ./dist/publish-workspace --bundle-root ./dist/publish-bundles --signing-key ./keys/release.toml
 ```
 
 Validate a package directory against its manifest and compiled shared library:

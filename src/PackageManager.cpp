@@ -117,6 +117,10 @@ typedef struct ExprPackageRegistration {
 typedef const ExprPackageRegistration* (*ExprRegisterPackageFn)(void);
 )";
 
+bool validatePackageEntry(const PackageRegistryEntry& entry,
+                          const std::string& projectRoot,
+                          std::string& outError);
+
 std::string trim(std::string_view text) {
     size_t start = 0;
     while (start < text.size() &&
@@ -4144,6 +4148,134 @@ bool stagePublishedNativePrebuiltArtifact(const std::filesystem::path& packagePa
     return true;
 }
 
+bool stagePublishedNativePrebuiltArtifactFromDirectory(
+    const PackageManifest& manifest, const PackageRegistryEntry& packageEntry,
+    const std::filesystem::path& nativeArtifactDir,
+    std::filesystem::path& outStagingDir, std::string& outError) {
+    outStagingDir.clear();
+
+    if (!isDirectory(nativeArtifactDir)) {
+        outError = "Native publish artifact directory '" +
+                   nativeArtifactDir.string() + "' does not exist.";
+        return false;
+    }
+
+    PackageManifest artifactManifest;
+    if (!loadPackageManifest(nativeArtifactDir.string(), artifactManifest,
+                             outError)) {
+        outError = "Could not load native publish artifact manifest from '" +
+                   nativeArtifactDir.string() + "': " + outError;
+        return false;
+    }
+
+    const std::string artifactImportName =
+        artifactManifest.importName.empty() ? artifactManifest.packageName
+                                            : artifactManifest.importName;
+    if (artifactManifest.kind != "native") {
+        outError = "Native publish artifact directory '" +
+                   nativeArtifactDir.string() +
+                   "' must contain a native package manifest.";
+        return false;
+    }
+    if (makePackageId(artifactManifest.packageNamespace,
+                      artifactManifest.packageName) != packageEntry.packageId) {
+        outError = "Native publish artifact directory '" +
+                   nativeArtifactDir.string() + "' is for package '" +
+                   makePackageId(artifactManifest.packageNamespace,
+                                 artifactManifest.packageName) +
+                   "', expected '" + packageEntry.packageId + "'.";
+        return false;
+    }
+    if (artifactManifest.version != packageEntry.version) {
+        outError = "Native publish artifact directory '" +
+                   nativeArtifactDir.string() + "' is version '" +
+                   artifactManifest.version + "', expected '" +
+                   packageEntry.version + "'.";
+        return false;
+    }
+    if (artifactImportName != packageEntry.importName) {
+        outError = "Native publish artifact directory '" +
+                   nativeArtifactDir.string() + "' exposes import name '" +
+                   artifactImportName + "', expected '" +
+                   packageEntry.importName + "'.";
+        return false;
+    }
+    if (artifactManifest.library != manifest.library) {
+        outError = "Native publish artifact directory '" +
+                   nativeArtifactDir.string() +
+                   "' uses a different library path than the package manifest.";
+        return false;
+    }
+
+    const std::filesystem::path apiPath = nativeArtifactDir / kPackageApiFileName;
+    if (!fileExists(apiPath)) {
+        outError = "Native publish artifact directory '" +
+                   nativeArtifactDir.string() + "' is missing package.api.mog.";
+        return false;
+    }
+
+    std::filesystem::path libraryPath;
+    if (!artifactManifest.library.empty()) {
+        libraryPath = nativeArtifactDir / artifactManifest.library;
+    } else {
+        const std::filesystem::path soPath = nativeArtifactDir / "package.so";
+        const std::filesystem::path dylibPath =
+            nativeArtifactDir / "package.dylib";
+        const std::filesystem::path dllPath = nativeArtifactDir / "package.dll";
+        const bool hasSo = fileExists(soPath);
+        const bool hasDylib = fileExists(dylibPath);
+        const bool hasDll = fileExists(dllPath);
+        const int matchCount =
+            static_cast<int>(hasSo) + static_cast<int>(hasDylib) +
+            static_cast<int>(hasDll);
+        if (matchCount > 1) {
+            outError = "Native publish artifact directory '" +
+                       nativeArtifactDir.string() +
+                       "' contains multiple candidate native libraries. Set an explicit library path in the manifest.";
+            return false;
+        }
+        if (hasSo) {
+            libraryPath = soPath;
+        } else if (hasDylib) {
+            libraryPath = dylibPath;
+        } else if (hasDll) {
+            libraryPath = dllPath;
+        }
+    }
+    if (libraryPath.empty() || !fileExists(libraryPath)) {
+        outError = "Native publish artifact directory '" +
+                   nativeArtifactDir.string() +
+                   "' does not have a built library to publish.";
+        return false;
+    }
+
+    PackageApiMetadata apiMetadata;
+    if (!loadPackageApiMetadata(apiPath.string(), packageEntry.packageId,
+                                packageEntry.importName, apiMetadata,
+                                outError)) {
+        outError = "Native publish artifact directory '" +
+                   nativeArtifactDir.string() + "' has an invalid package API: " +
+                   outError;
+        return false;
+    }
+
+    if (!createTemporaryDirectory("mog-publish-native", outStagingDir, outError)) {
+        return false;
+    }
+    if (!copyDirectoryRecursive(nativeArtifactDir, outStagingDir, outError)) {
+        return false;
+    }
+
+    std::error_code ec;
+    std::filesystem::remove(outStagingDir / "publish-target.txt", ec);
+    if (ec) {
+        outError = "Could not clean bundle metadata from '" +
+                   outStagingDir.string() + "'.";
+        return false;
+    }
+    return true;
+}
+
 bool writeGeneratedNativeBuildCMakeLists(const std::filesystem::path& outputPath,
                                          const std::filesystem::path& packageDir,
                                          std::string& outError) {
@@ -6291,8 +6423,7 @@ bool addProjectDependency(const std::string& projectRoot,
 
 bool publishProjectPackage(const std::string& projectRoot,
                            const std::string& packageDir,
-                           const std::string& registryAlias,
-                           const std::string& signingKeyPath,
+                           const PublishOptions& options,
                            std::string& outError) {
     ProjectManifestData projectManifest;
     if (!loadProjectManifestData(projectRoot, projectManifest, outError)) {
@@ -6300,8 +6431,9 @@ bool publishProjectPackage(const std::string& projectRoot,
     }
 
     const std::string effectiveRegistryAlias =
-        registryAlias.empty() ? defaultPublishedRegistryAlias(projectManifest)
-                              : registryAlias;
+        options.registryAlias.empty()
+            ? defaultPublishedRegistryAlias(projectManifest)
+            : options.registryAlias;
     if (effectiveRegistryAlias.empty()) {
         outError =
             "Publish requires a configured registry alias (preferably [registries.default]).";
@@ -6330,8 +6462,9 @@ bool publishProjectPackage(const std::string& projectRoot,
 
     RegistrySigningKeyFile signingKey;
     const RegistrySigningKeyFile* signingKeyPtr = nullptr;
-    if (!signingKeyPath.empty()) {
-        if (!loadRegistrySigningKeyFile(signingKeyPath, signingKey, outError)) {
+    if (!options.signingKeyPath.empty()) {
+        if (!loadRegistrySigningKeyFile(options.signingKeyPath, signingKey,
+                                        outError)) {
             return false;
         }
         signingKeyPtr = &signingKey;
@@ -6385,6 +6518,16 @@ bool publishProjectPackage(const std::string& projectRoot,
     }
     ensureResolvedLibraryPath(packageEntry, packagePath, projectRoot);
     if (!validatePackageEntry(packageEntry, projectRoot, outError)) {
+        return false;
+    }
+    if (!options.nativeArtifactDir.empty() && options.target.empty()) {
+        outError =
+            "Publishing with --native-artifact-dir also requires --target <triple>.";
+        return false;
+    }
+    if (packageEntry.kind != "native" &&
+        (!options.target.empty() || !options.nativeArtifactDir.empty())) {
+        outError = "Only native packages accept --target or --native-artifact-dir.";
         return false;
     }
 
@@ -6462,7 +6605,9 @@ bool publishProjectPackage(const std::string& projectRoot,
     }
 
     const std::string publishedTarget =
-        packageEntry.kind == "native" ? detectHostTarget() : "";
+        packageEntry.kind == "native"
+            ? (options.target.empty() ? detectHostTarget() : options.target)
+            : "";
     const std::filesystem::path sourceArtifactDir =
         packageEntry.kind == "native"
             ? registryRoot / "packages" / packageEntry.packageNamespace /
@@ -6491,9 +6636,16 @@ bool publishProjectPackage(const std::string& projectRoot,
             return false;
         }
         stagedSourceArtifactCleanup.path = sourceArtifactSource;
-        if (!stagePublishedNativePrebuiltArtifact(packagePath, manifest, packageEntry,
-                                                  nativeArtifactSource,
-                                                  outError)) {
+        if (!options.nativeArtifactDir.empty()) {
+            if (!stagePublishedNativePrebuiltArtifactFromDirectory(
+                    manifest, packageEntry,
+                    canonicalOrLexical(options.nativeArtifactDir),
+                    nativeArtifactSource, outError)) {
+                return false;
+            }
+        } else if (!stagePublishedNativePrebuiltArtifact(
+                       packagePath, manifest, packageEntry, nativeArtifactSource,
+                       outError)) {
             return false;
         }
         stagedNativeArtifactCleanup.path = nativeArtifactSource;

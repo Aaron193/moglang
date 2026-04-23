@@ -92,6 +92,7 @@ The repo now carries a scripted publish path for the official package:
 ```bash
 ./scripts/publish_official_window.sh --registry-path /tmp/mog-registry
 ./scripts/publish_official_window.sh --registry-path /tmp/mog-registry --signing-key ./keys/release.toml
+./scripts/publish_official_window.sh --registry release --workspace ./dist/publish-workspace --bundle-root ./dist/publish-bundles --signing-key ./keys/release.toml
 ```
 
 The script:
@@ -101,6 +102,8 @@ The script:
 - can sign the generated registry index with `--signing-key <registry-key.v1>`
 - can also publish through an existing registry alias with
   `--registry <alias> --workspace <dir>`
+- can publish one or more prepared native bundles with `--bundle-root <dir>`,
+  which is how the multi-runner GitHub Actions workflow aggregates target builds
 
 If SDL2 was not available when the repo was built, the script fails early with
 an explicit missing-artifact message instead of publishing a partial package.

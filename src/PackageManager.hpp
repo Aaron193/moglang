@@ -52,6 +52,13 @@ struct AuditOptions {
     bool offline = false;
 };
 
+struct PublishOptions {
+    std::string registryAlias;
+    std::string signingKeyPath;
+    std::string target;
+    std::string nativeArtifactDir;
+};
+
 struct StoredRegistryProfile {
     std::string index;
     bool isRemote = false;
@@ -92,8 +99,7 @@ bool addProjectDependency(const std::string& projectRoot,
 
 bool publishProjectPackage(const std::string& projectRoot,
                            const std::string& packageDir,
-                           const std::string& registryAlias,
-                           const std::string& signingKeyPath,
+                           const PublishOptions& options,
                            std::string& outError);
 
 bool loginProjectRegistry(const std::string& projectRoot,
