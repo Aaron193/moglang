@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -33,10 +34,18 @@ static void printUsage(const char* executable) {
         << "  login <registry> [--token <token>]\n"
         << "                         Store a hosted-registry bearer token\n"
         << "  logout <registry>      Remove a hosted-registry bearer token\n"
+        << "  registry <subcommand>  Manage stored registry trust and credentials\n"
         << "  publish [options] [dir] Publish a package to a configured registry\n"
         << "  audit [--offline]      Check locked registry packages against advisories\n"
         << "  run [flags] <file>     Install dependencies if needed, then run a program\n"
         << "  validate-package <dir> Validate a package directory\n"
+        << "Registry subcommands:\n"
+        << "  list\n"
+        << "  status <registry>\n"
+        << "  trust <registry> (--key <key_id:base64> | --key-file <path>)\n"
+        << "  untrust <registry> --key-id <key_id>\n"
+        << "  login <registry> [--token <token>]\n"
+        << "  logout <registry>\n"
         << "Flags for install/update/run:\n"
         << "  --locked --offline --prefer-prebuilt --no-native-build\n"
         << "  --target <triple> | --target=<triple>\n"
@@ -614,6 +623,237 @@ static int runLogoutCommand(int argc, char** argv) {
     return 0;
 }
 
+static std::string joinStrings(const std::vector<std::string>& values) {
+    std::ostringstream out;
+    for (size_t index = 0; index < values.size(); ++index) {
+        if (index > 0) {
+            out << ", ";
+        }
+        out << values[index];
+    }
+    return out.str();
+}
+
+static int runRegistryCommand(int argc, char** argv) {
+    if (argc < 3) {
+        std::cerr << "registry requires a subcommand." << std::endl;
+        return 1;
+    }
+
+    const std::string subcommand = argv[2];
+    if (subcommand == "list") {
+        if (argc != 3) {
+            std::cerr << "registry list does not accept extra arguments." << std::endl;
+            return 1;
+        }
+
+        std::vector<StoredRegistryProfile> profiles;
+        std::string error;
+        if (!listStoredRegistries(profiles, error)) {
+            std::cerr << "Registry list failed: " << error << std::endl;
+            return 1;
+        }
+        if (profiles.empty()) {
+            std::cout << "No stored registries." << std::endl;
+            return 0;
+        }
+
+        for (size_t index = 0; index < profiles.size(); ++index) {
+            const auto& profile = profiles[index];
+            if (index > 0) {
+                std::cout << std::endl;
+            }
+            std::cout << "index = " << profile.index << std::endl;
+            std::cout << "kind = " << (profile.isRemote ? "hosted" : "local")
+                      << std::endl;
+            std::cout << "trusted_key_ids = "
+                      << (profile.trustedKeyIds.empty()
+                              ? "(none)"
+                              : joinStrings(profile.trustedKeyIds))
+                      << std::endl;
+            std::cout << "token = " << (profile.hasToken ? "yes" : "no")
+                      << std::endl;
+        }
+        return 0;
+    }
+
+    if (subcommand == "status") {
+        if (argc != 4) {
+            std::cerr << "registry status requires exactly one registry alias."
+                      << std::endl;
+            return 1;
+        }
+
+        ProjectRegistryStatus status;
+        std::string error;
+        if (!describeProjectRegistry(currentManagedProjectRoot(), argv[3], status,
+                                     error)) {
+            std::cerr << "Registry status failed: " << error << std::endl;
+            return 1;
+        }
+
+        std::string trust = "none";
+        if (status.trustFromProject && status.trustFromUser) {
+            trust = "project+user";
+        } else if (status.trustFromProject) {
+            trust = "project";
+        } else if (status.trustFromUser) {
+            trust = "user";
+        }
+
+        std::cout << "alias = " << status.alias << std::endl;
+        std::cout << "index = " << status.index << std::endl;
+        std::cout << "kind = " << (status.isRemote ? "hosted" : "local")
+                  << std::endl;
+        std::cout << "trust = " << trust << std::endl;
+        std::cout << "trusted_key_ids = "
+                  << (status.trustedKeyIds.empty()
+                          ? "(none)"
+                          : joinStrings(status.trustedKeyIds))
+                  << std::endl;
+        std::cout << "token = " << (status.hasToken ? "yes" : "no") << std::endl;
+        return 0;
+    }
+
+    if (subcommand == "trust") {
+        std::string registryAlias;
+        std::string keySpec;
+        std::string keyFilePath;
+        for (int index = 3; index < argc; ++index) {
+            const std::string arg = argv[index];
+            if (arg == "--key") {
+                if (index + 1 >= argc) {
+                    std::cerr << "Missing value for --key." << std::endl;
+                    return 1;
+                }
+                keySpec = argv[++index];
+            } else if (arg.rfind("--key=", 0) == 0) {
+                keySpec = arg.substr(6);
+            } else if (arg == "--key-file") {
+                if (index + 1 >= argc) {
+                    std::cerr << "Missing value for --key-file." << std::endl;
+                    return 1;
+                }
+                keyFilePath = argv[++index];
+            } else if (arg.rfind("--key-file=", 0) == 0) {
+                keyFilePath = arg.substr(11);
+            } else if (!arg.empty() && arg[0] == '-') {
+                std::cerr << "Unknown option: " << arg << std::endl;
+                return 1;
+            } else if (registryAlias.empty()) {
+                registryAlias = arg;
+            } else {
+                std::cerr << "registry trust accepts exactly one registry alias."
+                          << std::endl;
+                return 1;
+            }
+        }
+
+        std::string trustedKeyId;
+        std::string error;
+        if (!trustProjectRegistry(currentManagedProjectRoot(), registryAlias, keySpec,
+                                  keyFilePath, trustedKeyId, error)) {
+            std::cerr << "Registry trust failed: " << error << std::endl;
+            return 1;
+        }
+
+        std::cout << "Trusted key '" << trustedKeyId << "' for registry '"
+                  << registryAlias << "'" << std::endl;
+        return 0;
+    }
+
+    if (subcommand == "untrust") {
+        std::string registryAlias;
+        std::string keyId;
+        for (int index = 3; index < argc; ++index) {
+            const std::string arg = argv[index];
+            if (arg == "--key-id") {
+                if (index + 1 >= argc) {
+                    std::cerr << "Missing value for --key-id." << std::endl;
+                    return 1;
+                }
+                keyId = argv[++index];
+            } else if (arg.rfind("--key-id=", 0) == 0) {
+                keyId = arg.substr(9);
+            } else if (!arg.empty() && arg[0] == '-') {
+                std::cerr << "Unknown option: " << arg << std::endl;
+                return 1;
+            } else if (registryAlias.empty()) {
+                registryAlias = arg;
+            } else {
+                std::cerr << "registry untrust accepts exactly one registry alias."
+                          << std::endl;
+                return 1;
+            }
+        }
+
+        bool removed = false;
+        std::string error;
+        if (!untrustProjectRegistry(currentManagedProjectRoot(), registryAlias,
+                                    keyId, removed, error)) {
+            std::cerr << "Registry untrust failed: " << error << std::endl;
+            return 1;
+        }
+
+        if (removed) {
+            std::cout << "Removed key '" << keyId << "' from registry '"
+                      << registryAlias << "'" << std::endl;
+        } else {
+            std::cout << "Registry '" << registryAlias
+                      << "' did not have stored key '" << keyId << "'"
+                      << std::endl;
+        }
+        return 0;
+    }
+
+    if (subcommand == "login") {
+        std::string registryAlias;
+        std::string token;
+        std::string parseError;
+        if (!parseLoginArgs(argc, argv, 3, registryAlias, token, parseError)) {
+            std::cerr << parseError << std::endl;
+            return 1;
+        }
+        if (token.empty()) {
+            if (!std::getline(std::cin, token)) {
+                std::cerr << "registry login requires a token via --token or stdin."
+                          << std::endl;
+                return 1;
+            }
+        }
+
+        std::string error;
+        if (!loginProjectRegistry(currentManagedProjectRoot(), registryAlias, token,
+                                  error)) {
+            std::cerr << "Registry login failed: " << error << std::endl;
+            return 1;
+        }
+
+        std::cout << "Stored token for registry '" << registryAlias << "'"
+                  << std::endl;
+        return 0;
+    }
+
+    if (subcommand == "logout") {
+        if (argc != 4) {
+            std::cerr << "registry logout requires exactly one registry alias."
+                      << std::endl;
+            return 1;
+        }
+        std::string error;
+        if (!logoutProjectRegistry(currentManagedProjectRoot(), argv[3], error)) {
+            std::cerr << "Registry logout failed: " << error << std::endl;
+            return 1;
+        }
+
+        std::cout << "Removed token for registry '" << argv[3] << "'" << std::endl;
+        return 0;
+    }
+
+    std::cerr << "Unknown registry subcommand: " << subcommand << std::endl;
+    return 1;
+}
+
 int main(int argc, char** argv) {
     RuntimeOptions runtimeOptions;
     try {
@@ -665,6 +905,9 @@ int main(int argc, char** argv) {
     }
     if (command == "publish") {
         return runPublishCommand(argc, argv);
+    }
+    if (command == "registry") {
+        return runRegistryCommand(argc, argv);
     }
     if (command == "audit") {
         return runAuditCommand(argc, argv);

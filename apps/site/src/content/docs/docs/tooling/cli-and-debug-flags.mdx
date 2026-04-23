@@ -81,6 +81,33 @@ Dependency auditing accepts:
 
 - `--offline` to reuse cached advisory metadata during `mog audit`
 
+## Registry management
+
+Hosted registry trust and credentials can now be bootstrapped through
+`mog registry` instead of hand-editing project manifests:
+
+```bash
+./build/interpreter registry status default
+./build/interpreter registry trust default --key-file ./keys/registry-public-key.toml
+./build/interpreter registry login default --token "$MOG_TOKEN"
+./build/interpreter registry list
+./build/interpreter registry untrust default --key-id release-key
+./build/interpreter registry logout default
+```
+
+Current registry subcommands:
+
+- `registry list` to show stored user-level registry profiles
+- `registry status <alias>` to inspect the effective trust/token state for a project registry
+- `registry trust <alias> --key ...` or `--key-file ...` to add trusted signing keys
+- `registry untrust <alias> --key-id ...` to remove user-stored trust
+- `registry login <alias>` and `registry logout <alias>` to manage hosted bearer tokens
+
+Stored trust and hosted tokens live under `~/.config/mog/registries.toml`,
+keyed by the normalized registry index, so the same hosted registry can be
+reused across multiple project-local aliases. The legacy top-level
+`mog login` and `mog logout` commands remain as compatibility wrappers.
+
 ## Frontend timings
 
 `--frontend-timings` reports a readable phase summary that includes parse,

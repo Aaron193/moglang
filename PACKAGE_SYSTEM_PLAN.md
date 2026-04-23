@@ -4,7 +4,7 @@
 
 In progress.
 
-Last updated: 2026-04-21.
+Last updated: 2026-04-23.
 
 Phase snapshot:
 
@@ -13,9 +13,10 @@ Phase snapshot:
 - Phase 3 native artifact distribution: in progress (broader native toolchain
   policy and full hosted official-package release automation remain)
 - Phase 4 enterprise and security features: in progress (policy baseline,
-  signed registry/advisory metadata, hosted-registry trust enforcement, and
-  lockfile-based `mog audit` are implemented; richer private-registry
-  bootstrap/trust workflows and broader enterprise policy remain)
+  signed registry/advisory metadata, hosted-registry trust enforcement,
+  lockfile-based `mog audit`, and user-level registry bootstrap/trust flows
+  are implemented; richer enterprise policy and broader supply-chain trust
+  features remain)
 
 Phase 1 local package-management work is now substantially implemented in the
 repository. The current codebase supports:
@@ -110,6 +111,14 @@ repository. The current codebase supports:
   `registry_key_id`
 - signed `advisories.v1` metadata plus lockfile-based `mog audit`
   and `mog audit --offline`
+- user-level registry bootstrap state in `~/.config/mog/registries.toml`,
+  keyed by normalized registry identity rather than project-local alias
+- `mog registry list|status|trust|untrust|login|logout` management commands
+- `registry-public-key.v1` public-key import support, while also accepting
+  `registry-key.v1` files for trust bootstrap
+- effective hosted-registry trust/auth merging across project manifest,
+  user config, environment variables, and legacy alias-scoped auth fallback
+- URL-scoped hosted-registry token/trust reuse across different project aliases
 - signed-registry and audit coverage in `tests/test_package_manager.sh`
 
 Not implemented yet:
@@ -120,8 +129,6 @@ Not implemented yet:
   artifact workflow
 - richer enterprise policy workflows beyond the current root-manifest registry,
   native-namespace, and CI-locked install controls
-- private-registry trust/bootstrap workflows beyond project-declared trusted
-  keys, bearer tokens, and `allow_insecure`
 - detached artifact-signature workflows, transparency/revocation, or other
   richer supply-chain trust features beyond the current signed metadata +
   SHA-256 artifact digest model
@@ -1074,7 +1081,7 @@ Deliver:
 Current status:
 
 - in progress
-- shipped in the current policy/trust-baseline slice:
+- shipped in the current policy/trust/bootstrap slice:
   - root-manifest `[policy]` parsing and persistence
   - registry allowlist enforcement for published dependencies before registry
     resolution/download
@@ -1093,9 +1100,20 @@ Current status:
   - lock/install metadata pinning of `registry_key_id`
   - signed `advisories.v1` metadata loading and lockfile-based `mog audit`
   - `mog audit --offline` using cached advisory metadata
+  - user-level registry profile storage in `~/.config/mog/registries.toml`
+    keyed by normalized registry identity
+  - `mog registry list`, `status`, `trust`, `untrust`, `login`, and `logout`
+    for hosted-registry bootstrap and local trust management
+  - `registry-public-key.v1` import support, with `registry-key.v1`
+    compatibility for trust bootstrap
+  - effective trust merging from project-declared `trusted_keys` plus
+    user-stored trusted keys, while keeping `allow_insecure` project-scoped
+  - hosted-registry token reuse across aliases that point at the same
+    normalized registry index URL
 - not yet complete inside Phase 4:
-  - private-registry trust/bootstrap workflows beyond the current alias,
-    bearer-token, project-trusted-key, and `allow_insecure` configuration
+  - richer private-registry bootstrap workflows such as first-contact trust
+    discovery, non-manual key distribution, and organization-wide bootstrap
+    beyond the current project alias + user-level stored trust/token model
   - richer supply-chain trust features such as detached artifact signatures,
     transparency, key rotation/revocation, and policy-enforced signature modes
 

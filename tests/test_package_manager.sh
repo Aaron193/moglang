@@ -168,6 +168,33 @@ public_key = "$public_der_b64"
 EOF
 }
 
+create_public_key_file() {
+    python3 - "$1" "$2" <<'PY'
+from pathlib import Path
+import sys
+
+source_path = Path(sys.argv[1])
+dest_path = Path(sys.argv[2])
+fields = {}
+for line in source_path.read_text(encoding="utf-8").splitlines():
+    if "=" not in line:
+        continue
+    key, value = line.split("=", 1)
+    fields[key.strip()] = value.strip().strip('"')
+
+dest_path.write_text(
+    '\n'.join([
+        'schema_version = "registry-public-key.v1"',
+        f'key_id = "{fields["key_id"]}"',
+        f'algorithm = "{fields.get("algorithm", "ed25519")}"',
+        f'public_key = "{fields["public_key"]}"',
+        '',
+    ]),
+    encoding="utf-8",
+)
+PY
+}
+
 trusted_key_spec() {
     python3 - "$1" <<'PY'
 from pathlib import Path
@@ -2059,7 +2086,10 @@ HOSTED_PORT="$(start_hosted_registry_server "$HOSTED_REGISTRY_DIR" "$HOSTED_TOKE
 HOSTED_PUBLISH_WORKSPACE="$(mktemp -d)"
 HOSTED_KEY_FILE="$HOSTED_PUBLISH_WORKSPACE/hosted-registry-key.toml"
 create_signing_key "$HOSTED_KEY_FILE" "hosted-registry"
+HOSTED_PUBLIC_KEY_FILE="$HOSTED_PUBLISH_WORKSPACE/hosted-registry-public-key.toml"
+create_public_key_file "$HOSTED_KEY_FILE" "$HOSTED_PUBLIC_KEY_FILE"
 HOSTED_TRUSTED_KEY="$(trusted_key_spec "$HOSTED_KEY_FILE")"
+HOSTED_PUBLISH_CONFIG="$TEMP_DIR/hosted-publish-config"
 mkdir -p "$HOSTED_PUBLISH_WORKSPACE/pkg/src"
 cat > "$HOSTED_PUBLISH_WORKSPACE/mog.toml" <<EOF_HOSTED_PUBLISH_ROOT
 kind = "project"
@@ -2092,12 +2122,31 @@ fn Name() str {
 }
 EOF_HOSTED_PACKAGE_SRC
 
-if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && "$MOG" login default --token "$HOSTED_TOKEN" >/dev/null); then
+if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && \
+    XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
+    "$MOG" login default --token "$HOSTED_TOKEN" >/dev/null); then
     echo "[FAIL] login should store a hosted registry token"
     exit 1
 fi
 
+if [[ ! -f "$HOSTED_PUBLISH_CONFIG/mog/registries.toml" ]]; then
+    echo "[FAIL] login should store hosted registry credentials in registries.toml"
+    exit 1
+fi
+
+if [[ -f "$HOSTED_PUBLISH_CONFIG/mog/auth.toml" ]]; then
+    echo "[FAIL] login should stop writing new credentials to auth.toml"
+    exit 1
+fi
+
+if ! grep -Fq 'token = "'"$HOSTED_TOKEN"'"' "$HOSTED_PUBLISH_CONFIG/mog/registries.toml"; then
+    echo "[FAIL] login should persist the hosted registry token in registries.toml"
+    cat "$HOSTED_PUBLISH_CONFIG/mog/registries.toml"
+    exit 1
+fi
+
 if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && \
+    XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
     "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg >/dev/null); then
     echo "[FAIL] publish should upload a hosted registry package"
     exit 1
@@ -2123,7 +2172,9 @@ const hosted_util = @import("hosted_util")
 print(hosted_util.Name())
 EOF_HOSTED_APP
 
-if ! (cd "$HOSTED_CONSUMER_DIR" && "$MOG" install >/dev/null); then
+if ! (cd "$HOSTED_CONSUMER_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
+    "$MOG" install >/dev/null); then
     echo "[FAIL] install should download hosted registry packages"
     exit 1
 fi
@@ -2134,8 +2185,6 @@ if [[ "$HOSTED_OUTPUT" != *"utility from hosted registry"* ]]; then
     echo "$HOSTED_OUTPUT"
     exit 1
 fi
-
-write_registry_index "$HOSTED_REGISTRY_DIR"
 
 HOSTED_UNTRUSTED_DIR="$TEMP_DIR/hosted-untrusted"
 mkdir -p "$HOSTED_UNTRUSTED_DIR"
@@ -2153,7 +2202,9 @@ hosted_util = { package = "acme:hosted-util", version = "1.0.0" }
 EOF_HOSTED_UNTRUSTED
 cp "$HOSTED_CONSUMER_DIR/app.mog" "$HOSTED_UNTRUSTED_DIR/app.mog"
 
-if (cd "$HOSTED_UNTRUSTED_DIR" && "$MOG" install \
+if (cd "$HOSTED_UNTRUSTED_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
+    "$MOG" install \
     >/tmp/mog_hosted_untrusted_failure.txt 2>&1); then
     echo "[FAIL] hosted registries should require trusted_keys by default"
     cat /tmp/mog_hosted_untrusted_failure.txt
@@ -2166,7 +2217,157 @@ if ! grep -Eq "trusted_keys|signed registry.v2" /tmp/mog_hosted_untrusted_failur
     exit 1
 fi
 
-if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && "$MOG" logout default >/dev/null); then
+HOSTED_BOOTSTRAP_DIR="$TEMP_DIR/hosted-bootstrap"
+HOSTED_BOOTSTRAP_CONFIG="$TEMP_DIR/hosted-bootstrap-config"
+mkdir -p "$HOSTED_BOOTSTRAP_DIR"
+cat > "$HOSTED_BOOTSTRAP_DIR/mog.toml" <<EOF_HOSTED_BOOTSTRAP
+kind = "project"
+name = "hosted-bootstrap"
+version = "0.1.0"
+description = "hosted bootstrap"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
+
+[dependencies]
+hosted_util = { package = "acme:hosted-util", version = "1.0.0" }
+EOF_HOSTED_BOOTSTRAP
+cp "$HOSTED_CONSUMER_DIR/app.mog" "$HOSTED_BOOTSTRAP_DIR/app.mog"
+
+if ! (cd "$HOSTED_BOOTSTRAP_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
+    "$MOG" registry trust default --key-file "$HOSTED_PUBLIC_KEY_FILE" >/dev/null); then
+    echo "[FAIL] registry trust should import hosted registry public keys from registry-public-key.v1 files"
+    exit 1
+fi
+
+HOSTED_BOOTSTRAP_STATUS="$(
+    cd "$HOSTED_BOOTSTRAP_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
+    "$MOG" registry status default
+)"
+if [[ "$HOSTED_BOOTSTRAP_STATUS" != *"trust = user"* ]] || \
+   [[ "$HOSTED_BOOTSTRAP_STATUS" != *"trusted_key_ids = hosted-registry"* ]] || \
+   [[ "$HOSTED_BOOTSTRAP_STATUS" != *"token = no"* ]]; then
+    echo "[FAIL] registry status should report user-scoped hosted trust before login"
+    echo "$HOSTED_BOOTSTRAP_STATUS"
+    exit 1
+fi
+
+if ! (cd "$HOSTED_BOOTSTRAP_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
+    "$MOG" registry login default --token "$HOSTED_TOKEN" >/dev/null); then
+    echo "[FAIL] registry login should store hosted registry tokens"
+    exit 1
+fi
+
+HOSTED_LIST_OUTPUT="$(
+    cd "$HOSTED_BOOTSTRAP_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
+    "$MOG" registry list
+)"
+if [[ "$HOSTED_LIST_OUTPUT" != *"index = http://127.0.0.1:$HOSTED_PORT/index.toml"* ]] || \
+   [[ "$HOSTED_LIST_OUTPUT" != *"trusted_key_ids = hosted-registry"* ]] || \
+   [[ "$HOSTED_LIST_OUTPUT" != *"token = yes"* ]]; then
+    echo "[FAIL] registry list should report stored registry trust and token state"
+    echo "$HOSTED_LIST_OUTPUT"
+    exit 1
+fi
+
+if ! (cd "$HOSTED_BOOTSTRAP_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
+    MOG_CACHE_DIR="$TEMP_DIR/hosted-bootstrap-cache" \
+    "$MOG" install >/dev/null); then
+    echo "[FAIL] registry trust/login should bootstrap hosted installs without project trusted_keys"
+    exit 1
+fi
+
+if [[ "$(cd "$HOSTED_BOOTSTRAP_DIR" && "$MOG" run app.mog)" != *"utility from hosted registry"* ]]; then
+    echo "[FAIL] bootstrap-installed hosted packages should execute normally"
+    exit 1
+fi
+
+HOSTED_ALIAS_REUSE_DIR="$TEMP_DIR/hosted-alias-reuse"
+mkdir -p "$HOSTED_ALIAS_REUSE_DIR"
+cat > "$HOSTED_ALIAS_REUSE_DIR/mog.toml" <<EOF_HOSTED_ALIAS
+kind = "project"
+name = "hosted-alias-reuse"
+version = "0.1.0"
+description = "hosted alias reuse"
+
+[registries.internal]
+index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
+
+[dependencies]
+hosted_util = { package = "acme:hosted-util", version = "1.0.0", registry = "internal" }
+EOF_HOSTED_ALIAS
+cp "$HOSTED_CONSUMER_DIR/app.mog" "$HOSTED_ALIAS_REUSE_DIR/app.mog"
+
+if ! (cd "$HOSTED_ALIAS_REUSE_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
+    MOG_CACHE_DIR="$TEMP_DIR/hosted-alias-cache" \
+    "$MOG" install >/dev/null); then
+    echo "[FAIL] stored hosted trust and tokens should be reused across aliases for the same registry URL"
+    exit 1
+fi
+
+HOSTED_ALIAS_STATUS="$(
+    cd "$HOSTED_ALIAS_REUSE_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
+    "$MOG" registry status internal
+)"
+if [[ "$HOSTED_ALIAS_STATUS" != *"trust = user"* ]] || \
+   [[ "$HOSTED_ALIAS_STATUS" != *"token = yes"* ]]; then
+    echo "[FAIL] registry status should reuse user-scoped trust and tokens across aliases"
+    echo "$HOSTED_ALIAS_STATUS"
+    exit 1
+fi
+
+if ! (cd "$HOSTED_ALIAS_REUSE_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
+    "$MOG" registry untrust internal --key-id hosted-registry >/dev/null); then
+    echo "[FAIL] registry untrust should remove stored user trust"
+    exit 1
+fi
+
+HOSTED_AFTER_UNTRUST_DIR="$TEMP_DIR/hosted-after-untrust"
+mkdir -p "$HOSTED_AFTER_UNTRUST_DIR"
+cp "$HOSTED_ALIAS_REUSE_DIR/mog.toml" "$HOSTED_AFTER_UNTRUST_DIR/mog.toml"
+cp "$HOSTED_ALIAS_REUSE_DIR/app.mog" "$HOSTED_AFTER_UNTRUST_DIR/app.mog"
+
+if (cd "$HOSTED_AFTER_UNTRUST_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
+    MOG_CACHE_DIR="$TEMP_DIR/hosted-after-untrust-cache" \
+    "$MOG" install >/tmp/mog_hosted_after_untrust_failure.txt 2>&1); then
+    echo "[FAIL] registry untrust should cause hosted installs to fail again when no project trust remains"
+    cat /tmp/mog_hosted_after_untrust_failure.txt
+    exit 1
+fi
+
+if ! grep -Eq "trusted_keys|unknown key|signed registry.v2" /tmp/mog_hosted_after_untrust_failure.txt; then
+    echo "[FAIL] hosted installs after untrust should explain the missing registry trust"
+    cat /tmp/mog_hosted_after_untrust_failure.txt
+    exit 1
+fi
+
+if ! (cd "$HOSTED_ALIAS_REUSE_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
+    "$MOG" registry trust internal --key-file "$HOSTED_KEY_FILE" >/dev/null); then
+    echo "[FAIL] registry trust should also accept registry-key.v1 files"
+    exit 1
+fi
+
+if ! (cd "$HOSTED_AFTER_UNTRUST_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
+    MOG_CACHE_DIR="$TEMP_DIR/hosted-restored-trust-cache" \
+    "$MOG" install >/dev/null); then
+    echo "[FAIL] restoring trust from registry-key.v1 should allow hosted installs again"
+    exit 1
+fi
+
+if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && \
+    XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
+    "$MOG" logout default >/dev/null); then
     echo "[FAIL] logout should clear a hosted registry token"
     exit 1
 fi
@@ -2189,6 +2390,8 @@ if ! grep -Eq "401|download failed|unauthorized" /tmp/mog_hosted_auth_failure.tx
     cat /tmp/mog_hosted_auth_failure.txt
     exit 1
 fi
+
+write_registry_index "$HOSTED_REGISTRY_DIR"
 
 HOSTED_INSECURE_DIR="$TEMP_DIR/hosted-insecure"
 mkdir -p "$HOSTED_INSECURE_DIR"

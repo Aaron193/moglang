@@ -466,6 +466,33 @@ struct RegistrySigningKeyFile {
     std::string publicKeyDerBase64;
 };
 
+struct RegistryPublicKeyFile {
+    std::string keyId;
+    std::string algorithm;
+    std::string publicKeyDerBase64;
+};
+
+struct UserRegistryProfile {
+    std::string index;
+    std::vector<std::string> trustedKeys;
+    std::string token;
+};
+
+struct UserRegistryConfigData {
+    std::vector<UserRegistryProfile> registries;
+};
+
+struct EffectiveRegistryProfile {
+    ProjectRegistryConfig config;
+    std::string normalizedIndex;
+    bool isRemote = false;
+    bool trustFromProject = false;
+    bool trustFromUser = false;
+    bool hasToken = false;
+    std::string token;
+    std::vector<std::string> trustedKeyIds;
+};
+
 bool parseTrustedRegistryKey(std::string_view raw,
                              RegistryTrustedKey& outKey,
                              std::string& outError) {
@@ -1021,6 +1048,39 @@ std::vector<std::string> sortedUniqueStrings(std::vector<std::string> values) {
     return values;
 }
 
+void sortUserRegistryProfiles(std::vector<UserRegistryProfile>& profiles) {
+    std::sort(profiles.begin(), profiles.end(),
+              [](const UserRegistryProfile& lhs,
+                 const UserRegistryProfile& rhs) {
+                  return lhs.index < rhs.index;
+              });
+}
+
+const UserRegistryProfile* findUserRegistryProfile(
+    const UserRegistryConfigData& config, std::string_view index) {
+    auto it = std::find_if(config.registries.begin(), config.registries.end(),
+                           [&](const UserRegistryProfile& profile) {
+                               return profile.index == index;
+                           });
+    return it == config.registries.end() ? nullptr : &*it;
+}
+
+UserRegistryProfile* upsertUserRegistryProfile(UserRegistryConfigData& config,
+                                               std::string_view index) {
+    auto it = std::find_if(config.registries.begin(), config.registries.end(),
+                           [&](const UserRegistryProfile& profile) {
+                               return profile.index == index;
+                           });
+    if (it != config.registries.end()) {
+        return &*it;
+    }
+
+    UserRegistryProfile profile;
+    profile.index = std::string(index);
+    config.registries.push_back(std::move(profile));
+    return &config.registries.back();
+}
+
 bool isSecureDigest(std::string_view digest) {
     return digest.rfind("sha256:", 0) == 0 && digest.size() == 71;
 }
@@ -1249,6 +1309,107 @@ bool loadRegistrySigningKeyFile(const std::filesystem::path& keyPath,
         outError = "Signing key algorithm must be 'ed25519'.";
         return false;
     }
+    return true;
+}
+
+bool loadRegistryPublicKeyFile(const std::filesystem::path& keyPath,
+                               RegistryPublicKeyFile& outKey,
+                               std::string& outError) {
+    outKey = RegistryPublicKeyFile{};
+    std::ifstream file(keyPath);
+    if (!file) {
+        outError = "Could not open public key file '" + keyPath.string() + "'.";
+        return false;
+    }
+
+    std::string schemaVersion;
+    std::string line;
+    size_t lineNumber = 0;
+    while (std::getline(file, line)) {
+        ++lineNumber;
+        const std::string content = stripComment(line);
+        if (content.empty()) {
+            continue;
+        }
+
+        const size_t equals = content.find('=');
+        if (equals == std::string::npos) {
+            outError = "Invalid public key line " + std::to_string(lineNumber) +
+                       ": expected key = value.";
+            return false;
+        }
+
+        const std::string key = trim(std::string_view(content).substr(0, equals));
+        const std::string value = trim(std::string_view(content).substr(equals + 1));
+        std::string parseError;
+        std::string parsed;
+        if (value.rfind("\"\"\"", 0) == 0) {
+            if (!parseMultilineStringValue(value, file, parsed, lineNumber, parseError)) {
+                outError = "Invalid public key field '" + key + "': " + parseError;
+                return false;
+            }
+        } else if (!parseQuotedString(value, parsed, parseError)) {
+            outError = "Invalid public key field '" + key + "': " + parseError;
+            return false;
+        }
+
+        if (key == "schema_version") {
+            schemaVersion = parsed;
+        } else if (key == "key_id") {
+            outKey.keyId = parsed;
+        } else if (key == "algorithm") {
+            outKey.algorithm = parsed;
+        } else if (key == "public_key") {
+            outKey.publicKeyDerBase64 = parsed;
+        } else if (key == "private_key") {
+            continue;
+        } else {
+            outError = "Unsupported public key field '" + key + "'.";
+            return false;
+        }
+    }
+
+    if (schemaVersion.empty()) {
+        outError =
+            "Public key file must declare schema_version = \"registry-public-key.v1\" or \"registry-key.v1\".";
+        return false;
+    }
+    if (schemaVersion != "registry-public-key.v1" &&
+        schemaVersion != "registry-key.v1") {
+        outError =
+            "Public key file must declare schema_version = \"registry-public-key.v1\" or \"registry-key.v1\".";
+        return false;
+    }
+    if (outKey.keyId.empty() || outKey.publicKeyDerBase64.empty()) {
+        outError = "Public key file must define key_id and public_key.";
+        return false;
+    }
+    if (outKey.algorithm.empty()) {
+        outKey.algorithm = "ed25519";
+    }
+    if (outKey.algorithm != "ed25519") {
+        outError = "Public key algorithm must be 'ed25519'.";
+        return false;
+    }
+    return true;
+}
+
+std::string trustedRegistryKeySpec(const RegistryTrustedKey& key) {
+    return key.keyId + ":" + key.publicKeyDerBase64;
+}
+
+bool parseTrustedKeyIds(const std::vector<std::string>& rawTrustedKeys,
+                        std::vector<std::string>& outKeyIds,
+                        std::string& outError) {
+    outKeyIds.clear();
+    for (const std::string& rawTrustedKey : rawTrustedKeys) {
+        RegistryTrustedKey trustedKey;
+        if (!parseTrustedRegistryKey(rawTrustedKey, trustedKey, outError)) {
+            return false;
+        }
+        outKeyIds.push_back(trustedKey.keyId);
+    }
+    outKeyIds = sortedUniqueStrings(std::move(outKeyIds));
     return true;
 }
 
@@ -1519,6 +1680,10 @@ std::filesystem::path registryAuthPath() {
     return userConfigRoot() / "auth.toml";
 }
 
+std::filesystem::path registryProfilesPath() {
+    return userConfigRoot() / "registries.toml";
+}
+
 bool isHttpUrl(std::string_view text) {
     return text.rfind("http://", 0) == 0 || text.rfind("https://", 0) == 0;
 }
@@ -1733,8 +1898,9 @@ bool parseArtifactManifest(const std::filesystem::path& manifestPath,
     return false;
 }
 
-bool loadRegistryAuthTokens(std::unordered_map<std::string, std::string>& outTokens,
-                            std::string& outError) {
+bool loadLegacyRegistryAuthTokens(
+    std::unordered_map<std::string, std::string>& outTokens,
+    std::string& outError) {
     outTokens.clear();
     outError.clear();
 
@@ -1794,65 +1960,159 @@ bool loadRegistryAuthTokens(std::unordered_map<std::string, std::string>& outTok
     return true;
 }
 
-bool writeRegistryAuthTokens(
-    const std::unordered_map<std::string, std::string>& tokens,
-    std::string& outError) {
-    const std::filesystem::path authPath = registryAuthPath();
-    std::error_code ec;
-    std::filesystem::create_directories(authPath.parent_path(), ec);
-    if (ec) {
-        outError = "Could not create registry auth directory '" +
-                   authPath.parent_path().string() + "'.";
+bool flushUserRegistryProfile(UserRegistryConfigData& outConfig,
+                              UserRegistryProfile& current,
+                              bool hasSection,
+                              std::string& outError) {
+    if (!hasSection) {
+        return true;
+    }
+    if (current.index.empty()) {
+        outError = "Stored registries must define index = \"...\".";
         return false;
     }
 
-    std::ofstream out(authPath);
-    if (!out) {
-        outError = "Could not open registry auth file '" + authPath.string() +
-                   "' for writing.";
-        return false;
-    }
-
-    std::vector<std::string> aliases;
-    aliases.reserve(tokens.size());
-    for (const auto& [alias, token] : tokens) {
-        if (!token.empty()) {
-            aliases.push_back(alias);
-        }
-    }
-    std::sort(aliases.begin(), aliases.end());
-    for (const auto& alias : aliases) {
-        out << "[registries." << alias << "]\n";
-        out << "token = " << quoteTomlString(tokens.at(alias)) << "\n\n";
+    current.trustedKeys = sortedUniqueStrings(std::move(current.trustedKeys));
+    UserRegistryProfile* existing =
+        upsertUserRegistryProfile(outConfig, current.index);
+    existing->trustedKeys = sortedUniqueStrings(
+        std::vector<std::string>(existing->trustedKeys.begin(),
+                                 existing->trustedKeys.end()));
+    existing->trustedKeys.insert(existing->trustedKeys.end(),
+                                 current.trustedKeys.begin(),
+                                 current.trustedKeys.end());
+    existing->trustedKeys = sortedUniqueStrings(std::move(existing->trustedKeys));
+    if (!current.token.empty()) {
+        existing->token = current.token;
     }
     return true;
 }
 
-bool resolveRegistryAuthToken(std::string_view alias, std::string& outToken,
+bool loadUserRegistryProfiles(UserRegistryConfigData& outConfig,
                               std::string& outError) {
-    outToken.clear();
+    outConfig = UserRegistryConfigData{};
     outError.clear();
 
-    const std::string envAlias =
-        "MOG_REGISTRY_TOKEN_" + normalizeEnvKey(alias);
-    if (const char* specific = std::getenv(envAlias.c_str());
-        specific != nullptr && *specific != '\0') {
-        outToken = specific;
-        return true;
-    }
-    if (const char* generic = std::getenv("MOG_REGISTRY_TOKEN");
-        generic != nullptr && *generic != '\0') {
-        outToken = generic;
+    const std::filesystem::path configPath = registryProfilesPath();
+    if (!fileExists(configPath)) {
         return true;
     }
 
-    std::unordered_map<std::string, std::string> tokens;
-    if (!loadRegistryAuthTokens(tokens, outError)) {
+    std::ifstream file(configPath);
+    if (!file) {
+        outError = "Could not open registry profile file '" + configPath.string() +
+                   "'.";
         return false;
     }
-    auto it = tokens.find(std::string(alias));
-    if (it != tokens.end()) {
-        outToken = it->second;
+
+    UserRegistryProfile current;
+    bool inRegistry = false;
+    std::string line;
+    size_t lineNumber = 0;
+    while (std::getline(file, line)) {
+        ++lineNumber;
+        const std::string content = stripComment(line);
+        if (content.empty()) {
+            continue;
+        }
+        if (content == "[[registry]]") {
+            if (!flushUserRegistryProfile(outConfig, current, inRegistry, outError)) {
+                return false;
+            }
+            current = UserRegistryProfile{};
+            inRegistry = true;
+            continue;
+        }
+        if (content.front() == '[' && content.back() == ']') {
+            outError = "Unsupported registry profile section '" + content + "'.";
+            return false;
+        }
+        if (!inRegistry) {
+            outError = "Registry profile fields must appear inside [[registry]].";
+            return false;
+        }
+
+        const size_t equals = content.find('=');
+        if (equals == std::string::npos) {
+            outError = "Invalid registry profile line " +
+                       std::to_string(lineNumber) + ": expected key = value.";
+            return false;
+        }
+        const std::string key = trim(std::string_view(content).substr(0, equals));
+        const std::string value =
+            trim(std::string_view(content).substr(equals + 1));
+        std::string parseError;
+        if (key == "index") {
+            if (!parseQuotedString(value, current.index, parseError)) {
+                outError = "Invalid registry profile field '" + key + "': " +
+                           parseError;
+                return false;
+            }
+        } else if (key == "trusted_keys") {
+            if (!parseQuotedStringArray(value, current.trustedKeys, parseError)) {
+                outError = "Invalid registry profile field '" + key + "': " +
+                           parseError;
+                return false;
+            }
+        } else if (key == "token") {
+            if (!parseQuotedString(value, current.token, parseError)) {
+                outError = "Invalid registry profile field '" + key + "': " +
+                           parseError;
+                return false;
+            }
+        } else {
+            outError = "Unsupported registry profile field '" + key + "'.";
+            return false;
+        }
+    }
+
+    if (!flushUserRegistryProfile(outConfig, current, inRegistry, outError)) {
+        return false;
+    }
+    sortUserRegistryProfiles(outConfig.registries);
+    return true;
+}
+
+bool writeUserRegistryProfiles(const UserRegistryConfigData& config,
+                               std::string& outError) {
+    const std::filesystem::path configPath = registryProfilesPath();
+    std::error_code ec;
+    std::filesystem::create_directories(configPath.parent_path(), ec);
+    if (ec) {
+        outError = "Could not create registry profile directory '" +
+                   configPath.parent_path().string() + "'.";
+        return false;
+    }
+
+    std::ofstream out(configPath);
+    if (!out) {
+        outError = "Could not open registry profile file '" + configPath.string() +
+                   "' for writing.";
+        return false;
+    }
+
+    std::vector<UserRegistryProfile> registries = config.registries;
+    sortUserRegistryProfiles(registries);
+    bool first = true;
+    for (const auto& registry : registries) {
+        if (registry.index.empty() ||
+            (registry.trustedKeys.empty() && registry.token.empty())) {
+            continue;
+        }
+        if (!first) {
+            out << "\n";
+        }
+        first = false;
+        out << "[[registry]]\n";
+        out << "index = " << quoteTomlString(registry.index) << "\n";
+        if (!registry.trustedKeys.empty()) {
+            out << "trusted_keys = "
+                << quoteTomlArray(sortedUniqueStrings(registry.trustedKeys))
+                << "\n";
+        }
+        if (!registry.token.empty()) {
+            out << "token = " << quoteTomlString(registry.token) << "\n";
+        }
     }
     return true;
 }
@@ -2630,6 +2890,136 @@ bool resolveRegistryLocation(const std::string& projectRoot,
     return true;
 }
 
+bool resolveRegistryIdentity(const std::string& projectRoot,
+                             const ProjectRegistryConfig& config,
+                             std::string& outIdentity,
+                             bool& outIsRemote,
+                             std::string& outError) {
+    RegistryLocation location;
+    if (!resolveRegistryLocation(projectRoot, config, location, outError)) {
+        return false;
+    }
+
+    outIsRemote = location.isRemote;
+    outIdentity = location.isRemote
+                      ? location.remoteIndexUrl
+                      : normalizeRelativePath(
+                            location.localIndexPath.lexically_normal().string());
+    return true;
+}
+
+bool resolveRegistryAuthTokenForIndex(std::string_view alias,
+                                      std::string_view normalizedIndex,
+                                      std::string& outToken,
+                                      std::string& outError);
+
+bool resolveEffectiveRegistryProfile(const std::string& projectRoot,
+                                     const ProjectRegistryConfig& config,
+                                     EffectiveRegistryProfile& outProfile,
+                                     std::string& outError) {
+    outProfile = EffectiveRegistryProfile{};
+    outError.clear();
+    outProfile.config = config;
+
+    if (!resolveRegistryIdentity(projectRoot, config, outProfile.normalizedIndex,
+                                 outProfile.isRemote, outError)) {
+        return false;
+    }
+
+    UserRegistryConfigData userConfig;
+    if (!loadUserRegistryProfiles(userConfig, outError)) {
+        return false;
+    }
+    const UserRegistryProfile* userProfile =
+        findUserRegistryProfile(userConfig, outProfile.normalizedIndex);
+
+    outProfile.trustFromProject = !config.trustedKeys.empty();
+    outProfile.trustFromUser =
+        userProfile != nullptr && !userProfile->trustedKeys.empty();
+    if (userProfile != nullptr) {
+        outProfile.config.trustedKeys.insert(outProfile.config.trustedKeys.end(),
+                                             userProfile->trustedKeys.begin(),
+                                             userProfile->trustedKeys.end());
+    }
+    outProfile.config.trustedKeys =
+        sortedUniqueStrings(std::move(outProfile.config.trustedKeys));
+    outProfile.config.index = outProfile.normalizedIndex;
+
+    if (!parseTrustedKeyIds(outProfile.config.trustedKeys,
+                            outProfile.trustedKeyIds, outError)) {
+        outError = "Registry '" + config.alias + "' has invalid trusted_keys: " +
+                   outError;
+        return false;
+    }
+
+    if (!resolveRegistryAuthTokenForIndex(config.alias, outProfile.normalizedIndex,
+                                          outProfile.token, outError)) {
+        return false;
+    }
+    outProfile.hasToken = !outProfile.token.empty();
+
+    return true;
+}
+
+bool resolveRegistryAuthTokenForIndex(std::string_view alias,
+                                      std::string_view normalizedIndex,
+                              std::string& outToken,
+                              std::string& outError) {
+    outToken.clear();
+    outError.clear();
+
+    const std::string envAlias =
+        "MOG_REGISTRY_TOKEN_" + normalizeEnvKey(alias);
+    if (const char* specific = std::getenv(envAlias.c_str());
+        specific != nullptr && *specific != '\0') {
+        outToken = specific;
+        return true;
+    }
+    if (const char* generic = std::getenv("MOG_REGISTRY_TOKEN");
+        generic != nullptr && *generic != '\0') {
+        outToken = generic;
+        return true;
+    }
+
+    UserRegistryConfigData userConfig;
+    if (!loadUserRegistryProfiles(userConfig, outError)) {
+        return false;
+    }
+    const UserRegistryProfile* userProfile =
+        findUserRegistryProfile(userConfig, normalizedIndex);
+    if (userProfile != nullptr && !userProfile->token.empty()) {
+        outToken = userProfile->token;
+        return true;
+    }
+
+    std::unordered_map<std::string, std::string> tokens;
+    if (!loadLegacyRegistryAuthTokens(tokens, outError)) {
+        return false;
+    }
+    auto it = tokens.find(std::string(alias));
+    if (it != tokens.end()) {
+        outToken = it->second;
+    }
+    return true;
+}
+
+bool resolveRegistryAuthToken(const std::string& projectRoot,
+                              const ProjectRegistryConfig& config,
+                              std::string& outToken,
+                              std::string& outError) {
+    std::string normalizedIndex;
+    bool isRemote = false;
+    if (!resolveRegistryIdentity(projectRoot, config, normalizedIndex, isRemote,
+                                 outError)) {
+        return false;
+    }
+    if (!resolveRegistryAuthTokenForIndex(config.alias, normalizedIndex, outToken,
+                                          outError)) {
+        return false;
+    }
+    return true;
+}
+
 bool loadRegistryIndex(const std::string& projectRoot,
                        const ProjectRegistryConfig& config,
                        const InstallOptions* options,
@@ -2638,18 +3028,21 @@ bool loadRegistryIndex(const std::string& projectRoot,
     outIndex = LoadedRegistryIndex{};
     outError.clear();
 
+    EffectiveRegistryProfile effectiveProfile;
+    if (!resolveEffectiveRegistryProfile(projectRoot, config, effectiveProfile,
+                                         outError)) {
+        return false;
+    }
+
     RegistryLocation location;
-    if (!resolveRegistryLocation(projectRoot, config, location, outError)) {
+    if (!resolveRegistryLocation(projectRoot, effectiveProfile.config, location,
+                                 outError)) {
         return false;
     }
 
     std::filesystem::path configuredPath = location.localIndexPath;
     std::error_code ec;
     if (location.isRemote) {
-        std::string token;
-        if (!resolveRegistryAuthToken(config.alias, token, outError)) {
-            return false;
-        }
         const bool offline = options != nullptr && options->offline;
         if (offline && !fileExists(configuredPath)) {
             outError = "Registry '" + config.alias +
@@ -2657,8 +3050,8 @@ bool loadRegistryIndex(const std::string& projectRoot,
             return false;
         }
         if (!offline || !fileExists(configuredPath)) {
-            if (!downloadUrlToFile(location.remoteIndexUrl, token, configuredPath,
-                                   outError)) {
+            if (!downloadUrlToFile(location.remoteIndexUrl, effectiveProfile.token,
+                                   configuredPath, outError)) {
                 outError = "Registry '" + config.alias +
                            "' index download failed: " + outError;
                 return false;
@@ -2903,13 +3296,14 @@ bool loadRegistryIndex(const std::string& projectRoot,
         }
         const std::string canonicalPayload =
             canonicalRegistryIndexPayload(std::move(canonicalRecords));
-        if (!verifyRegistrySignatureEnvelope(config, location.isRemote,
+        if (!verifyRegistrySignatureEnvelope(effectiveProfile.config, location.isRemote,
                                              outIndex.signingKeyId,
                                              outIndex.signatureBase64,
                                              canonicalPayload, outError)) {
             return false;
         }
-    } else if (registryRequiresTrustedSignatures(config, location.isRemote)) {
+    } else if (registryRequiresTrustedSignatures(effectiveProfile.config,
+                                                 location.isRemote)) {
         outError = "Registry '" + config.alias +
                    "' requires a signed registry.v2 index, but the registry is unsigned.";
         return false;
@@ -2990,8 +3384,15 @@ bool loadRegistryAdvisories(const std::string& projectRoot,
     outAdvisories = LoadedRegistryAdvisories{};
     outError.clear();
 
+    EffectiveRegistryProfile effectiveProfile;
+    if (!resolveEffectiveRegistryProfile(projectRoot, config, effectiveProfile,
+                                         outError)) {
+        return false;
+    }
+
     RegistryLocation location;
-    if (!resolveRegistryLocation(projectRoot, config, location, outError)) {
+    if (!resolveRegistryLocation(projectRoot, effectiveProfile.config, location,
+                                 outError)) {
         return false;
     }
 
@@ -3001,10 +3402,6 @@ bool loadRegistryAdvisories(const std::string& projectRoot,
                                                : location.localRootDir / "advisories.toml";
 
     if (location.isRemote) {
-        std::string token;
-        if (!resolveRegistryAuthToken(config.alias, token, outError)) {
-            return false;
-        }
         if (options.offline && !fileExists(advisoriesPath)) {
             outError = "Registry '" + config.alias +
                        "' cannot be audited with --offline because advisories are not cached locally.";
@@ -3013,7 +3410,8 @@ bool loadRegistryAdvisories(const std::string& projectRoot,
         if (!options.offline || !fileExists(advisoriesPath)) {
             std::string downloadError;
             if (!downloadUrlToFile(joinUrlPath(location.remoteRootUrl, "advisories.toml"),
-                                   token, advisoriesPath, downloadError)) {
+                                   effectiveProfile.token, advisoriesPath,
+                                   downloadError)) {
                 if (downloadError.find("404") != std::string::npos) {
                     return true;
                 }
@@ -3148,13 +3546,15 @@ bool loadRegistryAdvisories(const std::string& projectRoot,
     if (!outAdvisories.records.empty()) {
         const std::string canonicalPayload =
             canonicalAdvisoriesPayload(outAdvisories.records);
-        if (!verifyRegistrySignatureEnvelope(config, location.isRemote,
+        if (!verifyRegistrySignatureEnvelope(effectiveProfile.config,
+                                             location.isRemote,
                                              outAdvisories.signingKeyId,
                                              outAdvisories.signatureBase64,
                                              canonicalPayload, outError)) {
             return false;
         }
-    } else if (registryRequiresTrustedSignatures(config, location.isRemote) &&
+    } else if (registryRequiresTrustedSignatures(effectiveProfile.config,
+                                                 location.isRemote) &&
                (outAdvisories.signingKeyId.empty() ||
                 outAdvisories.signatureBase64.empty())) {
         outError = "Registry '" + config.alias +
@@ -3325,6 +3725,7 @@ std::string availableNativeTargetsLabel(const RegistryIndexRecord& record) {
 
 bool resolveRegistryArtifactDirectory(const LoadedRegistryIndex& index,
                                       std::string_view registryAlias,
+                                      std::string_view registryIndex,
                                       std::string_view rawArtifactPath,
                                       std::string_view artifactDigest,
                                       const InstallOptions* options,
@@ -3373,7 +3774,8 @@ bool resolveRegistryArtifactDirectory(const LoadedRegistryIndex& index,
     }
 
     std::string token;
-    if (!resolveRegistryAuthToken(registryAlias, token, outError)) {
+    if (!resolveRegistryAuthTokenForIndex(registryAlias, registryIndex, token,
+                                          outError)) {
         return false;
     }
 
@@ -3537,9 +3939,13 @@ bool resolveRegistryPackageNode(
         return true;
     }
     std::filesystem::path artifactPath;
+    const std::string registryIdentity =
+        indexIt->second.isRemote ? indexIt->second.remoteIndexUrl
+                                 : indexIt->second.indexPath.string();
     if (!resolveRegistryArtifactDirectory(indexIt->second, registryAlias,
-                                          rawArtifactPath, artifactDigest, options,
-                                          artifactPath, outError)) {
+                                          registryIdentity, rawArtifactPath,
+                                          artifactDigest, options, artifactPath,
+                                          outError)) {
         if (!outError.empty() &&
             outError.find("Registry artifact") == std::string::npos) {
             outError = "Registry artifact for '" + packageId + "@" + record.version +
@@ -4316,7 +4722,10 @@ bool materializeCacheEntry(const PackageRegistryEntry& sourceEntry,
         if (!loadRegistryIndex(projectRoot, *registry, &options, index, outError)) {
             return false;
         }
+        const std::string registryIdentity =
+            index.isRemote ? index.remoteIndexUrl : index.indexPath.string();
         if (!resolveRegistryArtifactDirectory(index, sourceEntry.registry,
+                                              registryIdentity,
                                               sourceEntry.artifactPath,
                                               sourceEntry.artifactDigest, &options,
                                               sourceDir, outError)) {
@@ -5906,8 +6315,15 @@ bool publishProjectPackage(const std::string& projectRoot,
         return false;
     }
 
+    EffectiveRegistryProfile effectiveProfile;
+    if (!resolveEffectiveRegistryProfile(projectRoot, *registry, effectiveProfile,
+                                         outError)) {
+        return false;
+    }
+
     RegistryLocation registryLocation;
-    if (!resolveRegistryLocation(projectRoot, *registry, registryLocation,
+    if (!resolveRegistryLocation(projectRoot, effectiveProfile.config,
+                                 registryLocation,
                                  outError)) {
         return false;
     }
@@ -5919,9 +6335,10 @@ bool publishProjectPackage(const std::string& projectRoot,
             return false;
         }
         signingKeyPtr = &signingKey;
-        if (!registry->trustedKeys.empty()) {
+        if (!effectiveProfile.config.trustedKeys.empty()) {
             bool trusted = false;
-            for (const std::string& rawTrustedKey : registry->trustedKeys) {
+            for (const std::string& rawTrustedKey :
+                 effectiveProfile.config.trustedKeys) {
                 RegistryTrustedKey trustedKey;
                 if (!parseTrustedRegistryKey(rawTrustedKey, trustedKey, outError)) {
                     outError = "Registry '" + effectiveRegistryAlias +
@@ -5936,12 +6353,13 @@ bool publishProjectPackage(const std::string& projectRoot,
             }
             if (!trusted) {
                 outError = "Signing key '" + signingKey.keyId +
-                           "' is not present in [registries." +
-                           effectiveRegistryAlias + "].trusted_keys.";
+                           "' is not trusted for registry '" +
+                           effectiveRegistryAlias + "'.";
                 return false;
             }
         }
-    } else if (registryRequiresTrustedSignatures(*registry, registryLocation.isRemote)) {
+    } else if (registryRequiresTrustedSignatures(effectiveProfile.config,
+                                                 registryLocation.isRemote)) {
         outError = "Registry '" + effectiveRegistryAlias +
                    "' requires --signing-key because it is configured for trusted signatures.";
         return false;
@@ -6245,10 +6663,7 @@ bool publishProjectPackage(const std::string& projectRoot,
         return true;
     }
 
-    std::string token;
-    if (!resolveRegistryAuthToken(effectiveRegistryAlias, token, outError)) {
-        return false;
-    }
+    const std::string& token = effectiveProfile.token;
     if (token.empty()) {
         outError = "Hosted publish requires a stored token. Run 'mog login " +
                    effectiveRegistryAlias + "'.";
@@ -6294,18 +6709,26 @@ bool loginProjectRegistry(const std::string& projectRoot,
         outError = "Unknown registry '" + registryAlias + "'.";
         return false;
     }
-    if (!isHttpUrl(registry->index)) {
+    std::string normalizedIndex;
+    bool isRemote = false;
+    if (!resolveRegistryIdentity(projectRoot, *registry, normalizedIndex, isRemote,
+                                 outError)) {
+        return false;
+    }
+    if (!isRemote) {
         outError = "Registry '" + registryAlias +
                    "' does not use a hosted http(s) index.";
         return false;
     }
 
-    std::unordered_map<std::string, std::string> tokens;
-    if (!loadRegistryAuthTokens(tokens, outError)) {
+    UserRegistryConfigData userConfig;
+    if (!loadUserRegistryProfiles(userConfig, outError)) {
         return false;
     }
-    tokens[registryAlias] = token;
-    return writeRegistryAuthTokens(tokens, outError);
+    UserRegistryProfile* profile =
+        upsertUserRegistryProfile(userConfig, normalizedIndex);
+    profile->token = token;
+    return writeUserRegistryProfiles(userConfig, outError);
 }
 
 bool logoutProjectRegistry(const std::string& projectRoot,
@@ -6326,12 +6749,235 @@ bool logoutProjectRegistry(const std::string& projectRoot,
         return false;
     }
 
-    std::unordered_map<std::string, std::string> tokens;
-    if (!loadRegistryAuthTokens(tokens, outError)) {
+    const ProjectRegistryConfig* registry = findRegistryConfig(manifest, registryAlias);
+    std::string normalizedIndex;
+    bool isRemote = false;
+    if (!resolveRegistryIdentity(projectRoot, *registry, normalizedIndex, isRemote,
+                                 outError)) {
         return false;
     }
-    tokens.erase(registryAlias);
-    return writeRegistryAuthTokens(tokens, outError);
+    UserRegistryConfigData userConfig;
+    if (!loadUserRegistryProfiles(userConfig, outError)) {
+        return false;
+    }
+    auto it = std::remove_if(
+        userConfig.registries.begin(), userConfig.registries.end(),
+        [&](const UserRegistryProfile& profile) {
+            return profile.index == normalizedIndex && profile.trustedKeys.empty() &&
+                   profile.token.empty();
+        });
+    userConfig.registries.erase(it, userConfig.registries.end());
+
+    UserRegistryProfile* profile =
+        upsertUserRegistryProfile(userConfig, normalizedIndex);
+    profile->token.clear();
+    if (profile->trustedKeys.empty()) {
+        userConfig.registries.erase(
+            std::remove_if(userConfig.registries.begin(),
+                           userConfig.registries.end(),
+                           [&](const UserRegistryProfile& candidate) {
+                               return candidate.index == normalizedIndex &&
+                                      candidate.trustedKeys.empty() &&
+                                      candidate.token.empty();
+                           }),
+            userConfig.registries.end());
+    }
+    return writeUserRegistryProfiles(userConfig, outError);
+}
+
+bool listStoredRegistries(std::vector<StoredRegistryProfile>& outProfiles,
+                          std::string& outError) {
+    outProfiles.clear();
+    UserRegistryConfigData userConfig;
+    if (!loadUserRegistryProfiles(userConfig, outError)) {
+        return false;
+    }
+
+    for (const auto& registry : userConfig.registries) {
+        if (registry.index.empty() ||
+            (registry.trustedKeys.empty() && registry.token.empty())) {
+            continue;
+        }
+        StoredRegistryProfile profile;
+        profile.index = registry.index;
+        profile.isRemote = isHttpUrl(registry.index);
+        profile.hasToken = !registry.token.empty();
+        if (!parseTrustedKeyIds(registry.trustedKeys, profile.trustedKeyIds,
+                                outError)) {
+            outError = "Stored registry '" + registry.index +
+                       "' has invalid trusted_keys: " + outError;
+            return false;
+        }
+        outProfiles.push_back(std::move(profile));
+    }
+    std::sort(outProfiles.begin(), outProfiles.end(),
+              [](const StoredRegistryProfile& lhs,
+                 const StoredRegistryProfile& rhs) {
+                  return lhs.index < rhs.index;
+              });
+    return true;
+}
+
+bool describeProjectRegistry(const std::string& projectRoot,
+                             const std::string& registryAlias,
+                             ProjectRegistryStatus& outStatus,
+                             std::string& outError) {
+    outStatus = ProjectRegistryStatus{};
+    outError.clear();
+    if (registryAlias.empty()) {
+        outError = "Registry alias cannot be empty.";
+        return false;
+    }
+
+    ProjectManifestData manifest;
+    if (!loadProjectManifestData(projectRoot, manifest, outError)) {
+        return false;
+    }
+    const ProjectRegistryConfig* registry = findRegistryConfig(manifest, registryAlias);
+    if (registry == nullptr) {
+        outError = "Unknown registry '" + registryAlias + "'.";
+        return false;
+    }
+
+    EffectiveRegistryProfile effectiveProfile;
+    if (!resolveEffectiveRegistryProfile(projectRoot, *registry, effectiveProfile,
+                                         outError)) {
+        return false;
+    }
+
+    outStatus.alias = registryAlias;
+    outStatus.index = effectiveProfile.normalizedIndex;
+    outStatus.isRemote = effectiveProfile.isRemote;
+    outStatus.hasToken = effectiveProfile.hasToken;
+    outStatus.trustFromProject = effectiveProfile.trustFromProject;
+    outStatus.trustFromUser = effectiveProfile.trustFromUser;
+    outStatus.trustedKeyIds = std::move(effectiveProfile.trustedKeyIds);
+    return true;
+}
+
+bool trustProjectRegistry(const std::string& projectRoot,
+                          const std::string& registryAlias,
+                          const std::string& keySpec,
+                          const std::string& keyFilePath,
+                          std::string& outTrustedKeyId,
+                          std::string& outError) {
+    outTrustedKeyId.clear();
+    outError.clear();
+    if (registryAlias.empty()) {
+        outError = "Registry alias cannot be empty.";
+        return false;
+    }
+    if (keySpec.empty() == keyFilePath.empty()) {
+        outError = "Registry trust requires exactly one of --key or --key-file.";
+        return false;
+    }
+
+    ProjectManifestData manifest;
+    if (!loadProjectManifestData(projectRoot, manifest, outError)) {
+        return false;
+    }
+    const ProjectRegistryConfig* registry = findRegistryConfig(manifest, registryAlias);
+    if (registry == nullptr) {
+        outError = "Unknown registry '" + registryAlias + "'.";
+        return false;
+    }
+
+    std::string normalizedIndex;
+    bool isRemote = false;
+    if (!resolveRegistryIdentity(projectRoot, *registry, normalizedIndex, isRemote,
+                                 outError)) {
+        return false;
+    }
+
+    RegistryTrustedKey trustedKey;
+    if (!keyFilePath.empty()) {
+        RegistryPublicKeyFile publicKey;
+        if (!loadRegistryPublicKeyFile(keyFilePath, publicKey, outError)) {
+            return false;
+        }
+        trustedKey.keyId = publicKey.keyId;
+        trustedKey.publicKeyDerBase64 = publicKey.publicKeyDerBase64;
+    } else if (!parseTrustedRegistryKey(keySpec, trustedKey, outError)) {
+        return false;
+    }
+
+    UserRegistryConfigData userConfig;
+    if (!loadUserRegistryProfiles(userConfig, outError)) {
+        return false;
+    }
+    UserRegistryProfile* profile =
+        upsertUserRegistryProfile(userConfig, normalizedIndex);
+    profile->trustedKeys.push_back(trustedRegistryKeySpec(trustedKey));
+    profile->trustedKeys = sortedUniqueStrings(std::move(profile->trustedKeys));
+    outTrustedKeyId = trustedKey.keyId;
+    return writeUserRegistryProfiles(userConfig, outError);
+}
+
+bool untrustProjectRegistry(const std::string& projectRoot,
+                            const std::string& registryAlias,
+                            const std::string& keyId,
+                            bool& outRemoved,
+                            std::string& outError) {
+    outRemoved = false;
+    outError.clear();
+    if (registryAlias.empty()) {
+        outError = "Registry alias cannot be empty.";
+        return false;
+    }
+    if (keyId.empty()) {
+        outError = "Registry trust removal requires --key-id.";
+        return false;
+    }
+
+    ProjectManifestData manifest;
+    if (!loadProjectManifestData(projectRoot, manifest, outError)) {
+        return false;
+    }
+    const ProjectRegistryConfig* registry = findRegistryConfig(manifest, registryAlias);
+    if (registry == nullptr) {
+        outError = "Unknown registry '" + registryAlias + "'.";
+        return false;
+    }
+
+    std::string normalizedIndex;
+    bool isRemote = false;
+    if (!resolveRegistryIdentity(projectRoot, *registry, normalizedIndex, isRemote,
+                                 outError)) {
+        return false;
+    }
+
+    UserRegistryConfigData userConfig;
+    if (!loadUserRegistryProfiles(userConfig, outError)) {
+        return false;
+    }
+    UserRegistryProfile* profile =
+        upsertUserRegistryProfile(userConfig, normalizedIndex);
+    std::vector<std::string> keptKeys;
+    keptKeys.reserve(profile->trustedKeys.size());
+    for (const std::string& rawTrustedKey : profile->trustedKeys) {
+        RegistryTrustedKey trustedKey;
+        if (!parseTrustedRegistryKey(rawTrustedKey, trustedKey, outError)) {
+            outError = "Stored registry '" + normalizedIndex +
+                       "' has invalid trusted_keys: " + outError;
+            return false;
+        }
+        if (trustedKey.keyId == keyId) {
+            outRemoved = true;
+            continue;
+        }
+        keptKeys.push_back(rawTrustedKey);
+    }
+    profile->trustedKeys = sortedUniqueStrings(std::move(keptKeys));
+    if (profile->trustedKeys.empty() && profile->token.empty()) {
+        userConfig.registries.erase(
+            std::remove_if(userConfig.registries.begin(),
+                           userConfig.registries.end(),
+                           [&](const UserRegistryProfile& candidate) {
+                               return candidate.index == normalizedIndex;
+                           }),
+            userConfig.registries.end());
+    }
+    return writeUserRegistryProfiles(userConfig, outError);
 }
 
 bool installProjectPackages(const std::string& projectRoot,

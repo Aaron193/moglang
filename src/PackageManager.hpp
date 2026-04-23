@@ -52,6 +52,23 @@ struct AuditOptions {
     bool offline = false;
 };
 
+struct StoredRegistryProfile {
+    std::string index;
+    bool isRemote = false;
+    bool hasToken = false;
+    std::vector<std::string> trustedKeyIds;
+};
+
+struct ProjectRegistryStatus {
+    std::string alias;
+    std::string index;
+    bool isRemote = false;
+    bool hasToken = false;
+    bool trustFromProject = false;
+    bool trustFromUser = false;
+    std::vector<std::string> trustedKeyIds;
+};
+
 bool loadProjectManifestData(const std::string& projectRoot,
                              ProjectManifestData& outManifest,
                              std::string& outError);
@@ -87,6 +104,27 @@ bool loginProjectRegistry(const std::string& projectRoot,
 bool logoutProjectRegistry(const std::string& projectRoot,
                            const std::string& registryAlias,
                            std::string& outError);
+
+bool listStoredRegistries(std::vector<StoredRegistryProfile>& outProfiles,
+                          std::string& outError);
+
+bool describeProjectRegistry(const std::string& projectRoot,
+                             const std::string& registryAlias,
+                             ProjectRegistryStatus& outStatus,
+                             std::string& outError);
+
+bool trustProjectRegistry(const std::string& projectRoot,
+                          const std::string& registryAlias,
+                          const std::string& keySpec,
+                          const std::string& keyFilePath,
+                          std::string& outTrustedKeyId,
+                          std::string& outError);
+
+bool untrustProjectRegistry(const std::string& projectRoot,
+                            const std::string& registryAlias,
+                            const std::string& keyId,
+                            bool& outRemoved,
+                            std::string& outError);
 
 bool installProjectPackages(const std::string& projectRoot,
                             std::vector<PackageRegistryEntry>& outEntries,
