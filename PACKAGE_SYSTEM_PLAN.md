@@ -23,6 +23,7 @@ repository. The current codebase supports:
 
 - `mog init`
 - `mog add <local-package>`
+- `mog remove <alias>`
 - `mog install`
 - `mog update`
 - `mog run <file>`
@@ -83,6 +84,7 @@ repository. The current codebase supports:
 - package-manifest dependency parsing aligned with project manifests via
   `[dependencies]` inline tables, while retaining legacy compatibility for
   `dependencies = []`
+- package-manifest publish opt-out via `publish = false`
 - native package `[system-dependencies]` manifest metadata for install-time
   diagnostics, including the `mog:window` SDL2 declaration
 - richer native source-build fallback diagnostics that report the selected
@@ -323,6 +325,26 @@ Current implementation status:
 - does not yet auto-discover packages from git specs in `mog add`, and still
   focuses on local/workspace and published registry discovery
 
+### Remove a dependency
+
+```bash
+mog remove hello
+```
+
+Behavior:
+
+- removes a dependency alias from `mog.toml`
+- refreshes `mog.lock`
+- rewrites `.mog/install/registry.toml`
+
+Current implementation status:
+
+- implemented for root-project dependency aliases
+- removes from `[dependencies]` first, then `[dev-dependencies]` if needed
+- forces a fresh install/update pass so generated metadata matches the reduced
+  graph
+- does not yet support package-id-based removal or bulk removals
+
 ### Install dependencies
 
 ```bash
@@ -416,6 +438,7 @@ Current implementation status:
 - implemented for source packages and current-host native packages published to
   configured static file registries and hosted `http(s)` registries that expose
   the current `registry.v1` artifact layout
+- package manifests can now explicitly block publication with `publish = false`
 - rejects conflicting re-publishes of an existing `package_id@version`
 - published native packages now emit both a generic source artifact and a
   host-target prebuilt artifact in the current registry format
@@ -795,7 +818,7 @@ Recommended supporting flags:
 Current implementation status:
 
 - implemented commands: `init`, `add`, `install`, `update`, `publish`, `run`,
-  `validate-package`, `login`, `logout`, `audit`
+  `remove`, `validate-package`, `login`, `logout`, `registry`, `audit`
 - implemented compatibility path: `mog <file>`
 - implemented legacy flag compatibility: `--validate-package`
 - implemented package-manager flags: `--locked`, `--offline`,
@@ -805,7 +828,7 @@ Current implementation status:
   `allowed_registries`, `allowed_native_namespaces`,
   registry `trusted_keys`, registry `allow_insecure`, and
   `require_locked_in_ci`
-- not implemented yet: `remove`, `test`, `build`, `registry`, and `cache`
+- not implemented yet: `test`, `build`, and `cache`
 
 ## Tooling Integration
 
@@ -913,7 +936,9 @@ Current implementation status:
 
 - partially implemented through local path dependencies and workspace/repo
   package discovery
-- dedicated workspace metadata and publish guards are not implemented yet
+- explicit package-manifest publish guards can now opt packages out of
+  publication with `publish = false`
+- dedicated workspace metadata is not implemented yet
 
 ## Migration from Current State
 

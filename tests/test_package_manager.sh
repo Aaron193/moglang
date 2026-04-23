@@ -47,8 +47,10 @@ GIT_OFFLINE_FAIL_DIR=""
 POLICY_REGISTRY_DIR=""
 POLICY_NATIVE_DIR=""
 POLICY_CI_DIR=""
+REMOVE_DIR=""
+REMOVE_DEV_DIR=""
 HOSTED_SERVER_PID=""
-trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_EXTERNAL_BUNDLE_DIR:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${WINDOW_BUNDLE_ROOT:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}" "${POLICY_REGISTRY_DIR:-}" "${POLICY_NATIVE_DIR:-}" "${POLICY_CI_DIR:-}"' EXIT
+trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_EXTERNAL_BUNDLE_DIR:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${WINDOW_BUNDLE_ROOT:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}" "${POLICY_REGISTRY_DIR:-}" "${POLICY_NATIVE_DIR:-}" "${POLICY_CI_DIR:-}" "${REMOVE_DIR:-}" "${REMOVE_DEV_DIR:-}"' EXIT
 
 detect_host_target() {
     local os
@@ -874,6 +876,41 @@ if ! grep -Fq "Only native packages accept --target or --native-artifact-dir." \
     exit 1
 fi
 
+PRIVATE_SOURCE_PACKAGE_DIR="$PUBLISH_WORKSPACE/packages/private-greeter"
+mkdir -p "$PRIVATE_SOURCE_PACKAGE_DIR/src"
+cat > "$PRIVATE_SOURCE_PACKAGE_DIR/mog.toml" <<'EOF_PRIVATE_SOURCE'
+kind = "source"
+import_name = "private_greeter"
+namespace = "demo"
+name = "private-greeter"
+version = "0.1.0"
+publish = false
+author = "Registry test"
+description = "Private source package."
+entry = "src/main.mog"
+dependencies = []
+EOF_PRIVATE_SOURCE
+
+cat > "$PRIVATE_SOURCE_PACKAGE_DIR/src/main.mog" <<'EOF_PRIVATE_SOURCE_SRC'
+fn Hidden() str {
+    return "not published"
+}
+EOF_PRIVATE_SOURCE_SRC
+
+if (cd "$PUBLISH_WORKSPACE" && \
+    "$MOG" publish "$PRIVATE_SOURCE_PACKAGE_DIR" \
+    >/tmp/mog_source_publish_private_failure.txt 2>&1); then
+    echo "[FAIL] publish should reject source packages marked publish = false"
+    cat /tmp/mog_source_publish_private_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "publish = false" /tmp/mog_source_publish_private_failure.txt; then
+    echo "[FAIL] source publish guard failures should mention publish = false"
+    cat /tmp/mog_source_publish_private_failure.txt
+    exit 1
+fi
+
 if ! grep -Fq 'package_id = "demo:greeter"' "$REGISTRY_DIR/index.toml" || \
    ! grep -Fq 'dependencies = ["acme:util@1.1.0"]' "$REGISTRY_DIR/index.toml"; then
     echo "[FAIL] publish should pin direct published dependencies exactly in the registry index"
@@ -1018,6 +1055,34 @@ fi
 if ! grep -Fq "requires --target" /tmp/mog_native_publish_missing_target.txt; then
     echo "[FAIL] native publish should explain missing --target for external artifact directories"
     cat /tmp/mog_native_publish_missing_target.txt
+    exit 1
+fi
+
+PRIVATE_NATIVE_PACKAGE_DIR="$NATIVE_PUBLISH_WORKSPACE/packages/examples/private-counter"
+mkdir -p "$PRIVATE_NATIVE_PACKAGE_DIR"
+cat > "$PRIVATE_NATIVE_PACKAGE_DIR/package.toml" <<'EOF_PRIVATE_NATIVE'
+kind = "native"
+namespace = "examples"
+name = "private-counter"
+version = "0.1.0"
+publish = false
+abi_version = 3
+author = "Mog runtime"
+description = "Private native package."
+dependencies = []
+EOF_PRIVATE_NATIVE
+
+if (cd "$NATIVE_PUBLISH_WORKSPACE" && \
+    "$MOG" publish "$PRIVATE_NATIVE_PACKAGE_DIR" \
+    >/tmp/mog_native_publish_private_failure.txt 2>&1); then
+    echo "[FAIL] publish should reject native packages marked publish = false"
+    cat /tmp/mog_native_publish_private_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "publish = false" /tmp/mog_native_publish_private_failure.txt; then
+    echo "[FAIL] native publish guard failures should mention publish = false"
+    cat /tmp/mog_native_publish_private_failure.txt
     exit 1
 fi
 
@@ -2873,6 +2938,100 @@ fi
 if ! grep -Fq 'source_type = "workspace"' "$WORKSPACE_DIR/mog.lock"; then
     echo "[FAIL] workspace dependencies should be recorded as workspace sources"
     cat "$WORKSPACE_DIR/mog.lock"
+    exit 1
+fi
+
+REMOVE_DIR="$(mktemp -d)"
+cat > "$REMOVE_DIR/mog.toml" <<EOF_REMOVE
+kind = "project"
+name = "remove-test"
+version = "0.1.0"
+description = "remove dependency test"
+
+[dependencies]
+hello = { path = "$PROJECT_ROOT/packages/examples/hello", package = "examples:hello", version = "0.1.0" }
+EOF_REMOVE
+
+cat > "$REMOVE_DIR/app.mog" <<'EOF_REMOVE_APP'
+const hello = @import("hello")
+print(hello.Greet())
+EOF_REMOVE_APP
+
+if [[ "$(cd "$REMOVE_DIR" && "$MOG" run app.mog)" != *"hello from source package"* ]]; then
+    echo "[FAIL] remove test setup should run before the dependency is removed"
+    exit 1
+fi
+
+if ! (cd "$REMOVE_DIR" && "$MOG" remove hello >/dev/null); then
+    echo "[FAIL] remove should delete a direct dependency and refresh install metadata"
+    exit 1
+fi
+
+if grep -Fq 'hello = {' "$REMOVE_DIR/mog.toml"; then
+    echo "[FAIL] remove should delete the dependency entry from mog.toml"
+    cat "$REMOVE_DIR/mog.toml"
+    exit 1
+fi
+
+if grep -Fq 'examples:hello' "$REMOVE_DIR/mog.lock" || \
+   grep -Fq 'examples:hello' "$REMOVE_DIR/.mog/install/registry.toml"; then
+    echo "[FAIL] remove should refresh mog.lock and install metadata after deletion"
+    cat "$REMOVE_DIR/mog.lock"
+    cat "$REMOVE_DIR/.mog/install/registry.toml"
+    exit 1
+fi
+
+if (cd "$REMOVE_DIR" && "$MOG" run app.mog >/tmp/mog_remove_run_failure.txt 2>&1); then
+    echo "[FAIL] removed dependencies should no longer resolve during run"
+    cat /tmp/mog_remove_run_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "hello" /tmp/mog_remove_run_failure.txt; then
+    echo "[FAIL] run failures after remove should still reference the missing import"
+    cat /tmp/mog_remove_run_failure.txt
+    exit 1
+fi
+
+REMOVE_DEV_DIR="$(mktemp -d)"
+cat > "$REMOVE_DEV_DIR/mog.toml" <<EOF_REMOVE_DEV
+kind = "project"
+name = "remove-dev-test"
+version = "0.1.0"
+description = "remove dev dependency test"
+
+[dev-dependencies]
+hello = { path = "$PROJECT_ROOT/packages/examples/hello", package = "examples:hello", version = "0.1.0" }
+EOF_REMOVE_DEV
+
+if ! (cd "$REMOVE_DEV_DIR" && "$MOG" remove hello >/dev/null); then
+    echo "[FAIL] remove should delete dev-dependencies when no normal dependency matches"
+    exit 1
+fi
+
+if grep -Fq 'hello = {' "$REMOVE_DEV_DIR/mog.toml"; then
+    echo "[FAIL] remove should delete the alias from [dev-dependencies]"
+    cat "$REMOVE_DEV_DIR/mog.toml"
+    exit 1
+fi
+
+if grep -Fq 'examples:hello' "$REMOVE_DEV_DIR/mog.lock" || \
+   grep -Fq 'examples:hello' "$REMOVE_DEV_DIR/.mog/install/registry.toml"; then
+    echo "[FAIL] remove should refresh metadata after deleting a dev-dependency"
+    cat "$REMOVE_DEV_DIR/mog.lock"
+    cat "$REMOVE_DEV_DIR/.mog/install/registry.toml"
+    exit 1
+fi
+
+if (cd "$REMOVE_DEV_DIR" && "$MOG" remove hello >/tmp/mog_remove_missing_failure.txt 2>&1); then
+    echo "[FAIL] remove should reject aliases that are no longer present"
+    cat /tmp/mog_remove_missing_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "No dependency named 'hello'" /tmp/mog_remove_missing_failure.txt; then
+    echo "[FAIL] remove missing-alias failures should name the requested alias"
+    cat /tmp/mog_remove_missing_failure.txt
     exit 1
 fi
 

@@ -18,6 +18,7 @@ struct PackageManifest {
     std::string packageNamespace;
     std::string packageName;
     std::string version;
+    bool publish = true;
     uint32_t abiVersion = 0;
     std::string author;
     std::string description;

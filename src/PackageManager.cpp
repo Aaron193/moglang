@@ -6421,6 +6421,40 @@ bool addProjectDependency(const std::string& projectRoot,
     return writeProjectManifestData(projectRoot, manifest, outError);
 }
 
+bool removeProjectDependency(const std::string& projectRoot,
+                             const std::string& alias,
+                             std::string& outError) {
+    ProjectManifestData manifest;
+    if (!loadProjectManifestData(projectRoot, manifest, outError)) {
+        return false;
+    }
+
+    auto removeDependency =
+        [&](std::vector<DependencySpec>& dependencies) {
+            const auto it = std::find_if(
+                dependencies.begin(), dependencies.end(),
+                [&](const DependencySpec& candidate) {
+                    return candidate.alias == alias;
+                });
+            if (it == dependencies.end()) {
+                return false;
+            }
+            dependencies.erase(it);
+            return true;
+        };
+
+    if (!removeDependency(manifest.dependencies) &&
+        !removeDependency(manifest.devDependencies)) {
+        outError = "No dependency named '" + alias +
+                   "' exists in [dependencies] or [dev-dependencies].";
+        return false;
+    }
+
+    sortDependencies(manifest.dependencies);
+    sortDependencies(manifest.devDependencies);
+    return writeProjectManifestData(projectRoot, manifest, outError);
+}
+
 bool publishProjectPackage(const std::string& projectRoot,
                            const std::string& packageDir,
                            const PublishOptions& options,
@@ -6501,6 +6535,12 @@ bool publishProjectPackage(const std::string& projectRoot,
     const std::filesystem::path packagePath = canonicalOrLexical(packageDir);
     PackageManifest manifest;
     if (!loadPackageManifest(packagePath.string(), manifest, outError)) {
+        return false;
+    }
+    if (!manifest.publish) {
+        outError = "Package '" + manifest.packageNamespace + ":" +
+                   manifest.packageName +
+                   "' cannot be published because its manifest sets publish = false.";
         return false;
     }
 

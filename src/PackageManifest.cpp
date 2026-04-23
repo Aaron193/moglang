@@ -651,6 +651,11 @@ bool loadPackageManifest(const std::string& packageDir,
                 outError = "Invalid manifest version: " + parseError;
                 return false;
             }
+        } else if (key == "publish") {
+            if (!parseBoolValue(value, outManifest.publish, parseError)) {
+                outError = "Invalid manifest publish: " + parseError;
+                return false;
+            }
         } else if (key == "abi_version") {
             if (!parseUnsignedValue(value, outManifest.abiVersion, parseError)) {
                 outError = "Invalid manifest abi_version: " + parseError;

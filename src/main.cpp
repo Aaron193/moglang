@@ -29,6 +29,7 @@ static void printUsage(const char* executable) {
         << "Commands:\n"
         << "  init [name]            Create a project mog.toml in the current directory\n"
         << "  add <package>          Add a package dependency and install it\n"
+        << "  remove <alias>         Remove a dependency and install the updated graph\n"
         << "  install [flags]        Install dependencies using mog.lock when it is current\n"
         << "  update [flags]         Re-resolve dependencies and rewrite install metadata\n"
         << "  login <registry> [--token <token>]\n"
@@ -535,6 +536,36 @@ static int runAddCommand(int argc, char** argv) {
     return 0;
 }
 
+static int runRemoveCommand(int argc, char** argv) {
+    if (argc < 3) {
+        std::cerr << "remove requires a dependency alias." << std::endl;
+        return 1;
+    }
+    if (argc > 3) {
+        std::cerr << "remove accepts exactly one dependency alias." << std::endl;
+        return 1;
+    }
+
+    const std::string projectRoot = currentManagedProjectRoot();
+    std::string error;
+    if (!removeProjectDependency(projectRoot, argv[2], error)) {
+        std::cerr << "Remove failed: " << error << std::endl;
+        return 1;
+    }
+
+    InstallOptions installOptions;
+    installOptions.update = true;
+    std::vector<PackageRegistryEntry> installedEntries;
+    if (!installProjectPackages(projectRoot, installedEntries, installOptions,
+                                error)) {
+        std::cerr << "Remove failed during install: " << error << std::endl;
+        return 1;
+    }
+
+    std::cout << "Removed dependency '" << argv[2] << "'" << std::endl;
+    return 0;
+}
+
 static int runPublishCommand(int argc, char** argv) {
     PublishOptions options;
     std::string packageDir;
@@ -904,6 +935,9 @@ int main(int argc, char** argv) {
     }
     if (command == "add") {
         return runAddCommand(argc, argv);
+    }
+    if (command == "remove") {
+        return runRemoveCommand(argc, argv);
     }
     if (command == "install" || command == "update") {
         InstallOptions installOptions;

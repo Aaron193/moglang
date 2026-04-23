@@ -97,6 +97,10 @@ bool addProjectDependency(const std::string& projectRoot,
                           const DependencySpec& dependency,
                           std::string& outError);
 
+bool removeProjectDependency(const std::string& projectRoot,
+                             const std::string& alias,
+                             std::string& outError);
+
 bool publishProjectPackage(const std::string& projectRoot,
                            const std::string& packageDir,
                            const PublishOptions& options,
