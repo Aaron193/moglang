@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "DependencySpec.hpp"
@@ -16,6 +17,11 @@ struct ProjectRegistryConfig {
 struct ProjectNativeToolchainConfig {
     std::string target;
     std::string cmakeToolchain;
+    std::string generator;
+    std::string buildType;
+    std::vector<std::string> configureArgs;
+    std::vector<std::string> buildArgs;
+    std::vector<std::pair<std::string, std::string>> env;
 };
 
 struct ProjectPolicyConfig {
@@ -140,6 +146,7 @@ bool trustProjectRegistry(const std::string& projectRoot,
                           const std::string& registryAlias,
                           const std::string& keySpec,
                           const std::string& keyFilePath,
+                          bool bootstrap,
                           std::string& outTrustedKeyId,
                           std::string& outError);
 

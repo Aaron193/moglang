@@ -46,7 +46,7 @@ static void printUsage(const char* executable) {
         << "Registry subcommands:\n"
         << "  list\n"
         << "  status <registry>\n"
-        << "  trust <registry> (--key <key_id:base64> | --key-file <path>)\n"
+        << "  trust <registry> (--key <key_id:base64> | --key-file <path> | --bootstrap)\n"
         << "  untrust <registry> --key-id <key_id>\n"
         << "  login <registry> [--token <token>]\n"
         << "  logout <registry>\n"
@@ -990,6 +990,7 @@ static int runRegistryCommand(int argc, char** argv) {
         std::string registryAlias;
         std::string keySpec;
         std::string keyFilePath;
+        bool bootstrap = false;
         for (int index = 3; index < argc; ++index) {
             const std::string arg = argv[index];
             if (arg == "--key") {
@@ -1008,6 +1009,8 @@ static int runRegistryCommand(int argc, char** argv) {
                 keyFilePath = argv[++index];
             } else if (arg.rfind("--key-file=", 0) == 0) {
                 keyFilePath = arg.substr(11);
+            } else if (arg == "--bootstrap") {
+                bootstrap = true;
             } else if (!arg.empty() && arg[0] == '-') {
                 std::cerr << "Unknown option: " << arg << std::endl;
                 return 1;
@@ -1023,7 +1026,7 @@ static int runRegistryCommand(int argc, char** argv) {
         std::string trustedKeyId;
         std::string error;
         if (!trustProjectRegistry(currentManagedProjectRoot(), registryAlias, keySpec,
-                                  keyFilePath, trustedKeyId, error)) {
+                                  keyFilePath, bootstrap, trustedKeyId, error)) {
             std::cerr << "Registry trust failed: " << error << std::endl;
             return 1;
         }

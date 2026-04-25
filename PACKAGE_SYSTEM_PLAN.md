@@ -10,13 +10,13 @@ Phase snapshot:
 
 - Phase 1 local package-management baseline: mostly complete
 - Phase 2 registry and publishing: partially implemented
-- Phase 3 native artifact distribution: in progress (broader native toolchain
-  policy remains)
+- Phase 3 native artifact distribution: substantially complete for the current
+  CMake-based model (broader non-CMake/native build-system policy remains)
 - Phase 4 enterprise and security features: in progress (policy baseline,
   signed registry/advisory metadata, hosted-registry trust enforcement,
-  lockfile-based `mog audit`, and user-level registry bootstrap/trust flows
-  are implemented; richer enterprise policy and broader supply-chain trust
-  features remain)
+  lockfile-based `mog audit`, hosted `registry-public-key.v1` bootstrap, and
+  user-level registry trust flows are implemented; richer enterprise policy
+  and broader supply-chain trust features remain)
 
 Phase 1 local package-management work is now substantially implemented in the
 repository. The current codebase supports:
@@ -85,6 +85,11 @@ repository. The current codebase supports:
 - non-host native toolchain auto-discovery via
   `MOG_CMAKE_TOOLCHAIN_<TARGET>`, `.mog/toolchains/<target>.cmake`, and
   `toolchains/<target>.cmake`
+- expanded root-manifest native toolchain configuration via
+  `[native.toolchains."<target>"]` with `generator`, `build_type`,
+  `configure_args`, `build_args`, and `env`
+- native source-build logs that record the invoked `cmake` configure/build
+  commands for clearer diagnostics
 - package-manifest dependency parsing aligned with project manifests via
   `[dependencies]` inline tables, while retaining legacy compatibility for
   `dependencies = []`
@@ -124,6 +129,8 @@ repository. The current codebase supports:
 - user-level registry bootstrap state in `~/.config/mog/registries.toml`,
   keyed by normalized registry identity rather than project-local alias
 - `mog registry list|status|trust|untrust|login|logout` management commands
+- `mog registry trust <registry> --bootstrap` for hosted registries that serve
+  `registry-public-key.v1` from the registry root
 - `registry-public-key.v1` public-key import support, while also accepting
   `registry-key.v1` files for trust bootstrap
 - effective hosted-registry trust/auth merging across project manifest,
@@ -131,12 +138,13 @@ repository. The current codebase supports:
 - URL-scoped hosted-registry token/trust reuse across different project aliases
 - signed-registry and audit coverage in `tests/test_package_manager.sh`
 
-Not implemented yet:
+Not implemented yet (post-v1 / follow-on work):
 
 - richer hosted-registry service contracts beyond the current `index.toml` +
   artifact upload/download workflow
 - richer enterprise policy workflows beyond the current root-manifest registry,
-  native-namespace, and CI-locked install controls
+  native-namespace, CI-locked install controls, and hosted public-key
+  bootstrap
 - detached artifact-signature workflows, transparency/revocation, or other
   richer supply-chain trust features beyond the current signed metadata +
   SHA-256 artifact digest model
@@ -829,6 +837,7 @@ Current implementation status:
 - implemented package-manager flags: `--locked`, `--offline`,
   `--no-native-build`, `--prefer-prebuilt`, `--target`, and
   `publish --signing-key`
+- implemented hosted trust bootstrap: `mog registry trust <registry> --bootstrap`
 - implemented root-manifest script controls: `[scripts].test` and
   `[scripts].build`, executed as package-aware Mog entry scripts with
   dev-dependency installs
@@ -836,6 +845,9 @@ Current implementation status:
   `allowed_registries`, `allowed_native_namespaces`,
   registry `trusted_keys`, registry `allow_insecure`, and
   `require_locked_in_ci`
+- implemented root-manifest native toolchain controls:
+  `cmake_toolchain`, `generator`, `build_type`, `configure_args`,
+  `build_args`, and `env`
 - implemented cache inspection commands: `mog cache status` and
   `mog cache path <user|project|registry|git>`
 - not implemented yet: cache eviction/pruning workflows and broader
@@ -1098,6 +1110,8 @@ Current status:
   `--cmake-toolchain` taking precedence
 - non-host native toolchain auto-discovery via environment and repo-local
   toolchain files
+- expanded `[native.toolchains."<target>"]` support for `generator`,
+  `build_type`, `configure_args`, `build_args`, and `env`
 - SDL-gated publish/install smoke coverage for the official `mog:window`
   package through the current static file-registry format
 - scripted repo-local and bundle-root publish workflow for the official
@@ -1106,8 +1120,8 @@ Current status:
   bundles, and aggregates them into a hosted official-package publish step for
   `mog:window`
 - not yet complete inside Phase 3:
-  - broader native toolchain policy beyond the current CMake toolchain
-    discovery contract
+  - broader native build-system policy beyond the current CMake-based
+    toolchain contract
 
 ### Phase 4: Enterprise and Security Features
 
@@ -1145,6 +1159,8 @@ Current status:
     keyed by normalized registry identity
   - `mog registry list`, `status`, `trust`, `untrust`, `login`, and `logout`
     for hosted-registry bootstrap and local trust management
+  - `mog registry trust <registry> --bootstrap` using hosted
+    `registry-public-key.v1`
   - `registry-public-key.v1` import support, with `registry-key.v1`
     compatibility for trust bootstrap
   - effective trust merging from project-declared `trusted_keys` plus
@@ -1152,9 +1168,9 @@ Current status:
   - hosted-registry token reuse across aliases that point at the same
     normalized registry index URL
 - not yet complete inside Phase 4:
-  - richer private-registry bootstrap workflows such as first-contact trust
-    discovery, non-manual key distribution, and organization-wide bootstrap
-    beyond the current project alias + user-level stored trust/token model
+  - richer private-registry bootstrap workflows such as organization-wide key
+    distribution and non-manual bootstrap beyond the current hosted
+    `registry-public-key.v1` + user-level stored trust/token model
   - richer supply-chain trust features such as detached artifact signatures,
     transparency, key rotation/revocation, and policy-enforced signature modes
 

@@ -336,6 +336,9 @@ class Handler(SimpleHTTPRequestHandler):
         return str((root / path).resolve())
 
     def _authorized(self):
+        path = self.path.split("?", 1)[0].split("#", 1)[0].lstrip("/")
+        if path == "registry-public-key.v1":
+            return True
         return self.headers.get("Authorization", "") == f"Bearer {token}"
 
     def do_GET(self):
@@ -1478,6 +1481,11 @@ index = "$REGISTRY_DIR"
 
 [native.toolchains."$ALT_TARGET"]
 cmake_toolchain = "$TEMP_DIR/cross-target-toolchain.cmake"
+generator = "Unix Makefiles"
+build_type = "RelWithDebInfo"
+configure_args = ["--log-level=NOTICE"]
+build_args = ["--verbose"]
+env = { "MOG_NATIVE_TEST_ENV" = "manifest-value" }
 
 [dependencies]
 counter = { package = "examples:counter", version = "0.1.0" }
@@ -1489,6 +1497,23 @@ if ! (cd "$NATIVE_CROSS_TARGET_MANIFEST_DIR" && \
       MOG_CACHE_DIR="$TEMP_DIR/manifest-target-cache" \
       "$MOG" install --target "$ALT_TARGET" >/dev/null); then
     echo "[FAIL] install should allow non-host native source fallback from manifest-configured toolchains"
+    exit 1
+fi
+
+MANIFEST_BUILD_LOG="$(find "$TEMP_DIR/manifest-target-cache" -name .build.log -print -quit)"
+if [[ -z "$MANIFEST_BUILD_LOG" ]]; then
+    echo "[FAIL] manifest-configured non-host native source builds should retain a build log"
+    find "$TEMP_DIR/manifest-target-cache" -maxdepth 6 -print
+    exit 1
+fi
+
+if ! grep -Fq '"MOG_NATIVE_TEST_ENV=manifest-value" cmake' "$MANIFEST_BUILD_LOG" || \
+   ! grep -Fq -- '-G "Unix Makefiles"' "$MANIFEST_BUILD_LOG" || \
+   ! grep -Fq -- '-DCMAKE_BUILD_TYPE="RelWithDebInfo"' "$MANIFEST_BUILD_LOG" || \
+   ! grep -Fq -- '"--log-level=NOTICE"' "$MANIFEST_BUILD_LOG" || \
+   ! grep -Fq -- '"--verbose"' "$MANIFEST_BUILD_LOG"; then
+    echo "[FAIL] manifest-configured native toolchain settings should propagate into the CMake configure/build commands"
+    cat "$MANIFEST_BUILD_LOG"
     exit 1
 fi
 
@@ -2235,6 +2260,7 @@ HOSTED_KEY_FILE="$HOSTED_PUBLISH_WORKSPACE/hosted-registry-key.toml"
 create_signing_key "$HOSTED_KEY_FILE" "hosted-registry"
 HOSTED_PUBLIC_KEY_FILE="$HOSTED_PUBLISH_WORKSPACE/hosted-registry-public-key.toml"
 create_public_key_file "$HOSTED_KEY_FILE" "$HOSTED_PUBLIC_KEY_FILE"
+cp "$HOSTED_PUBLIC_KEY_FILE" "$HOSTED_REGISTRY_DIR/registry-public-key.v1"
 HOSTED_TRUSTED_KEY="$(trusted_key_spec "$HOSTED_KEY_FILE")"
 HOSTED_PUBLISH_CONFIG="$TEMP_DIR/hosted-publish-config"
 mkdir -p "$HOSTED_PUBLISH_WORKSPACE/pkg/src"
@@ -2383,8 +2409,8 @@ cp "$HOSTED_CONSUMER_DIR/app.mog" "$HOSTED_BOOTSTRAP_DIR/app.mog"
 
 if ! (cd "$HOSTED_BOOTSTRAP_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
-    "$MOG" registry trust default --key-file "$HOSTED_PUBLIC_KEY_FILE" >/dev/null); then
-    echo "[FAIL] registry trust should import hosted registry public keys from registry-public-key.v1 files"
+    "$MOG" registry trust default --bootstrap >/dev/null); then
+    echo "[FAIL] registry trust --bootstrap should import hosted registry public keys from the hosted registry root"
     exit 1
 fi
 
@@ -2431,6 +2457,68 @@ fi
 
 if [[ "$(cd "$HOSTED_BOOTSTRAP_DIR" && "$MOG" run app.mog)" != *"utility from hosted registry"* ]]; then
     echo "[FAIL] bootstrap-installed hosted packages should execute normally"
+    exit 1
+fi
+
+HOSTED_BOOTSTRAP_MISSING_KEY_DIR="$TEMP_DIR/hosted-bootstrap-missing-key"
+mkdir -p "$HOSTED_BOOTSTRAP_MISSING_KEY_DIR"
+cat > "$HOSTED_BOOTSTRAP_MISSING_KEY_DIR/mog.toml" <<EOF_HOSTED_BOOTSTRAP_MISSING_KEY
+kind = "project"
+name = "hosted-bootstrap-missing-key"
+version = "0.1.0"
+description = "hosted bootstrap missing key"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/missing/index.toml"
+EOF_HOSTED_BOOTSTRAP_MISSING_KEY
+
+if (cd "$HOSTED_BOOTSTRAP_MISSING_KEY_DIR" && \
+    XDG_CONFIG_HOME="$TEMP_DIR/hosted-bootstrap-missing-key-config" \
+    "$MOG" registry trust default --bootstrap \
+    >/tmp/mog_hosted_bootstrap_missing_key_failure.txt 2>&1); then
+    echo "[FAIL] registry trust --bootstrap should fail when registry-public-key.v1 is missing"
+    cat /tmp/mog_hosted_bootstrap_missing_key_failure.txt
+    exit 1
+fi
+
+if ! grep -Eq "registry-public-key.v1|404|bootstrap trust" \
+    /tmp/mog_hosted_bootstrap_missing_key_failure.txt; then
+    echo "[FAIL] missing hosted bootstrap key failure should mention the missing hosted key file"
+    cat /tmp/mog_hosted_bootstrap_missing_key_failure.txt
+    exit 1
+fi
+
+mkdir -p "$HOSTED_REGISTRY_DIR/bad-key"
+cat > "$HOSTED_REGISTRY_DIR/bad-key/registry-public-key.v1" <<'EOF_BAD_HOSTED_KEY'
+schema_version = "registry-public-key.v1"
+key_id = "broken"
+EOF_BAD_HOSTED_KEY
+
+HOSTED_BOOTSTRAP_BAD_KEY_DIR="$TEMP_DIR/hosted-bootstrap-bad-key"
+mkdir -p "$HOSTED_BOOTSTRAP_BAD_KEY_DIR"
+cat > "$HOSTED_BOOTSTRAP_BAD_KEY_DIR/mog.toml" <<EOF_HOSTED_BOOTSTRAP_BAD_KEY
+kind = "project"
+name = "hosted-bootstrap-bad-key"
+version = "0.1.0"
+description = "hosted bootstrap bad key"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/bad-key/index.toml"
+EOF_HOSTED_BOOTSTRAP_BAD_KEY
+
+if (cd "$HOSTED_BOOTSTRAP_BAD_KEY_DIR" && \
+    XDG_CONFIG_HOME="$TEMP_DIR/hosted-bootstrap-bad-key-config" \
+    "$MOG" registry trust default --bootstrap \
+    >/tmp/mog_hosted_bootstrap_bad_key_failure.txt 2>&1); then
+    echo "[FAIL] registry trust --bootstrap should fail when the hosted public key file is malformed"
+    cat /tmp/mog_hosted_bootstrap_bad_key_failure.txt
+    exit 1
+fi
+
+if ! grep -Eq "public key|key_id|bootstrap trust" \
+    /tmp/mog_hosted_bootstrap_bad_key_failure.txt; then
+    echo "[FAIL] malformed hosted bootstrap key failure should explain the invalid public key file"
+    cat /tmp/mog_hosted_bootstrap_bad_key_failure.txt
     exit 1
 fi
 

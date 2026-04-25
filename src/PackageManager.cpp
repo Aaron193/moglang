@@ -267,6 +267,81 @@ bool parseQuotedStringArray(const std::string& value,
     return true;
 }
 
+bool parseQuotedStringInlineTable(
+    const std::string& value,
+    std::vector<std::pair<std::string, std::string>>& outValues,
+    std::string& outError) {
+    outValues.clear();
+    if (value.size() < 2 || value.front() != '{' || value.back() != '}') {
+        outError = "Expected inline table value.";
+        return false;
+    }
+
+    std::string body = trim(std::string_view(value).substr(1, value.size() - 2));
+    while (!body.empty()) {
+        const size_t equals = body.find('=');
+        if (equals == std::string::npos) {
+            outError = "Inline table entries must use key = value.";
+            return false;
+        }
+
+        std::string key = trim(std::string_view(body).substr(0, equals));
+        body = trim(std::string_view(body).substr(equals + 1));
+        if (body.empty()) {
+            outError = "Inline table entry is missing a value.";
+            return false;
+        }
+
+        if (!key.empty() && key.front() == '"' && key.back() == '"') {
+            std::string parsedKey;
+            if (!parseQuotedString(key, parsedKey, outError)) {
+                return false;
+            }
+            key = std::move(parsedKey);
+        }
+
+        size_t valueLength = 0;
+        bool inString = false;
+        bool escaped = false;
+        for (; valueLength < body.size(); ++valueLength) {
+            const char ch = body[valueLength];
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (ch == '\\') {
+                    escaped = true;
+                } else if (ch == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+
+            if (ch == '"') {
+                inString = true;
+                continue;
+            }
+            if (ch == ',') {
+                break;
+            }
+        }
+
+        std::string parsedValue;
+        if (!parseQuotedString(trim(body.substr(0, valueLength)), parsedValue,
+                               outError)) {
+            return false;
+        }
+        outValues.emplace_back(std::move(key), std::move(parsedValue));
+
+        if (valueLength >= body.size()) {
+            body.clear();
+        } else {
+            body = trim(std::string_view(body).substr(valueLength + 1));
+        }
+    }
+
+    return true;
+}
+
 bool validateDependencySpec(const DependencySpec& dependency,
                             std::string& outError) {
     const size_t gitRefCount =
@@ -326,6 +401,21 @@ std::string quoteTomlArray(const std::vector<std::string>& values) {
         out << quoteTomlString(values[index]);
     }
     out << "]";
+    return out.str();
+}
+
+std::string quoteTomlInlineTable(
+    const std::vector<std::pair<std::string, std::string>>& values) {
+    std::ostringstream out;
+    out << "{";
+    for (size_t index = 0; index < values.size(); ++index) {
+        if (index > 0) {
+            out << ", ";
+        }
+        out << quoteTomlString(values[index].first) << " = "
+            << quoteTomlString(values[index].second);
+    }
+    out << "}";
     return out.str();
 }
 
@@ -497,6 +587,11 @@ struct NativeToolchainSelection {
     std::string target;
     std::string cmakeToolchainFile;
     std::string sourceDescription;
+    std::string generator;
+    std::string buildType = "Release";
+    std::vector<std::string> configureArgs;
+    std::vector<std::string> buildArgs;
+    std::vector<std::pair<std::string, std::string>> env;
     std::vector<std::string> checkedSources;
 };
 
@@ -676,6 +771,14 @@ std::string nativeToolchainSettingLabel(std::string_view target) {
            "].cmake_toolchain";
 }
 
+std::string hostedRegistryBootstrapHint(std::string_view alias, bool isRemote) {
+    if (!isRemote || alias.empty()) {
+        return "";
+    }
+    return " Run 'mog registry trust " + std::string(alias) +
+           " --bootstrap' to import the hosted registry public key.";
+}
+
 bool resolveNativeToolchainSelection(const std::string& projectRoot,
                                      const ProjectManifestData* manifest,
                                      const PackageRegistryEntry& entry,
@@ -694,9 +797,24 @@ bool resolveNativeToolchainSelection(const std::string& projectRoot,
     if (options != nullptr && !options->cmakeToolchainFile.empty()) {
         toolchainPath = std::filesystem::path(options->cmakeToolchainFile);
         outSelection.sourceDescription = "--cmake-toolchain";
-    } else if (manifest != nullptr && outSelection.target != detectHostTarget()) {
-        const ProjectNativeToolchainConfig* config =
-            findNativeToolchainConfig(*manifest, outSelection.target);
+    }
+
+    const ProjectNativeToolchainConfig* config = nullptr;
+    if (manifest != nullptr) {
+        config = findNativeToolchainConfig(*manifest, outSelection.target);
+        if (config != nullptr) {
+            outSelection.generator = config->generator;
+            if (!config->buildType.empty()) {
+                outSelection.buildType = config->buildType;
+            }
+            outSelection.configureArgs = config->configureArgs;
+            outSelection.buildArgs = config->buildArgs;
+            outSelection.env = config->env;
+        }
+    }
+
+    if (toolchainPath.empty() && manifest != nullptr &&
+        outSelection.target != detectHostTarget()) {
         if (config != nullptr && !config->cmakeToolchain.empty()) {
             toolchainPath = std::filesystem::path(projectRoot) /
                             std::filesystem::path(config->cmakeToolchain);
@@ -1089,6 +1207,36 @@ std::vector<std::string> sortedUniqueStrings(std::vector<std::string> values) {
     return values;
 }
 
+std::vector<std::pair<std::string, std::string>> sortedUniqueStringPairs(
+    std::vector<std::pair<std::string, std::string>> values) {
+    std::sort(values.begin(), values.end(),
+              [](const auto& lhs, const auto& rhs) {
+                  return lhs.first < rhs.first;
+              });
+    values.erase(std::unique(values.begin(), values.end(),
+                             [](const auto& lhs, const auto& rhs) {
+                                 return lhs.first == rhs.first;
+                             }),
+                 values.end());
+    return values;
+}
+
+bool isValidEnvironmentVariableName(std::string_view name) {
+    if (name.empty()) {
+        return false;
+    }
+    const unsigned char first = static_cast<unsigned char>(name.front());
+    if (!(std::isalpha(first) || name.front() == '_')) {
+        return false;
+    }
+    for (const unsigned char ch : name) {
+        if (!(std::isalnum(ch) || ch == '_')) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void sortUserRegistryProfiles(std::vector<UserRegistryProfile>& profiles) {
     std::sort(profiles.begin(), profiles.end(),
               [](const UserRegistryProfile& lhs,
@@ -1470,12 +1618,14 @@ bool verifyRegistrySignatureEnvelope(const ProjectRegistryConfig& config,
     }
     if (signingKeyId.empty() || signatureBase64.empty()) {
         outError = "Registry '" + config.alias +
-                   "' requires a signed index, but the registry metadata is unsigned.";
+                   "' requires a signed index, but the registry metadata is unsigned." +
+                   hostedRegistryBootstrapHint(config.alias, isRemote);
         return false;
     }
     if (config.trustedKeys.empty()) {
         outError = "Registry '" + config.alias +
-                   "' requires trusted_keys unless allow_insecure = true is set.";
+                   "' requires trusted_keys unless allow_insecure = true is set." +
+                   hostedRegistryBootstrapHint(config.alias, isRemote);
         return false;
     }
 
@@ -1496,7 +1646,8 @@ bool verifyRegistrySignatureEnvelope(const ProjectRegistryConfig& config,
     }
     if (!foundKey) {
         outError = "Registry '" + config.alias + "' was signed by unknown key '" +
-                   std::string(signingKeyId) + "'.";
+                   std::string(signingKeyId) + "'." +
+                   hostedRegistryBootstrapHint(config.alias, isRemote);
         return false;
     }
 
@@ -3346,7 +3497,8 @@ bool loadRegistryIndex(const std::string& projectRoot,
     } else if (registryRequiresTrustedSignatures(effectiveProfile.config,
                                                  location.isRemote)) {
         outError = "Registry '" + config.alias +
-                   "' requires a signed registry.v2 index, but the registry is unsigned.";
+                   "' requires a signed registry.v2 index, but the registry is unsigned." +
+                   hostedRegistryBootstrapHint(config.alias, location.isRemote);
         return false;
     }
 
@@ -3599,7 +3751,8 @@ bool loadRegistryAdvisories(const std::string& projectRoot,
                (outAdvisories.signingKeyId.empty() ||
                 outAdvisories.signatureBase64.empty())) {
         outError = "Registry '" + config.alias +
-                   "' requires signed advisories metadata when advisories.toml is present.";
+                   "' requires signed advisories metadata when advisories.toml is present." +
+                   hostedRegistryBootstrapHint(config.alias, location.isRemote);
         return false;
     }
 
@@ -4369,8 +4522,33 @@ bool locateBuiltNativeLibrary(const std::filesystem::path& buildDir,
 bool runLoggedSystemCommand(const std::string& command,
                             const std::filesystem::path& logPath) {
     const std::string fullCommand =
-        command + " >> " + shellQuote(logPath.string()) + " 2>&1";
+        "printf '%s\\n' " + shellQuote("$ " + command) + " >> " +
+        shellQuote(logPath.string()) + " 2>&1 && " + command + " >> " +
+        shellQuote(logPath.string()) + " 2>&1";
     return std::system(fullCommand.c_str()) == 0;
+}
+
+void appendShellArguments(std::string& command,
+                          const std::vector<std::string>& args) {
+    for (const std::string& arg : args) {
+        command += " ";
+        command += shellQuote(arg);
+    }
+}
+
+std::string shellEnvironmentPrefix(
+    const std::vector<std::pair<std::string, std::string>>& env) {
+    if (env.empty()) {
+        return "";
+    }
+
+    std::string prefix = "env";
+    for (const auto& [name, value] : env) {
+        prefix += " ";
+        prefix += shellQuote(name + "=" + value);
+    }
+    prefix += " ";
+    return prefix;
 }
 
 std::string formatNativeToolchainRequirement(std::string_view target) {
@@ -4572,13 +4750,19 @@ bool buildNativePackageFromSource(const std::string& projectRoot,
         sourceDir = generatedSourceDir;
     }
 
-    std::string configureCommand =
-        "cmake -S " + shellQuote(sourceDir.string()) + " -B " +
-        shellQuote(buildDir.string()) + " -DCMAKE_BUILD_TYPE=Release";
+    std::string configureCommand = shellEnvironmentPrefix(toolchainSelection.env) +
+                                   "cmake -S " + shellQuote(sourceDir.string()) +
+                                   " -B " + shellQuote(buildDir.string()) +
+                                   " -DCMAKE_BUILD_TYPE=" +
+                                   shellQuote(toolchainSelection.buildType);
+    if (!toolchainSelection.generator.empty()) {
+        configureCommand += " -G " + shellQuote(toolchainSelection.generator);
+    }
     if (!toolchainSelection.cmakeToolchainFile.empty()) {
         configureCommand += " -DCMAKE_TOOLCHAIN_FILE=" +
                             shellQuote(toolchainSelection.cmakeToolchainFile);
     }
+    appendShellArguments(configureCommand, toolchainSelection.configureArgs);
     if (!runLoggedSystemCommand(configureCommand, buildLogPath)) {
         const std::string buildLog = readFileText(buildLogPath);
         const SystemDependencySpec* missingDependency =
@@ -4599,8 +4783,11 @@ bool buildNativePackageFromSource(const std::string& projectRoot,
         return false;
     }
 
-    const std::string buildCommand =
-        "cmake --build " + shellQuote(buildDir.string()) + " --config Release";
+    std::string buildCommand = shellEnvironmentPrefix(toolchainSelection.env) +
+                               "cmake --build " + shellQuote(buildDir.string()) +
+                               " --config " +
+                               shellQuote(toolchainSelection.buildType);
+    appendShellArguments(buildCommand, toolchainSelection.buildArgs);
     if (!runLoggedSystemCommand(buildCommand, buildLogPath)) {
         const std::string buildLog = readFileText(buildLogPath);
         const SystemDependencySpec* missingDependency =
@@ -5754,6 +5941,12 @@ void sortRegistries(std::vector<ProjectRegistryConfig>& registries) {
 
 void sortNativeToolchains(
     std::vector<ProjectNativeToolchainConfig>& nativeToolchains) {
+    for (auto& toolchain : nativeToolchains) {
+        toolchain.configureArgs =
+            sortedUniqueStrings(std::move(toolchain.configureArgs));
+        toolchain.buildArgs = sortedUniqueStrings(std::move(toolchain.buildArgs));
+        toolchain.env = sortedUniqueStringPairs(std::move(toolchain.env));
+    }
     std::sort(nativeToolchains.begin(), nativeToolchains.end(),
               [](const ProjectNativeToolchainConfig& lhs,
                  const ProjectNativeToolchainConfig& rhs) {
@@ -5993,9 +6186,27 @@ void writeNativeToolchainTables(
     for (const auto& toolchain : nativeToolchains) {
         out << "\n[native.toolchains."
             << quoteTomlString(toolchain.target) << "]\n";
-        out << "cmake_toolchain = "
-            << quoteTomlString(normalizeRelativePath(toolchain.cmakeToolchain))
-            << "\n";
+        if (!toolchain.cmakeToolchain.empty()) {
+            out << "cmake_toolchain = "
+                << quoteTomlString(normalizeRelativePath(toolchain.cmakeToolchain))
+                << "\n";
+        }
+        if (!toolchain.generator.empty()) {
+            out << "generator = " << quoteTomlString(toolchain.generator) << "\n";
+        }
+        if (!toolchain.buildType.empty()) {
+            out << "build_type = " << quoteTomlString(toolchain.buildType) << "\n";
+        }
+        if (!toolchain.configureArgs.empty()) {
+            out << "configure_args = " << quoteTomlArray(toolchain.configureArgs)
+                << "\n";
+        }
+        if (!toolchain.buildArgs.empty()) {
+            out << "build_args = " << quoteTomlArray(toolchain.buildArgs) << "\n";
+        }
+        if (!toolchain.env.empty()) {
+            out << "env = " << quoteTomlInlineTable(toolchain.env) << "\n";
+        }
     }
 }
 
@@ -6278,27 +6489,71 @@ bool loadProjectManifestData(const std::string& projectRoot,
         }
 
         if (section == Section::NATIVE_TOOLCHAIN) {
-            if (key != "cmake_toolchain") {
-                outError = "Unsupported native toolchain field '" + key + "'.";
-                return false;
-            }
-
             ProjectNativeToolchainConfig toolchain;
             toolchain.target = currentNativeToolchainTarget;
-            if (!parseQuotedString(value, toolchain.cmakeToolchain, parseError)) {
-                outError = "Invalid native toolchain field '" + key + "': " +
-                           parseError;
-                return false;
-            }
-            toolchain.cmakeToolchain =
-                normalizeRelativePath(toolchain.cmakeToolchain);
-
             auto existing = std::find_if(
                 outManifest.nativeToolchains.begin(),
                 outManifest.nativeToolchains.end(),
                 [&](const ProjectNativeToolchainConfig& candidate) {
                     return candidate.target == toolchain.target;
                 });
+            if (existing != outManifest.nativeToolchains.end()) {
+                toolchain = *existing;
+            }
+
+            if (key == "cmake_toolchain") {
+                if (!parseQuotedString(value, toolchain.cmakeToolchain, parseError)) {
+                    outError = "Invalid native toolchain field '" + key + "': " +
+                               parseError;
+                    return false;
+                }
+                toolchain.cmakeToolchain =
+                    normalizeRelativePath(toolchain.cmakeToolchain);
+            } else if (key == "generator") {
+                if (!parseQuotedString(value, toolchain.generator, parseError)) {
+                    outError = "Invalid native toolchain field '" + key + "': " +
+                               parseError;
+                    return false;
+                }
+            } else if (key == "build_type") {
+                if (!parseQuotedString(value, toolchain.buildType, parseError)) {
+                    outError = "Invalid native toolchain field '" + key + "': " +
+                               parseError;
+                    return false;
+                }
+            } else if (key == "configure_args") {
+                if (!parseQuotedStringArray(value, toolchain.configureArgs,
+                                            parseError)) {
+                    outError = "Invalid native toolchain field '" + key + "': " +
+                               parseError;
+                    return false;
+                }
+            } else if (key == "build_args") {
+                if (!parseQuotedStringArray(value, toolchain.buildArgs, parseError)) {
+                    outError = "Invalid native toolchain field '" + key + "': " +
+                               parseError;
+                    return false;
+                }
+            } else if (key == "env") {
+                if (!parseQuotedStringInlineTable(value, toolchain.env, parseError)) {
+                    outError = "Invalid native toolchain field '" + key + "': " +
+                               parseError;
+                    return false;
+                }
+                for (const auto& [name, envValue] : toolchain.env) {
+                    if (!isValidEnvironmentVariableName(name)) {
+                        outError = "Invalid native toolchain field '" + key +
+                                   "': invalid environment variable name '" +
+                                   name + "'.";
+                        return false;
+                    }
+                    (void)envValue;
+                }
+            } else {
+                outError = "Unsupported native toolchain field '" + key + "'.";
+                return false;
+            }
+
             if (existing != outManifest.nativeToolchains.end()) {
                 *existing = std::move(toolchain);
             } else {
@@ -7140,6 +7395,7 @@ bool trustProjectRegistry(const std::string& projectRoot,
                           const std::string& registryAlias,
                           const std::string& keySpec,
                           const std::string& keyFilePath,
+                          bool bootstrap,
                           std::string& outTrustedKeyId,
                           std::string& outError) {
     outTrustedKeyId.clear();
@@ -7148,8 +7404,12 @@ bool trustProjectRegistry(const std::string& projectRoot,
         outError = "Registry alias cannot be empty.";
         return false;
     }
-    if (keySpec.empty() == keyFilePath.empty()) {
-        outError = "Registry trust requires exactly one of --key or --key-file.";
+    const int trustSourceCount =
+        (!keySpec.empty() ? 1 : 0) + (!keyFilePath.empty() ? 1 : 0) +
+        (bootstrap ? 1 : 0);
+    if (trustSourceCount != 1) {
+        outError =
+            "Registry trust requires exactly one of --key, --key-file, or --bootstrap.";
         return false;
     }
 
@@ -7171,7 +7431,52 @@ bool trustProjectRegistry(const std::string& projectRoot,
     }
 
     RegistryTrustedKey trustedKey;
-    if (!keyFilePath.empty()) {
+    if (bootstrap) {
+        if (!isRemote) {
+            outError = "Registry '" + registryAlias +
+                       "' does not use a hosted http(s) index.";
+            return false;
+        }
+
+        EffectiveRegistryProfile effectiveProfile;
+        if (!resolveEffectiveRegistryProfile(projectRoot, *registry, effectiveProfile,
+                                             outError)) {
+            return false;
+        }
+
+        RegistryLocation location;
+        if (!resolveRegistryLocation(projectRoot, effectiveProfile.config, location,
+                                     outError)) {
+            return false;
+        }
+
+        std::filesystem::path tempDir;
+        if (!createTemporaryDirectory("mog-registry-trust", tempDir, outError)) {
+            return false;
+        }
+        ScopedPathCleanup cleanup{tempDir};
+        const std::filesystem::path downloadedKeyPath =
+            tempDir / "registry-public-key.v1";
+        std::string downloadError;
+        if (!downloadUrlToFile(joinUrlPath(location.remoteRootUrl,
+                                           "registry-public-key.v1"),
+                               effectiveProfile.token, downloadedKeyPath,
+                               downloadError)) {
+            outError = "Could not bootstrap trust for registry '" + registryAlias +
+                       "': " + downloadError;
+            return false;
+        }
+
+        RegistryPublicKeyFile publicKey;
+        if (!loadRegistryPublicKeyFile(downloadedKeyPath.string(), publicKey,
+                                       outError)) {
+            outError = "Could not bootstrap trust for registry '" + registryAlias +
+                       "': " + outError;
+            return false;
+        }
+        trustedKey.keyId = publicKey.keyId;
+        trustedKey.publicKeyDerBase64 = publicKey.publicKeyDerBase64;
+    } else if (!keyFilePath.empty()) {
         RegistryPublicKeyFile publicKey;
         if (!loadRegistryPublicKeyFile(keyFilePath, publicKey, outError)) {
             return false;

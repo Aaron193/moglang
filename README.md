@@ -525,6 +525,11 @@ trusted_keys = ["release-key:BASE64_DER_PUBLIC_KEY"]
 
 [native.toolchains."linux-arm64-gnu"]
 cmake_toolchain = "./toolchains/linux-arm64.cmake"
+generator = "Unix Makefiles"
+build_type = "RelWithDebInfo"
+configure_args = ["--log-level=NOTICE"]
+build_args = ["--verbose"]
+env = { "PKG_CONFIG_PATH" = "/opt/sdk/lib/pkgconfig" }
 
 [dependencies]
 window = { package = "mog:window", version = "0.1.0" }
@@ -532,7 +537,9 @@ window = { package = "mog:window", version = "0.1.0" }
 
 For native source-build fallback, Mog uses `--cmake-toolchain` first. If that
 flag is not provided for a non-host target, it then checks
-`[native.toolchains."<target>"].cmake_toolchain` in the project manifest.
+`[native.toolchains."<target>"]` in the project manifest. Today that section
+supports `cmake_toolchain`, `generator`, `build_type`, `configure_args`,
+`build_args`, and `env`.
 
 When `[policy]` is present, Mog enforces it during `install` and install-aware
 `run` workflows. `allowed_registries` restricts registry-sourced dependencies,
@@ -544,6 +551,15 @@ Hosted `http(s)` registries now require trust configuration by default.
 Projects can pin trusted Ed25519 registry keys with
 `[registries.<alias>].trusted_keys = ["<key_id>:<base64-der-public-key>"]`.
 Use `allow_insecure = true` only for explicitly unsigned hosted registries.
+To bootstrap trust for a hosted registry without checking a key into the
+project, run:
+
+```bash
+./build/interpreter registry trust default --bootstrap
+```
+
+This downloads `registry-public-key.v1` from the hosted registry root and
+stores the trusted key in the user registry profile.
 
 Registry publishing can sign `registry.v2` indexes with a `registry-key.v1`
 file:
