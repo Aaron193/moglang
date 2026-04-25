@@ -552,7 +552,93 @@ std::string findLibraryPath(const std::filesystem::path& packageDir,
     return "";
 }
 
+bool validatePackageIdentity(const PackageManifest& manifest,
+                             std::string& outError) {
+    if (!isValidPackageIdPart(manifest.packageNamespace) ||
+        !isValidPackageIdPart(manifest.packageName)) {
+        outError = "Manifest namespace and name must use lowercase letters, "
+                   "digits, '_', or '-'.";
+        return false;
+    }
+
+    return true;
+}
+
+bool validatePackageDirectorySuffix(const std::filesystem::path& dirPath,
+                                    const PackageManifest& manifest,
+                                    std::string& outError) {
+    if (!pathEndsWith(dirPath, {manifest.packageNamespace, manifest.packageName}) &&
+        !pathEndsWith(dirPath, {"packages", manifest.packageNamespace,
+                                manifest.packageName}) &&
+        !pathEndsWith(dirPath, {".mog", "install", "packages",
+                                manifest.packageNamespace,
+                                manifest.packageName})) {
+        outError = "Package directory must end with '" + manifest.packageNamespace +
+                   "/" + manifest.packageName + "'.";
+        return false;
+    }
+
+    return true;
+}
+
+bool validateReservedNamespacePath(const std::filesystem::path& dirPath,
+                                   const std::filesystem::path& repoRootPath,
+                                   const PackageManifest& manifest,
+                                   std::string& outError) {
+    if (manifest.packageNamespace != "mog") {
+        return true;
+    }
+
+    const bool isOfficialSourcePath =
+        pathEndsWith(dirPath, {"packages", "mog", manifest.packageName}) &&
+        dirPath.string().rfind(joinPath(repoRootPath / "packages"), 0) == 0;
+    const bool isOfficialBuildPath =
+        pathEndsWith(dirPath, {"build", "packages", "mog",
+                               manifest.packageName}) &&
+        dirPath.string().rfind(joinPath(repoRootPath / "build" / "packages"), 0) ==
+            0;
+    const bool isInstalledPath =
+        pathEndsWith(dirPath, {".mog", "install", "packages", "mog",
+                               manifest.packageName});
+    if (!isOfficialSourcePath && !isOfficialBuildPath && !isInstalledPath) {
+        outError = "Namespace 'mog' is reserved for runtime-maintained packages.";
+        return false;
+    }
+
+    return true;
+}
+
+bool loadValidatedPackageApi(const std::filesystem::path& dirPath,
+                             const PackageManifest& manifest,
+                             PackageApiMetadata& outApiMetadata,
+                             std::string& outError) {
+    const std::filesystem::path apiPath = dirPath / "package.api.mog";
+    if (!std::filesystem::exists(apiPath)) {
+        outError = "Package directory '" + dirPath.string() +
+                   "' is missing package.api.mog.";
+        return false;
+    }
+
+    const std::string packageId =
+        makePackageId(manifest.packageNamespace, manifest.packageName);
+    const std::string importName =
+        manifest.importName.empty() ? manifest.packageName : manifest.importName;
+    return loadPackageApiMetadata(apiPath.string(), packageId, importName,
+                                  outApiMetadata, outError);
+}
+
 }  // namespace
+
+std::filesystem::path packageManifestPath(
+    const std::filesystem::path& packageDir) {
+    const std::filesystem::path canonicalManifest =
+        packageDir / kPackageManifestFileName;
+    if (std::filesystem::exists(canonicalManifest)) {
+        return canonicalManifest;
+    }
+
+    return packageDir / kLegacyPackageManifestFileName;
+}
 
 bool loadPackageManifest(const std::string& packageDir,
                          PackageManifest& outManifest,
@@ -560,11 +646,8 @@ bool loadPackageManifest(const std::string& packageDir,
     outManifest = PackageManifest{};
     outError.clear();
 
-    std::filesystem::path manifestPath =
-        std::filesystem::path(packageDir) / "mog.toml";
-    if (!std::filesystem::exists(manifestPath)) {
-        manifestPath = std::filesystem::path(packageDir) / "package.toml";
-    }
+    const std::filesystem::path manifestPath =
+        packageManifestPath(std::filesystem::path(packageDir));
     std::ifstream file(manifestPath);
     if (!file) {
         outError = "Could not open manifest '" + manifestPath.string() + "'.";
@@ -928,17 +1011,28 @@ bool validatePackageDirectory(const std::string& packageDir,
     if (!validatePackageManifestForDistribution(manifest, outError)) {
         return false;
     }
-
-    if (!isValidPackageIdPart(manifest.packageNamespace) ||
-        !isValidPackageIdPart(manifest.packageName)) {
-        outError = "Manifest namespace and name must use lowercase letters, "
-                   "digits, '_', or '-'.";
+    const std::filesystem::path repoRootPath(repoRoot);
+    if (!validatePackageIdentity(manifest, outError) ||
+        !validatePackageDirectorySuffix(dirPath, manifest, outError) ||
+        !validateReservedNamespacePath(dirPath, repoRootPath, manifest,
+                                      outError)) {
         return false;
     }
 
-    if (manifest.kind != "native") {
-        outError = "Package validation currently supports native packages only.";
+    PackageApiMetadata apiMetadata;
+    if (!loadValidatedPackageApi(dirPath, manifest, apiMetadata, outError)) {
         return false;
+    }
+
+    if (manifest.kind == "source") {
+        const std::filesystem::path entryPath = dirPath / manifest.sourceEntry;
+        if (!std::filesystem::exists(entryPath)) {
+            outError = "Source package '" + makePackageId(manifest.packageNamespace,
+                                                          manifest.packageName) +
+                       "' is missing entry module '" + entryPath.string() + "'.";
+            return false;
+        }
+        return true;
     }
 
     if (manifest.abiVersion != EXPR_NATIVE_PACKAGE_ABI_VERSION) {
@@ -948,35 +1042,8 @@ bool validatePackageDirectory(const std::string& packageDir,
         return false;
     }
 
-    if (!pathEndsWith(dirPath, {manifest.packageNamespace, manifest.packageName}) &&
-        !pathEndsWith(dirPath, {"packages", manifest.packageNamespace,
-                                manifest.packageName})) {
-        outError = "Package directory must end with '" + manifest.packageNamespace +
-                   "/" + manifest.packageName + "'.";
-        return false;
-    }
-
-    const std::filesystem::path repoRootPath(repoRoot);
-    if (manifest.packageNamespace == "mog") {
-        const bool isOfficialSourcePath =
-            pathEndsWith(dirPath, {"packages", "mog", manifest.packageName}) &&
-            dirPath.string().rfind(joinPath(repoRootPath / "packages"), 0) == 0;
-        const bool isOfficialBuildPath =
-            pathEndsWith(dirPath, {"build", "packages", "mog",
-                                   manifest.packageName}) &&
-            dirPath.string().rfind(joinPath(repoRootPath / "build" / "packages"),
-                                   0) == 0;
-        const bool isInstalledPath =
-            pathEndsWith(dirPath, {".mog", "install", "packages", "mog",
-                                   manifest.packageName});
-        if (!isOfficialSourcePath && !isOfficialBuildPath && !isInstalledPath) {
-            outError =
-                "Namespace 'mog' is reserved for runtime-maintained packages.";
-            return false;
-        }
-    }
-
-    const std::string libraryPath = findLibraryPath(dirPath, manifest, repoRootPath);
+    const std::string libraryPath =
+        findLibraryPath(dirPath, manifest, repoRootPath);
     if (libraryPath.empty()) {
         outError = "Could not find built package library '" +
                    std::string(kPackageLibraryFileName) + "' for '" +
@@ -1001,23 +1068,8 @@ bool validatePackageDirectory(const std::string& packageDir,
         return false;
     }
 
-    const std::filesystem::path apiPath = dirPath / "package.api.mog";
-    if (!std::filesystem::exists(apiPath)) {
-        outError = "Package directory '" + dirPath.string() +
-                   "' is missing package.api.mog.";
-        return false;
-    }
-
-    PackageApiMetadata apiMetadata;
-    const std::string importName =
-        manifest.importName.empty() ? manifest.packageName : manifest.importName;
-    if (!loadPackageApiMetadata(apiPath.string(), descriptor.packageId,
-                                importName, apiMetadata, outError)) {
-        return false;
-    }
     if (!validateNativePackageApi(apiMetadata, descriptor, outError)) {
         return false;
     }
-
     return true;
 }

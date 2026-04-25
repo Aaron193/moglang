@@ -65,6 +65,11 @@ run_expect_success \
     "$INTERPRETER" --validate-package="$PROJECT_ROOT/packages/examples/counter" ||
     failed=1
 
+run_expect_success \
+    "validate examples:hello source package" \
+    "$INTERPRETER" --validate-package "$PROJECT_ROOT/packages/examples/hello" ||
+    failed=1
+
 run_expect_failure \
     "reject registration mismatch" \
     "Manifest declares 'examples:mismatch' but library registers 'examples:declared_math'." \
@@ -147,6 +152,98 @@ run_expect_failure \
     "reject system dependencies on source packages" \
     "Only native package manifests may declare [system-dependencies]." \
     "$INTERPRETER" --validate-package "$TEMP_DIR/examples/source-system-dep" ||
+    failed=1
+
+mkdir -p "$TEMP_DIR/examples/legacysource/src"
+cat <<'EOF_LEGACY_SOURCE' > "$TEMP_DIR/examples/legacysource/package.toml"
+kind = "source"
+import_name = "legacysource"
+namespace = "examples"
+name = "legacysource"
+version = "0.1.0"
+license = "MIT"
+description = "legacy source package"
+entry = "src/main.mog"
+dependencies = []
+EOF_LEGACY_SOURCE
+
+cat <<'EOF_LEGACY_SOURCE_API' > "$TEMP_DIR/examples/legacysource/package.api.mog"
+package legacysource
+
+fn Name() str
+EOF_LEGACY_SOURCE_API
+
+cat <<'EOF_LEGACY_SOURCE_SRC' > "$TEMP_DIR/examples/legacysource/src/main.mog"
+fn Name() str {
+    return "legacysource"
+}
+EOF_LEGACY_SOURCE_SRC
+
+run_expect_success \
+    "validate legacy source package manifest" \
+    "$INTERPRETER" --validate-package "$TEMP_DIR/examples/legacysource" ||
+    failed=1
+
+mkdir -p "$TEMP_DIR/examples/missingentry/src"
+cat <<'EOF_MISSING_ENTRY' > "$TEMP_DIR/examples/missingentry/mog.toml"
+kind = "source"
+import_name = "missingentry"
+namespace = "examples"
+name = "missingentry"
+version = "0.1.0"
+license = "MIT"
+description = "missing source entry"
+entry = "src/absent.mog"
+dependencies = []
+EOF_MISSING_ENTRY
+
+cat <<'EOF_MISSING_ENTRY_API' > "$TEMP_DIR/examples/missingentry/package.api.mog"
+package missingentry
+
+fn Name() str
+EOF_MISSING_ENTRY_API
+
+cat <<'EOF_MISSING_ENTRY_SRC' > "$TEMP_DIR/examples/missingentry/src/main.mog"
+fn Name() str {
+    return "missing-entry"
+}
+EOF_MISSING_ENTRY_SRC
+
+run_expect_failure \
+    "reject missing source package entry" \
+    "is missing entry module" \
+    "$INTERPRETER" --validate-package "$TEMP_DIR/examples/missingentry" ||
+    failed=1
+
+mkdir -p "$TEMP_DIR/mog/fake-source/src"
+cat <<'EOF_FAKE_SOURCE' > "$TEMP_DIR/mog/fake-source/mog.toml"
+kind = "source"
+import_name = "fake-source"
+namespace = "mog"
+name = "fake-source"
+version = "0.1.0"
+license = "MIT"
+description = "reserved source package"
+entry = "src/main.mog"
+dependencies = []
+EOF_FAKE_SOURCE
+
+cat <<'EOF_FAKE_SOURCE_API' > "$TEMP_DIR/mog/fake-source/package.api.mog"
+package fake-source
+
+fn Name() str
+EOF_FAKE_SOURCE_API
+
+cat <<'EOF_FAKE_SOURCE_SRC' > "$TEMP_DIR/mog/fake-source/src/main.mog"
+fn Name() str {
+    return "fake-source"
+}
+EOF_FAKE_SOURCE_SRC
+
+run_expect_failure \
+    "reject reserved mog namespace for source packages" \
+    "Namespace 'mog' is reserved for runtime-maintained packages." \
+    "$INTERPRETER" --validate-package "$TEMP_DIR/mog/fake-source" ||
     failed=1
 
 if [[ $failed -ne 0 ]]; then

@@ -1231,14 +1231,9 @@ std::string digestFile(const std::filesystem::path& path) {
 }
 
 std::string manifestDigestForDir(const std::filesystem::path& packageDir) {
-    const std::filesystem::path mogManifest = packageDir / kProjectManifestFileName;
-    if (fileExists(mogManifest)) {
-        return digestFile(mogManifest);
-    }
-
-    const std::filesystem::path legacyManifest = packageDir / "package.toml";
-    if (fileExists(legacyManifest)) {
-        return digestFile(legacyManifest);
+    const std::filesystem::path manifestPath = packageManifestPath(packageDir);
+    if (fileExists(manifestPath)) {
+        return digestFile(manifestPath);
     }
 
     return "";
@@ -1796,6 +1791,43 @@ bool copyDirectoryRecursive(const std::filesystem::path& from,
         return false;
     }
 
+    return true;
+}
+
+bool copyCanonicalPackageManifest(const std::filesystem::path& fromPackageDir,
+                                  const std::filesystem::path& toPackageDir,
+                                  std::string& outError) {
+    const std::filesystem::path manifestPath = packageManifestPath(fromPackageDir);
+    if (!fileExists(manifestPath)) {
+        outError = "Could not find manifest for package directory '" +
+                   fromPackageDir.string() + "'.";
+        return false;
+    }
+
+    const std::filesystem::path destination =
+        toPackageDir / kProjectManifestFileName;
+    if (manifestPath.lexically_normal() == destination.lexically_normal()) {
+        return true;
+    }
+
+    return copyFileReplacing(manifestPath, destination, outError);
+}
+
+bool normalizeCanonicalPackageManifest(const std::filesystem::path& packageDir,
+                                       std::string& outError) {
+    if (!copyCanonicalPackageManifest(packageDir, packageDir, outError)) {
+        return false;
+    }
+
+    const std::filesystem::path legacyManifest =
+        packageDir / kLegacyPackageManifestFileName;
+    std::error_code ec;
+    std::filesystem::remove(legacyManifest, ec);
+    if (ec) {
+        outError = "Could not remove legacy manifest '" +
+                   legacyManifest.string() + "'.";
+        return false;
+    }
     return true;
 }
 
@@ -3870,8 +3902,7 @@ bool scanPackageDirectories(const std::filesystem::path& root,
         }
 
         const std::filesystem::path dir = it->path();
-        if (!fileExists(dir / kProjectManifestFileName) &&
-            !fileExists(dir / "package.toml")) {
+        if (!fileExists(packageManifestPath(dir))) {
             continue;
         }
 
@@ -4385,6 +4416,9 @@ bool stagePublishedNativeSourceArtifact(const std::filesystem::path& packagePath
     if (!copyDirectoryRecursive(packagePath, outStagingDir, outError)) {
         return false;
     }
+    if (!normalizeCanonicalPackageManifest(outStagingDir, outError)) {
+        return false;
+    }
 
     std::ofstream apiHeader(outStagingDir / "NativePackageAPI.hpp");
     if (!apiHeader) {
@@ -4415,17 +4449,9 @@ bool stagePublishedNativePrebuiltArtifact(const std::filesystem::path& packagePa
         return false;
     }
 
-    const std::filesystem::path manifestPath =
-        fileExists(packagePath / kProjectManifestFileName)
-            ? packagePath / kProjectManifestFileName
-            : packagePath / "package.toml";
-    if (!fileExists(manifestPath)) {
-        outError = "Could not find manifest for native package '" +
-                   packageEntry.packageId + "'.";
-        return false;
-    }
-    if (!copyFileReplacing(manifestPath, outStagingDir / manifestPath.filename(),
-                           outError)) {
+    if (!copyCanonicalPackageManifest(packagePath, outStagingDir, outError)) {
+        outError = "Could not stage manifest for native package '" +
+                   packageEntry.packageId + "': " + outError;
         return false;
     }
 
@@ -4560,6 +4586,9 @@ bool stagePublishedNativePrebuiltArtifactFromDirectory(
         return false;
     }
     if (!copyDirectoryRecursive(nativeArtifactDir, outStagingDir, outError)) {
+        return false;
+    }
+    if (!normalizeCanonicalPackageManifest(outStagingDir, outError)) {
         return false;
     }
 
@@ -5219,12 +5248,18 @@ bool materializeCacheEntry(const PackageRegistryEntry& sourceEntry,
         if (!copyDirectoryRecursive(sourceDir, cacheDir, outError)) {
             return false;
         }
+        if (!normalizeCanonicalPackageManifest(cacheDir, outError)) {
+            return false;
+        }
         return writeCacheMetadataFile(cacheMetadataPath(cacheDir), sourceEntry,
                                       outError);
     }
 
     if (sourceEntry.buildFromSource) {
         if (!copyDirectoryRecursive(sourceDir, cacheDir, outError)) {
+            return false;
+        }
+        if (!normalizeCanonicalPackageManifest(cacheDir, outError)) {
             return false;
         }
         if (!buildNativePackageFromSource(projectRoot, manifest, sourceEntry,
@@ -5235,11 +5270,7 @@ bool materializeCacheEntry(const PackageRegistryEntry& sourceEntry,
                                       outError);
     }
 
-    const std::filesystem::path sourceManifest = fileExists(sourceDir / kProjectManifestFileName)
-                                                     ? sourceDir / kProjectManifestFileName
-                                                     : sourceDir / "package.toml";
-    if (!copyFileReplacing(sourceManifest, cacheDir / kProjectManifestFileName,
-                           outError)) {
+    if (!copyCanonicalPackageManifest(sourceDir, cacheDir, outError)) {
         return false;
     }
 
@@ -7215,6 +7246,9 @@ bool publishProjectPackage(const std::string& projectRoot,
         }
         stagedSourceArtifactCleanup.path = sourceArtifactSource;
         if (!copyDirectoryRecursive(packagePath, sourceArtifactSource, outError)) {
+            return false;
+        }
+        if (!normalizeCanonicalPackageManifest(sourceArtifactSource, outError)) {
             return false;
         }
     }

@@ -11,9 +11,12 @@ real authoring path instead of a hypothetical future design.
 A native package in this repo typically includes:
 
 - `mog.toml`
-- `package.toml`
 - `package.api.mog`
 - `package.cpp`
+
+`mog.toml` is the canonical package manifest name. Older `package.toml` files
+are still accepted as a compatibility path, but new packages should use
+`mog.toml`.
 
 Examples:
 

@@ -35,6 +35,8 @@ repository. The current codebase supports:
 - `--offline` installs for local path/workspace dependency graphs
 - generated project install metadata in `.mog/install/registry.toml`
 - generated `mog.lock`
+- canonical generated/staged package manifests under `mog.toml`, while
+  retaining read compatibility with legacy `package.toml`
 - distinct generated lockfile and install-registry schemas, including
   `generator_version`
 - project-local package materialization under `.mog/install/packages/`
@@ -56,6 +58,9 @@ repository. The current codebase supports:
   compatibility with older flat manifests
 - strict validate/publish enforcement for package `license`, native
   `mog_runtime`, and current `[native]` build metadata
+- `mog validate-package` support for both source packages and native packages,
+  including shared manifest/API/namespace/path checks plus native ABI/export
+  validation
 - language-server auto-install for workspace projects with `mog.toml`
 - Phase 2A static file-registry installs for published source packages using
   exact `x.y.z` versions
@@ -176,8 +181,8 @@ Mog already supports package-shaped imports and package metadata:
 - bare imports such as `@import("window")` resolve as packages
 - source-like imports such as `@import("./foo.mog")` resolve as source modules
 - native packages are shared libraries loaded dynamically at runtime
-- package metadata exists in `mog.toml`, `mog.lock`, `package.toml`, and
-  `package.api.mog`
+- package metadata exists in `mog.toml`, `mog.lock`, and `package.api.mog`,
+  with legacy `package.toml` still accepted for compatibility
 - official runtime-maintained packages currently use the reserved `mog:*`
   canonical package namespace internally
 
@@ -498,8 +503,9 @@ package-root/
     ...
 ```
 
-The current `package.toml` file can be retired once `mog.toml` is authoritative
-for package metadata, unless a strong compatibility reason remains.
+`mog.toml` is now the authoritative package manifest for generated installs,
+staged publish artifacts, and current docs/examples. Legacy `package.toml`
+files remain a read-compatibility path for older packages.
 
 ## Manifest Requirements
 
@@ -811,6 +817,14 @@ Validation should include:
 - artifact hash verification
 - version consistency checks
 
+Current implementation status:
+
+- install, cache, publish, and validate flows now treat `mog.toml` as the
+  canonical package manifest name
+- legacy `package.toml` remains supported as an input compatibility path
+- `mog validate-package` now validates both source packages and native
+  packages, with native-only ABI/export checks layered on top
+
 ## CLI Surface
 
 Recommended baseline commands:
@@ -977,11 +991,12 @@ The system should support:
 
 Current implementation status:
 
-- partially implemented through local path dependencies and workspace/repo
-  package discovery
+- workspace roots now support `[workspace] members = [...]`
+- workspace dependencies can be declared with `workspace = true`
+- workspace-root commands write a shared `mog.lock` and
+  `.mog/install/registry.toml` at the workspace root
 - explicit package-manifest publish guards can now opt packages out of
   publication with `publish = false`
-- dedicated workspace metadata is not implemented yet
 
 ## Migration from Current State
 
@@ -996,7 +1011,8 @@ Planned changes:
 
 - `mog.lock` becomes generated and authoritative
 - package installation moves from repo-local build artifacts to a managed store
-- `package.toml` likely collapses into `mog.toml`
+- `mog.toml` is the canonical manifest name; `package.toml` remains a legacy
+  compatibility input only
 - runtime package scanning becomes secondary to resolved installs
 
 ## Phased Implementation Plan

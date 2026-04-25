@@ -56,8 +56,9 @@ SCRIPT_INVALID_EXT_DIR=""
 SCRIPT_INVALID_ESCAPE_DIR=""
 CACHE_STATUS_DIR=""
 CACHE_PRUNE_DIR=""
+LEGACY_SOURCE_PROJECT=""
 HOSTED_SERVER_PID=""
-trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_EXTERNAL_BUNDLE_DIR:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${WINDOW_BUNDLE_ROOT:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}" "${POLICY_REGISTRY_DIR:-}" "${POLICY_NATIVE_DIR:-}" "${POLICY_CI_DIR:-}" "${REMOVE_DIR:-}" "${REMOVE_DEV_DIR:-}" "${SCRIPT_WORKFLOW_DIR:-}" "${SCRIPT_MISSING_DIR:-}" "${SCRIPT_INVALID_ABS_DIR:-}" "${SCRIPT_INVALID_EXT_DIR:-}" "${SCRIPT_INVALID_ESCAPE_DIR:-}" "${CACHE_STATUS_DIR:-}" "${CACHE_PRUNE_DIR:-}"' EXIT
+trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_EXTERNAL_BUNDLE_DIR:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${WINDOW_BUNDLE_ROOT:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}" "${POLICY_REGISTRY_DIR:-}" "${POLICY_NATIVE_DIR:-}" "${POLICY_CI_DIR:-}" "${REMOVE_DIR:-}" "${REMOVE_DEV_DIR:-}" "${SCRIPT_WORKFLOW_DIR:-}" "${SCRIPT_MISSING_DIR:-}" "${SCRIPT_INVALID_ABS_DIR:-}" "${SCRIPT_INVALID_EXT_DIR:-}" "${SCRIPT_INVALID_ESCAPE_DIR:-}" "${CACHE_STATUS_DIR:-}" "${CACHE_PRUNE_DIR:-}" "${LEGACY_SOURCE_PROJECT:-}"' EXIT
 
 detect_host_target() {
     local os
@@ -494,9 +495,69 @@ if [[ ! -f "$TEMP_DIR/.mog/install/packages/examples/hello/src/main.mog" ]]; the
     exit 1
 fi
 
+if [[ ! -f "$TEMP_DIR/.mog/install/packages/examples/hello/mog.toml" || \
+      -f "$TEMP_DIR/.mog/install/packages/examples/hello/package.toml" ]]; then
+    echo "[FAIL] installed source packages should materialize a canonical mog.toml manifest"
+    find "$TEMP_DIR/.mog/install/packages/examples/hello" -maxdepth 3 -type f | sort
+    exit 1
+fi
+
 "$MOG" --validate-package "$PROJECT_ROOT/packages/examples/math" >/dev/null
 
 popd >/dev/null
+
+LEGACY_SOURCE_PROJECT="$(mktemp -d)"
+mkdir -p "$LEGACY_SOURCE_PROJECT/vendor/examples/legacysource/src"
+cat > "$LEGACY_SOURCE_PROJECT/vendor/examples/legacysource/package.toml" <<'EOF_LEGACY_SOURCE_MANIFEST'
+kind = "source"
+import_name = "legacysource"
+namespace = "examples"
+name = "legacysource"
+version = "0.1.0"
+license = "MIT"
+description = "Legacy-only source package."
+entry = "src/main.mog"
+dependencies = []
+EOF_LEGACY_SOURCE_MANIFEST
+
+cat > "$LEGACY_SOURCE_PROJECT/vendor/examples/legacysource/package.api.mog" <<'EOF_LEGACY_SOURCE_API'
+package legacysource
+
+fn Greet() str
+EOF_LEGACY_SOURCE_API
+
+cat > "$LEGACY_SOURCE_PROJECT/vendor/examples/legacysource/src/main.mog" <<'EOF_LEGACY_SOURCE_SRC'
+fn Greet() str {
+    return "hello from legacy source package"
+}
+EOF_LEGACY_SOURCE_SRC
+
+cat > "$LEGACY_SOURCE_PROJECT/mog.toml" <<'EOF_LEGACY_SOURCE_PROJECT'
+kind = "project"
+name = "legacy-source-project"
+version = "0.1.0"
+description = "legacy source project"
+
+[dependencies]
+legacysource = { path = "vendor/examples/legacysource", package = "examples:legacysource", version = "0.1.0" }
+EOF_LEGACY_SOURCE_PROJECT
+
+cat > "$LEGACY_SOURCE_PROJECT/app.mog" <<'EOF_LEGACY_SOURCE_APP'
+const legacysource = @import("legacysource")
+print(legacysource.Greet())
+EOF_LEGACY_SOURCE_APP
+
+if [[ "$(cd "$LEGACY_SOURCE_PROJECT" && "$MOG" run app.mog)" != *"hello from legacy source package"* ]]; then
+    echo "[FAIL] run should continue to load source packages from legacy package.toml manifests"
+    exit 1
+fi
+
+if [[ ! -f "$LEGACY_SOURCE_PROJECT/.mog/install/packages/examples/legacysource/mog.toml" || \
+      -f "$LEGACY_SOURCE_PROJECT/.mog/install/packages/examples/legacysource/package.toml" ]]; then
+    echo "[FAIL] legacy source package installs should normalize manifests to mog.toml"
+    find "$LEGACY_SOURCE_PROJECT/.mog/install/packages/examples/legacysource" -maxdepth 3 -type f | sort
+    exit 1
+fi
 
 if ! find "$MOG_CACHE_DIR" -name ".metadata.toml" -print -quit | grep -q .; then
     echo "[FAIL] install did not write durable cache metadata"
@@ -1028,7 +1089,7 @@ NATIVE_NO_CMAKE_DIR="$(mktemp -d)"
 NATIVE_BUILD_FAIL_DIR="$(mktemp -d)"
 mkdir -p "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" \
          "$NATIVE_PUBLISH_WORKSPACE/build/packages/examples/counter"
-cp "$PROJECT_ROOT/packages/examples/counter/package.toml" \
+cp "$PROJECT_ROOT/packages/examples/counter/mog.toml" \
    "$PROJECT_ROOT/packages/examples/counter/package.api.mog" \
    "$PROJECT_ROOT/packages/examples/counter/package.cpp" \
    "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/"
@@ -1058,7 +1119,7 @@ if ! (cd "$NATIVE_PUBLISH_WORKSPACE" && \
 fi
 
 NATIVE_EXTERNAL_BUNDLE_DIR="$(mktemp -d)"
-cp "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/package.toml" \
+cp "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/mog.toml" \
    "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/package.api.mog" \
    "$NATIVE_EXTERNAL_BUNDLE_DIR/"
 cp "$NATIVE_PUBLISH_WORKSPACE/build/packages/examples/counter/package.so" \
@@ -1082,7 +1143,7 @@ fi
 
 PRIVATE_NATIVE_PACKAGE_DIR="$NATIVE_PUBLISH_WORKSPACE/packages/examples/private-counter"
 mkdir -p "$PRIVATE_NATIVE_PACKAGE_DIR"
-cat > "$PRIVATE_NATIVE_PACKAGE_DIR/package.toml" <<'EOF_PRIVATE_NATIVE'
+cat > "$PRIVATE_NATIVE_PACKAGE_DIR/mog.toml" <<'EOF_PRIVATE_NATIVE'
 kind = "native"
 namespace = "examples"
 name = "private-counter"
@@ -1147,7 +1208,18 @@ if [[ ! -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/package.cpp" ||
     exit 1
 fi
 
-python3 - "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/package.toml" <<'PY'
+if [[ ! -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/mog.toml" || \
+      -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/package.toml" || \
+      ! -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/mog.toml" || \
+      -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/package.toml" || \
+      ! -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/mog.toml" || \
+      -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/package.toml" ]]; then
+    echo "[FAIL] published native artifacts should normalize manifests to mog.toml"
+    find "$REGISTRY_DIR/packages/examples/counter/0.1.0" -maxdepth 3 -type f | sort
+    exit 1
+fi
+
+python3 - "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/mog.toml" <<'PY'
 from pathlib import Path
 import sys
 
@@ -1761,11 +1833,11 @@ EOF_NATIVE_BUILD_FAIL
 cp "$NATIVE_CONSUMER_DIR/app.mog" "$NATIVE_BUILD_FAIL_DIR/app.mog"
 
 mkdir -p "$REGISTRY_DIR/packages/examples/counter/0.1.2/source"
-cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/package.toml" \
+cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/mog.toml" \
    "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/package.api.mog" \
    "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/NativePackageAPI.hpp" \
    "$REGISTRY_DIR/packages/examples/counter/0.1.2/source/"
-python3 - "$REGISTRY_DIR/packages/examples/counter/0.1.2/source/package.toml" <<'PY'
+python3 - "$REGISTRY_DIR/packages/examples/counter/0.1.2/source/mog.toml" <<'PY'
 from pathlib import Path
 import sys
 
@@ -1964,8 +2036,8 @@ if ! grep -Fq "could not find required system dependency 'libmagic'" \
 fi
 
 mkdir -p "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET"
-cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/package.toml" \
-   "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/package.toml"
+cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/mog.toml" \
+   "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/mog.toml"
 cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/package.api.mog" \
    "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/package.api.mog"
 cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/package.so" \
@@ -2107,7 +2179,7 @@ if [[ "$LOCKED_NATIVE_OUTPUT" != *"examples:counter"* || "$LOCKED_NATIVE_OUTPUT"
 fi
 
 mkdir -p "$REGISTRY_DIR/packages/examples/counter/0.1.1"
-cat > "$REGISTRY_DIR/packages/examples/counter/0.1.1/package.toml" <<'EOF_BAD_NATIVE_API_MANIFEST'
+cat > "$REGISTRY_DIR/packages/examples/counter/0.1.1/mog.toml" <<'EOF_BAD_NATIVE_API_MANIFEST'
 kind = "native"
 import_name = "counter"
 namespace = "examples"

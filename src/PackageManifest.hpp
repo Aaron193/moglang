@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,12 @@ struct PackageManifest {
     std::vector<DependencySpec> devDependencies;
     std::vector<DependencySpec> buildDependencies;
 };
+
+inline constexpr const char* kPackageManifestFileName = "mog.toml";
+inline constexpr const char* kLegacyPackageManifestFileName = "package.toml";
+
+std::filesystem::path packageManifestPath(
+    const std::filesystem::path& packageDir);
 
 bool loadPackageManifest(const std::string& packageDir,
                          PackageManifest& outManifest,
