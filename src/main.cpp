@@ -53,6 +53,7 @@ static void printUsage(const char* executable) {
         << "Cache subcommands:\n"
         << "  status\n"
         << "  path <user|project|registry|git>\n"
+        << "  prune [--dry-run]\n"
         << "Flags for install/update/run:\n"
         << "  --locked --offline --prefer-prebuilt --no-native-build\n"
         << "  --target <triple> | --target=<triple>\n"
@@ -580,6 +581,8 @@ static int runProjectScriptCommand(int argc, char** argv,
 
     options.sourceFile = resolvedScriptPath.string();
     options.installOptions.includeDevDependencies = true;
+    options.installOptions.includeBuildDependencies =
+        std::string(commandName) == "build";
     return runFile(options);
 }
 
@@ -639,6 +642,28 @@ static int runCacheCommand(int argc, char** argv) {
 
         std::cerr << "Unknown cache path kind: " << kind << std::endl;
         return 1;
+    }
+
+    if (subcommand == "prune") {
+        CachePruneOptions options;
+        for (int index = 3; index < argc; ++index) {
+            const std::string arg = argv[index];
+            if (arg == "--dry-run") {
+                options.dryRun = true;
+                continue;
+            }
+            std::cerr << "Unknown cache prune option: " << arg << std::endl;
+            return 1;
+        }
+
+        std::string report;
+        if (!pruneProjectCaches(currentManagedProjectRoot(), options, report,
+                                error)) {
+            std::cerr << "Cache prune failed: " << error << std::endl;
+            return 1;
+        }
+        std::cout << report << std::endl;
+        return 0;
     }
 
     std::cerr << "Unknown cache subcommand: " << subcommand << std::endl;
@@ -739,7 +764,10 @@ static int runAddCommand(int argc, char** argv) {
     }
 
     std::vector<PackageRegistryEntry> installedEntries;
-    if (!installProjectPackages(projectRoot, installedEntries, InstallOptions{},
+    InstallOptions installOptions;
+    installOptions.includeDevDependencies = true;
+    installOptions.includeBuildDependencies = true;
+    if (!installProjectPackages(projectRoot, installedEntries, installOptions,
                                 error)) {
         std::cerr << "Add failed during install: " << error << std::endl;
         return 1;
@@ -777,6 +805,8 @@ static int runRemoveCommand(int argc, char** argv) {
     }
 
     InstallOptions installOptions;
+    installOptions.includeDevDependencies = true;
+    installOptions.includeBuildDependencies = true;
     installOptions.update = true;
     std::vector<PackageRegistryEntry> installedEntries;
     if (!installProjectPackages(projectRoot, installedEntries, installOptions,
@@ -1178,6 +1208,8 @@ int main(int argc, char** argv) {
             return 1;
         }
         installOptions.update = command == "update";
+        installOptions.includeDevDependencies = true;
+        installOptions.includeBuildDependencies = true;
         return runInstallCommand(currentManagedProjectRoot(), installOptions);
     }
     if (command == "test" || command == "build") {
@@ -1219,6 +1251,8 @@ int main(int argc, char** argv) {
             printUsage(argv[0]);
             return 1;
         }
+        runtimeOptions.installOptions.includeDevDependencies = false;
+        runtimeOptions.installOptions.includeBuildDependencies = false;
         return runtimeOptions.sourceFile.empty() ? runRepl(runtimeOptions)
                                                  : runFile(runtimeOptions);
     }

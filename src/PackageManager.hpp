@@ -47,6 +47,7 @@ struct ProjectManifestData {
     std::vector<ProjectNativeToolchainConfig> nativeToolchains;
     std::vector<DependencySpec> dependencies;
     std::vector<DependencySpec> devDependencies;
+    std::vector<DependencySpec> buildDependencies;
 };
 
 struct InstallOptions {
@@ -54,7 +55,8 @@ struct InstallOptions {
     bool offline = false;
     bool preferPrebuilt = true;
     bool noNativeBuild = false;
-    bool includeDevDependencies = true;
+    bool includeDevDependencies = false;
+    bool includeBuildDependencies = false;
     bool update = false;
     std::string target;
     std::string cmakeToolchainFile;
@@ -93,6 +95,10 @@ struct ProjectCachePaths {
     std::string projectFallbackPackages;
     std::string registry;
     std::string git;
+};
+
+struct CachePruneOptions {
+    bool dryRun = false;
 };
 
 bool loadProjectManifestData(const std::string& projectRoot,
@@ -174,3 +180,8 @@ bool auditProjectPackages(const std::string& projectRoot,
 bool describeProjectCachePaths(const std::string& projectRoot,
                                ProjectCachePaths& outPaths,
                                std::string& outError);
+
+bool pruneProjectCaches(const std::string& projectRoot,
+                        const CachePruneOptions& options,
+                        std::string& outReport,
+                        std::string& outError);

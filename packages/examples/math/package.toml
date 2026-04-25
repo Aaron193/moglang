@@ -1,7 +1,13 @@
 namespace = "examples"
 name = "math"
 version = "0.1.0"
+license = "MIT"
 abi_version = 3
+mog_runtime = "^0.1.0"
 author = "Mog runtime"
 description = "Reference namespaced math package."
 dependencies = []
+
+[native]
+build = "cmake"
+targets = ["linux-x86_64-gnu", "linux-arm64-gnu", "macos-arm64", "macos-x86_64"]

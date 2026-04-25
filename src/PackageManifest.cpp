@@ -419,6 +419,23 @@ void sortDependencies(std::vector<DependencySpec>& dependencies) {
               });
 }
 
+std::vector<std::string> sortedUniqueStrings(std::vector<std::string> values) {
+    std::sort(values.begin(), values.end());
+    values.erase(std::unique(values.begin(), values.end()), values.end());
+    return values;
+}
+
+bool validateStringList(const std::vector<std::string>& values,
+                        const char* label, std::string& outError) {
+    for (const std::string& value : values) {
+        if (trim(value).empty()) {
+            outError = std::string(label) + " entries must not be empty.";
+            return false;
+        }
+    }
+    return true;
+}
+
 void sortSystemDependencies(std::vector<SystemDependencySpec>& systemDependencies) {
     std::sort(systemDependencies.begin(), systemDependencies.end(),
               [](const SystemDependencySpec& lhs,
@@ -556,9 +573,11 @@ bool loadPackageManifest(const std::string& packageDir,
 
     enum class Section {
         ROOT,
+        NATIVE,
         SYSTEM_DEPENDENCIES,
         DEPENDENCIES,
         DEV_DEPENDENCIES,
+        BUILD_DEPENDENCIES,
     };
 
     Section section = Section::ROOT;
@@ -577,6 +596,14 @@ bool loadPackageManifest(const std::string& packageDir,
         }
         if (content == "[dev-dependencies]") {
             section = Section::DEV_DEPENDENCIES;
+            continue;
+        }
+        if (content == "[build-dependencies]") {
+            section = Section::BUILD_DEPENDENCIES;
+            continue;
+        }
+        if (content == "[native]") {
+            section = Section::NATIVE;
             continue;
         }
         if (content == "[system-dependencies]") {
@@ -601,15 +628,20 @@ bool loadPackageManifest(const std::string& packageDir,
         std::string parseError;
 
         if (section == Section::DEPENDENCIES ||
-            section == Section::DEV_DEPENDENCIES) {
+            section == Section::DEV_DEPENDENCIES ||
+            section == Section::BUILD_DEPENDENCIES) {
             DependencySpec dependency;
             dependency.alias = key;
             if (!parseDependencyInlineTable(value, dependency, parseError)) {
                 outError = "Invalid dependency '" + key + "': " + parseError;
                 return false;
             }
-            auto& output = section == Section::DEPENDENCIES ? outManifest.dependencies
-                                                            : outManifest.devDependencies;
+            auto& output =
+                section == Section::DEPENDENCIES
+                    ? outManifest.dependencies
+                    : (section == Section::DEV_DEPENDENCIES
+                           ? outManifest.devDependencies
+                           : outManifest.buildDependencies);
             output.push_back(std::move(dependency));
             continue;
         }
@@ -622,6 +654,31 @@ bool loadPackageManifest(const std::string& packageDir,
                 return false;
             }
             outManifest.systemDependencies.push_back(std::move(dependency));
+            continue;
+        }
+        if (section == Section::NATIVE) {
+            if (key == "entry") {
+                if (!parseQuotedString(value, outManifest.native.entry, parseError)) {
+                    outError = "Invalid native field '" + key + "': " + parseError;
+                    return false;
+                }
+            } else if (key == "build") {
+                if (!parseQuotedString(value, outManifest.native.build, parseError)) {
+                    outError = "Invalid native field '" + key + "': " + parseError;
+                    return false;
+                }
+            } else if (key == "targets") {
+                if (!parseQuotedStringArray(value, outManifest.native.targets,
+                                            parseError)) {
+                    outError = "Invalid native field '" + key + "': " + parseError;
+                    return false;
+                }
+                outManifest.native.targets =
+                    sortedUniqueStrings(std::move(outManifest.native.targets));
+            } else {
+                outError = "Unsupported native field '" + key + "'.";
+                return false;
+            }
             continue;
         }
 
@@ -651,6 +708,11 @@ bool loadPackageManifest(const std::string& packageDir,
                 outError = "Invalid manifest version: " + parseError;
                 return false;
             }
+        } else if (key == "license") {
+            if (!parseQuotedString(value, outManifest.license, parseError)) {
+                outError = "Invalid manifest license: " + parseError;
+                return false;
+            }
         } else if (key == "publish") {
             if (!parseBoolValue(value, outManifest.publish, parseError)) {
                 outError = "Invalid manifest publish: " + parseError;
@@ -666,13 +728,45 @@ bool loadPackageManifest(const std::string& packageDir,
                 outError = "Invalid manifest author: " + parseError;
                 return false;
             }
+        } else if (key == "authors") {
+            if (!parseQuotedStringArray(value, outManifest.authors, parseError)) {
+                outError = "Invalid manifest authors: " + parseError;
+                return false;
+            }
+            outManifest.authors = sortedUniqueStrings(std::move(outManifest.authors));
         } else if (key == "description") {
             if (!parseQuotedString(value, outManifest.description, parseError)) {
                 outError = "Invalid manifest description: " + parseError;
                 return false;
             }
+        } else if (key == "repository") {
+            if (!parseQuotedString(value, outManifest.repository, parseError)) {
+                outError = "Invalid manifest repository: " + parseError;
+                return false;
+            }
+        } else if (key == "homepage") {
+            if (!parseQuotedString(value, outManifest.homepage, parseError)) {
+                outError = "Invalid manifest homepage: " + parseError;
+                return false;
+            }
+        } else if (key == "documentation") {
+            if (!parseQuotedString(value, outManifest.documentation, parseError)) {
+                outError = "Invalid manifest documentation: " + parseError;
+                return false;
+            }
+        } else if (key == "keywords") {
+            if (!parseQuotedStringArray(value, outManifest.keywords, parseError)) {
+                outError = "Invalid manifest keywords: " + parseError;
+                return false;
+            }
+            outManifest.keywords = sortedUniqueStrings(std::move(outManifest.keywords));
+        } else if (key == "mog_runtime") {
+            if (!parseQuotedString(value, outManifest.mogRuntime, parseError)) {
+                outError = "Invalid manifest mog_runtime: " + parseError;
+                return false;
+            }
         } else if (key == "entry") {
-            if (!parseQuotedString(value, outManifest.entry, parseError)) {
+            if (!parseQuotedString(value, outManifest.sourceEntry, parseError)) {
                 outError = "Invalid manifest entry: " + parseError;
                 return false;
             }
@@ -694,6 +788,20 @@ bool loadPackageManifest(const std::string& packageDir,
 
     if (outManifest.importName.empty()) {
         outManifest.importName = outManifest.packageName;
+    }
+    if (outManifest.authors.empty() && !outManifest.author.empty()) {
+        outManifest.authors.push_back(outManifest.author);
+    } else if (!outManifest.author.empty()) {
+        outManifest.authors.push_back(outManifest.author);
+        outManifest.authors = sortedUniqueStrings(std::move(outManifest.authors));
+    }
+    if (outManifest.library.empty() && !outManifest.native.entry.empty()) {
+        outManifest.library = outManifest.native.entry;
+    } else if (!outManifest.library.empty() && !outManifest.native.entry.empty() &&
+               outManifest.library != outManifest.native.entry) {
+        outError =
+            "Manifest library and [native].entry must match when both are set.";
+        return false;
     }
 
     if (outManifest.packageNamespace.empty() || outManifest.packageName.empty() ||
@@ -721,7 +829,7 @@ bool loadPackageManifest(const std::string& packageDir,
         outError = "Native package manifest must define abi_version.";
         return false;
     }
-    if (outManifest.kind == "source" && outManifest.entry.empty()) {
+    if (outManifest.kind == "source" && outManifest.sourceEntry.empty()) {
         outError = "Source package manifest must define entry.";
         return false;
     }
@@ -730,10 +838,22 @@ bool loadPackageManifest(const std::string& packageDir,
             "Only native package manifests may declare [system-dependencies].";
         return false;
     }
+    if (outManifest.kind != "native" &&
+        (!outManifest.native.entry.empty() || !outManifest.native.build.empty() ||
+         !outManifest.native.targets.empty() || !outManifest.library.empty())) {
+        outError = "Only native package manifests may declare [native] metadata.";
+        return false;
+    }
+    if (!outManifest.native.build.empty() && outManifest.native.build != "cmake") {
+        outError =
+            "Native package manifest [native].build must currently be \"cmake\".";
+        return false;
+    }
 
     sortSystemDependencies(outManifest.systemDependencies);
     sortDependencies(outManifest.dependencies);
     sortDependencies(outManifest.devDependencies);
+    sortDependencies(outManifest.buildDependencies);
 
     if (!validateSystemDependencySpecs(outManifest.systemDependencies, outError)) {
         return false;
@@ -743,6 +863,46 @@ bool loadPackageManifest(const std::string& packageDir,
     }
     if (!validateDependencySpecs(outManifest.devDependencies, outError)) {
         return false;
+    }
+    if (!validateDependencySpecs(outManifest.buildDependencies, outError)) {
+        return false;
+    }
+    if (!validateStringList(outManifest.authors, "authors", outError) ||
+        !validateStringList(outManifest.keywords, "keywords", outError) ||
+        !validateStringList(outManifest.native.targets, "native.targets",
+                            outError)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool validatePackageManifestForDistribution(const PackageManifest& manifest,
+                                            std::string& outError) {
+    outError.clear();
+
+    if (manifest.license.empty()) {
+        outError = "Manifest must define license.";
+        return false;
+    }
+    if (!validateStringList(manifest.authors, "authors", outError) ||
+        !validateStringList(manifest.keywords, "keywords", outError)) {
+        return false;
+    }
+
+    if (manifest.kind == "native") {
+        if (manifest.mogRuntime.empty()) {
+            outError = "Native package manifest must define mog_runtime.";
+            return false;
+        }
+        if (manifest.native.build.empty()) {
+            outError = "Native package manifest must define [native].build.";
+            return false;
+        }
+        if (manifest.native.targets.empty()) {
+            outError = "Native package manifest must define [native].targets.";
+            return false;
+        }
     }
 
     return true;
@@ -763,6 +923,9 @@ bool validatePackageDirectory(const std::string& packageDir,
 
     PackageManifest manifest;
     if (!loadPackageManifest(dirPath.string(), manifest, outError)) {
+        return false;
+    }
+    if (!validatePackageManifestForDistribution(manifest, outError)) {
         return false;
     }
 

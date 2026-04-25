@@ -445,6 +445,9 @@ bool loadLockfileEntries(const std::filesystem::path& lockfilePath,
             if (key == "schema_version") {
                 continue;
             }
+            if (key == "generator_version") {
+                continue;
+            }
             outError = "Invalid lockfile line " + std::to_string(lineNumber) +
                        ": entries must appear inside [[package]].";
             return false;
@@ -511,6 +514,10 @@ bool loadLockfileEntries(const std::filesystem::path& lockfilePath,
             current.apiPath = parsed;
         } else if (key == "description") {
             current.description = parsed;
+        } else if (key == "license") {
+            current.license = parsed;
+        } else if (key == "mog_runtime") {
+            current.mogRuntime = parsed;
         } else if (key == "source_type") {
             current.sourceType = parsed;
         } else if (key == "source_path") {
@@ -572,14 +579,17 @@ bool loadPackageManifestEntry(const std::filesystem::path& packageDir,
     outEntry.packageDir = canonicalOrLexical(packageDir);
     outEntry.kind = manifest.kind.empty() ? "native" : manifest.kind;
     outEntry.description = manifest.description;
+    outEntry.license = manifest.license;
+    outEntry.mogRuntime = manifest.mogRuntime;
     outEntry.dependencyIds.clear();
     for (const auto& dependency : manifest.dependencies) {
         outEntry.dependencyIds.push_back(dependency.packageId);
     }
     outEntry.sourceType = "path";
     outEntry.sourcePath = outEntry.packageDir;
-    if (!manifest.entry.empty()) {
-        outEntry.entryPath = canonicalOrLexical(packageDir / manifest.entry);
+    if (!manifest.sourceEntry.empty()) {
+        outEntry.entryPath =
+            canonicalOrLexical(packageDir / manifest.sourceEntry);
     }
     if (!manifest.library.empty()) {
         const std::filesystem::path configuredLibrary = packageDir / manifest.library;

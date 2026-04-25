@@ -55,8 +55,9 @@ SCRIPT_INVALID_ABS_DIR=""
 SCRIPT_INVALID_EXT_DIR=""
 SCRIPT_INVALID_ESCAPE_DIR=""
 CACHE_STATUS_DIR=""
+CACHE_PRUNE_DIR=""
 HOSTED_SERVER_PID=""
-trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_EXTERNAL_BUNDLE_DIR:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${WINDOW_BUNDLE_ROOT:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}" "${POLICY_REGISTRY_DIR:-}" "${POLICY_NATIVE_DIR:-}" "${POLICY_CI_DIR:-}" "${REMOVE_DIR:-}" "${REMOVE_DEV_DIR:-}" "${SCRIPT_WORKFLOW_DIR:-}" "${SCRIPT_MISSING_DIR:-}" "${SCRIPT_INVALID_ABS_DIR:-}" "${SCRIPT_INVALID_EXT_DIR:-}" "${SCRIPT_INVALID_ESCAPE_DIR:-}" "${CACHE_STATUS_DIR:-}"' EXIT
+trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_EXTERNAL_BUNDLE_DIR:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${WINDOW_BUNDLE_ROOT:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}" "${POLICY_REGISTRY_DIR:-}" "${POLICY_NATIVE_DIR:-}" "${POLICY_CI_DIR:-}" "${REMOVE_DIR:-}" "${REMOVE_DEV_DIR:-}" "${SCRIPT_WORKFLOW_DIR:-}" "${SCRIPT_MISSING_DIR:-}" "${SCRIPT_INVALID_ABS_DIR:-}" "${SCRIPT_INVALID_EXT_DIR:-}" "${SCRIPT_INVALID_ESCAPE_DIR:-}" "${CACHE_STATUS_DIR:-}" "${CACHE_PRUNE_DIR:-}"' EXIT
 
 detect_host_target() {
     local os
@@ -435,14 +436,24 @@ if [[ ! -f "$TEMP_DIR/.mog/install/registry.toml" ]]; then
     exit 1
 fi
 
-if ! grep -Fq 'schema_version = "lock.v3"' "$TEMP_DIR/mog.lock"; then
+if ! grep -Fq 'schema_version = "lock.v4"' "$TEMP_DIR/mog.lock"; then
     echo "[FAIL] lockfile did not write the new lock schema"
     cat "$TEMP_DIR/mog.lock"
     exit 1
 fi
+if ! grep -Fq 'generator_version = "0.1.0"' "$TEMP_DIR/mog.lock"; then
+    echo "[FAIL] lockfile should record generator_version"
+    cat "$TEMP_DIR/mog.lock"
+    exit 1
+fi
 
-if ! grep -Fq 'schema_version = "install.v3"' "$TEMP_DIR/.mog/install/registry.toml"; then
+if ! grep -Fq 'schema_version = "install.v4"' "$TEMP_DIR/.mog/install/registry.toml"; then
     echo "[FAIL] install registry did not write the new install schema"
+    cat "$TEMP_DIR/.mog/install/registry.toml"
+    exit 1
+fi
+if ! grep -Fq 'generator_version = "0.1.0"' "$TEMP_DIR/.mog/install/registry.toml"; then
+    echo "[FAIL] install registry should record generator_version"
     cat "$TEMP_DIR/.mog/install/registry.toml"
     exit 1
 fi
@@ -844,6 +855,7 @@ import_name = "greeter"
 namespace = "demo"
 name = "greeter"
 version = "0.1.0"
+license = "MIT"
 author = "Registry test"
 description = "Published greeter package."
 entry = "src/main.mog"
@@ -893,6 +905,7 @@ import_name = "private_greeter"
 namespace = "demo"
 name = "private-greeter"
 version = "0.1.0"
+license = "MIT"
 publish = false
 author = "Registry test"
 description = "Private source package."
@@ -1074,11 +1087,17 @@ kind = "native"
 namespace = "examples"
 name = "private-counter"
 version = "0.1.0"
+license = "MIT"
 publish = false
 abi_version = 3
+mog_runtime = "^0.1.0"
 author = "Mog runtime"
 description = "Private native package."
 dependencies = []
+
+[native]
+build = "cmake"
+targets = ["linux-x86_64-gnu"]
 EOF_PRIVATE_NATIVE
 
 if (cd "$NATIVE_PUBLISH_WORKSPACE" && \
@@ -2281,6 +2300,7 @@ import_name = "hosted_util"
 namespace = "acme"
 name = "hosted-util"
 version = "1.0.0"
+license = "MIT"
 author = "Hosted registry test"
 description = "Hosted utility package."
 entry = "src/main.mog"
@@ -2384,7 +2404,7 @@ if (cd "$HOSTED_UNTRUSTED_DIR" && \
     exit 1
 fi
 
-if ! grep -Eq "trusted_keys|signed registry.v2" /tmp/mog_hosted_untrusted_failure.txt; then
+if ! grep -Eq "trusted_keys|signed registry" /tmp/mog_hosted_untrusted_failure.txt; then
     echo "[FAIL] hosted trust failure should explain the missing trusted_keys requirement"
     cat /tmp/mog_hosted_untrusted_failure.txt
     exit 1
@@ -2579,7 +2599,7 @@ if (cd "$HOSTED_AFTER_UNTRUST_DIR" && \
     exit 1
 fi
 
-if ! grep -Eq "trusted_keys|unknown key|signed registry.v2" /tmp/mog_hosted_after_untrust_failure.txt; then
+if ! grep -Eq "trusted_keys|unknown key|signed registry" /tmp/mog_hosted_after_untrust_failure.txt; then
     echo "[FAIL] hosted installs after untrust should explain the missing registry trust"
     cat /tmp/mog_hosted_after_untrust_failure.txt
     exit 1
@@ -2689,6 +2709,7 @@ import_name = "audit_util"
 namespace = "acme"
 name = "audit-util"
 version = "1.0.0"
+license = "MIT"
 author = "Audit registry test"
 description = "Audit utility package."
 entry = "src/main.mog"
@@ -2972,7 +2993,8 @@ if [[ "$(cd "$POLICY_CI_DIR" && CI=1 "$MOG" run --locked app.mog)" != *"hello fr
 fi
 
 SCRIPT_WORKFLOW_DIR="$(mktemp -d)"
-mkdir -p "$SCRIPT_WORKFLOW_DIR/tests" "$SCRIPT_WORKFLOW_DIR/tools"
+mkdir -p "$SCRIPT_WORKFLOW_DIR/tests" "$SCRIPT_WORKFLOW_DIR/tools" \
+    "$SCRIPT_WORKFLOW_DIR/packages/examples/build-helper/src"
 cat > "$SCRIPT_WORKFLOW_DIR/mog.toml" <<EOF_SCRIPTS
 kind = "project"
 name = "script-workflow"
@@ -2988,7 +3010,28 @@ math = { path = "$PROJECT_ROOT/packages/examples/math", package = "examples:math
 
 [dev-dependencies]
 hello = { path = "$PROJECT_ROOT/packages/examples/hello", package = "examples:hello", version = "0.1.0" }
+
+[build-dependencies]
+build_helper = { path = "packages/examples/build-helper", package = "examples:build-helper", version = "0.1.0" }
 EOF_SCRIPTS
+
+cat > "$SCRIPT_WORKFLOW_DIR/packages/examples/build-helper/src/main.mog" <<'EOF_BUILD_HELPER_SRC'
+fn Name() str {
+    return "build-helper"
+}
+EOF_BUILD_HELPER_SRC
+
+cat > "$SCRIPT_WORKFLOW_DIR/packages/examples/build-helper/mog.toml" <<'EOF_BUILD_HELPER_MANIFEST'
+kind = "source"
+import_name = "build_helper"
+namespace = "examples"
+name = "build-helper"
+version = "0.1.0"
+license = "MIT"
+description = "Build-only helper package."
+entry = "src/main.mog"
+dependencies = []
+EOF_BUILD_HELPER_MANIFEST
 
 cat > "$SCRIPT_WORKFLOW_DIR/tests/main.mog" <<'EOF_SCRIPT_TEST'
 const hello = @import("hello")
@@ -2997,9 +3040,9 @@ print(hello.Greet())
 EOF_SCRIPT_TEST
 
 cat > "$SCRIPT_WORKFLOW_DIR/tools/build.mog" <<'EOF_SCRIPT_BUILD'
-const hello = @import("hello")
+const build_helper = @import("build_helper")
 print("script build")
-print(hello.Greet())
+print(build_helper.Name())
 EOF_SCRIPT_BUILD
 
 if ! (cd "$SCRIPT_WORKFLOW_DIR" && "$MOG" remove math >/dev/null); then
@@ -3022,12 +3065,26 @@ if [[ "$SCRIPT_TEST_OUTPUT" != *"script test"* || \
     echo "$SCRIPT_TEST_OUTPUT"
     exit 1
 fi
+if grep -Fq 'examples:build-helper' "$SCRIPT_WORKFLOW_DIR/.mog/install/registry.toml"; then
+    echo "[FAIL] mog test should not install build-only dependencies"
+    cat "$SCRIPT_WORKFLOW_DIR/.mog/install/registry.toml"
+    exit 1
+fi
+if ! (cd "$SCRIPT_WORKFLOW_DIR" && "$MOG" install --offline >/dev/null); then
+    echo "[FAIL] mog install should restore build-only dependencies for the full developer graph"
+    exit 1
+fi
 
 SCRIPT_BUILD_OUTPUT="$(cd "$SCRIPT_WORKFLOW_DIR" && "$MOG" build --locked --offline)"
 if [[ "$SCRIPT_BUILD_OUTPUT" != *"script build"* || \
-      "$SCRIPT_BUILD_OUTPUT" != *"hello from source package"* ]]; then
+      "$SCRIPT_BUILD_OUTPUT" != *"build-helper"* ]]; then
     echo "[FAIL] mog build should honor locked/offline execution for configured scripts"
     echo "$SCRIPT_BUILD_OUTPUT"
+    exit 1
+fi
+if ! grep -Fq 'examples:build-helper' "$SCRIPT_WORKFLOW_DIR/.mog/install/registry.toml"; then
+    echo "[FAIL] mog build should install build-only dependencies"
+    cat "$SCRIPT_WORKFLOW_DIR/.mog/install/registry.toml"
     exit 1
 fi
 
@@ -3149,6 +3206,65 @@ if [[ "$CACHE_STATUS_OUTPUT" != *"user_packages = $EXPECTED_USER_CACHE"* || \
       "$CACHE_STATUS_OUTPUT" != *"git = $EXPECTED_GIT_CACHE"* ]]; then
     echo "[FAIL] cache status should report all cache roots"
     echo "$CACHE_STATUS_OUTPUT"
+    exit 1
+fi
+
+CACHE_PRUNE_DIR="$(mktemp -d)"
+cat > "$CACHE_PRUNE_DIR/mog.toml" <<EOF_CACHE_PRUNE
+kind = "project"
+name = "cache-prune"
+version = "0.1.0"
+description = "cache prune test"
+
+[dependencies]
+hello = { path = "$PROJECT_ROOT/packages/examples/hello", package = "examples:hello", version = "0.1.0" }
+EOF_CACHE_PRUNE
+
+cat > "$CACHE_PRUNE_DIR/app.mog" <<'EOF_CACHE_PRUNE_APP'
+const hello = @import("hello")
+print(hello.Greet())
+EOF_CACHE_PRUNE_APP
+
+CACHE_PRUNE_ROOT="$TEMP_DIR/cache-prune-root"
+if ! (cd "$CACHE_PRUNE_DIR" && MOG_CACHE_DIR="$CACHE_PRUNE_ROOT" "$MOG" install >/dev/null); then
+    echo "[FAIL] cache prune setup install should succeed"
+    exit 1
+fi
+
+CACHE_LOCAL_ENTRY="$(find "$CACHE_PRUNE_ROOT/packages/local" -mindepth 3 -maxdepth 3 -type d | head -n1)"
+if [[ -z "$CACHE_LOCAL_ENTRY" ]]; then
+    echo "[FAIL] cache prune setup should create a reusable local cache entry"
+    exit 1
+fi
+
+CACHE_PRUNE_DRY_RUN_OUTPUT="$(cd "$CACHE_PRUNE_DIR" && MOG_CACHE_DIR="$CACHE_PRUNE_ROOT" "$MOG" cache prune --dry-run)"
+if [[ "$CACHE_PRUNE_DRY_RUN_OUTPUT" != *"Would remove"* || \
+      "$CACHE_PRUNE_DRY_RUN_OUTPUT" != *"$CACHE_LOCAL_ENTRY"* ]]; then
+    echo "[FAIL] cache prune --dry-run should report removable cache entries"
+    echo "$CACHE_PRUNE_DRY_RUN_OUTPUT"
+    exit 1
+fi
+if [[ ! -d "$CACHE_LOCAL_ENTRY" ]]; then
+    echo "[FAIL] cache prune --dry-run should not remove cache entries"
+    exit 1
+fi
+
+CACHE_PRUNE_OUTPUT="$(cd "$CACHE_PRUNE_DIR" && MOG_CACHE_DIR="$CACHE_PRUNE_ROOT" "$MOG" cache prune)"
+if [[ "$CACHE_PRUNE_OUTPUT" != *"Removed"* ]]; then
+    echo "[FAIL] cache prune should report removed cache entries"
+    echo "$CACHE_PRUNE_OUTPUT"
+    exit 1
+fi
+if [[ -d "$CACHE_LOCAL_ENTRY" ]]; then
+    echo "[FAIL] cache prune should remove stale local cache entries"
+    exit 1
+fi
+if [[ ! -f "$CACHE_PRUNE_DIR/.mog/install/registry.toml" ]]; then
+    echo "[FAIL] cache prune should not touch active install metadata"
+    exit 1
+fi
+if [[ "$(cd "$CACHE_PRUNE_DIR" && MOG_CACHE_DIR="$CACHE_PRUNE_ROOT" "$MOG" run app.mog)" != *"hello from source package"* ]]; then
+    echo "[FAIL] cache prune should leave the active install runnable"
     exit 1
 fi
 

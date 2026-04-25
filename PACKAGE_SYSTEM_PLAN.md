@@ -8,7 +8,7 @@ Last updated: 2026-04-25.
 
 Phase snapshot:
 
-- Phase 1 local package-management baseline: mostly complete
+- Phase 1 local package-management baseline: substantially complete
 - Phase 2 registry and publishing: partially implemented
 - Phase 3 native artifact distribution: substantially complete for the current
   CMake-based model (broader non-CMake/native build-system policy remains)
@@ -29,13 +29,14 @@ repository. The current codebase supports:
 - `mog run <file>`
 - `mog test`
 - `mog build`
-- `mog cache status|path`
+- `mog cache status|path|prune`
 - `mog validate-package <dir>`
 - `--locked` installs and runs against an existing `mog.lock`
 - `--offline` installs for local path/workspace dependency graphs
 - generated project install metadata in `.mog/install/registry.toml`
 - generated `mog.lock`
-- distinct generated lockfile and install-registry schemas
+- distinct generated lockfile and install-registry schemas, including
+  `generator_version`
 - project-local package materialization under `.mog/install/packages/`
 - durable cache metadata for reused local package installs, with a project-local
   cache fallback when the preferred user cache path is unavailable
@@ -46,18 +47,26 @@ repository. The current codebase supports:
 - workspace-root discovery for CLI/runtime/LSP package installs
 - root manifest workspace metadata via `[workspace] members = [...]`
 - root-manifest `[scripts]` support for `test` and `build` entry points
+- root-manifest `[build-dependencies]` support with dependency-group-aware
+  `mog install`, `mog update`, `mog test`, and `mog build` flows
 - dependency source-kind tracking and dependency-group tracking in generated
   lock/install metadata
+- additive package-manifest schema support for `license`, optional authoring
+  metadata, `[build-dependencies]`, and `[native]` metadata while retaining
+  compatibility with older flat manifests
+- strict validate/publish enforcement for package `license`, native
+  `mog_runtime`, and current `[native]` build metadata
 - language-server auto-install for workspace projects with `mog.toml`
 - Phase 2A static file-registry installs for published source packages using
   exact `x.y.z` versions
 - Phase 2B semver-constrained published source-package installs using
   `x.y.z`, `^x.y.z`, and `~x.y.z`
 - root-manifest registry configuration via `[registries.<name>]`
-- hosted `http(s)` registry index/download/publish flows backed by the same
-  `registry.v1` format
+- hosted `http(s)` registry index/download/publish flows backed by the current
+  registry index formats
 - registry-pinned lock/install metadata including registry identity and
   artifact digests
+- lock/install/registry metadata pinning of package `mog_runtime`
 - cached `--offline` reinstalls for previously fetched registry source packages
 - lockfile-first `mog install` / `mog run` behavior for current dependency
   graphs, with `mog update` as the explicit refresh path
@@ -77,6 +86,9 @@ repository. The current codebase supports:
 - published native-package source artifacts and host-target source-build
   fallback through the current static file-registry format, including cached
   `--offline` reinstalls and `build_from_source` metadata
+- native-package `mog_runtime` compatibility metadata from package manifests
+  through registry, lockfile, install-registry, and cache metadata, with
+  install-time compatibility enforcement
 - non-host published native-package source-build fallback when
   `--cmake-toolchain <path>` is provided
 - root-manifest native toolchain configuration via
@@ -116,7 +128,7 @@ repository. The current codebase supports:
   including pre-resolution registry allowlist checks and final resolved-graph
   native/registry policy validation
 - SHA-256-prefixed artifact, manifest, API, and cache digests
-- signed `registry.v2` metadata using Ed25519 signing keys passed through
+- signed `registry.v3` metadata using Ed25519 signing keys passed through
   `mog publish --signing-key <registry-key.v1>`
 - trusted hosted-registry verification through
   `[registries.<name>].trusted_keys = ["<key_id>:<base64-der-public-key>"]`
@@ -136,6 +148,7 @@ repository. The current codebase supports:
 - effective hosted-registry trust/auth merging across project manifest,
   user config, environment variables, and legacy alias-scoped auth fallback
 - URL-scoped hosted-registry token/trust reuse across different project aliases
+- cache eviction/pruning via `mog cache prune` and `mog cache prune --dry-run`
 - signed-registry and audit coverage in `tests/test_package_manager.sh`
 
 Not implemented yet (post-v1 / follow-on work):
@@ -518,6 +531,7 @@ they serve different purposes.
 - `native.entry`
 - `native.build`
 - `native.targets`
+- `mog_runtime`
 
 ### Recommended metadata
 
@@ -840,7 +854,7 @@ Current implementation status:
 - implemented hosted trust bootstrap: `mog registry trust <registry> --bootstrap`
 - implemented root-manifest script controls: `[scripts].test` and
   `[scripts].build`, executed as package-aware Mog entry scripts with
-  dev-dependency installs
+  dependency-group-aware dev/build installs
 - implemented root-manifest policy controls:
   `allowed_registries`, `allowed_native_namespaces`,
   registry `trusted_keys`, registry `allow_insecure`, and
@@ -850,8 +864,14 @@ Current implementation status:
   `build_args`, and `env`
 - implemented cache inspection commands: `mog cache status` and
   `mog cache path <user|project|registry|git>`
-- not implemented yet: cache eviction/pruning workflows and broader
-  build/test orchestration beyond root-manifest Mog entry scripts
+- implemented cache pruning commands: `mog cache prune` and
+  `mog cache prune --dry-run`
+- implemented generated lock/install metadata `generator_version`
+- implemented package-manifest additive schema support for `license`,
+  optional authoring metadata, `[build-dependencies]`, `[native]`, and
+  native `mog_runtime`
+- not implemented yet: broader build/test orchestration beyond root-manifest
+  Mog entry scripts
 
 ## Tooling Integration
 
@@ -1000,7 +1020,7 @@ Do not deliver yet:
 
 Current status:
 
-- mostly complete
+- substantially complete
 - shipped:
   - `mog init`
   - `mog add`
@@ -1009,7 +1029,7 @@ Current status:
   - `mog run`
   - generated `mog.lock`
   - generated `.mog/install/registry.toml`
-  - distinct lockfile and install-registry schemas
+  - distinct lockfile and install-registry schemas with `generator_version`
   - dependency-group and source-kind tracking in generated lock/install
     metadata
   - install-time package validation for local packages
@@ -1020,14 +1040,16 @@ Current status:
   - explicit `--locked` and `--offline` flows for local dependency graphs
   - root manifest workspace metadata and workspace-root discovery
   - root-manifest `[scripts]` support for `mog test` / `mog build`
-  - read-only `mog cache status|path` introspection commands
+  - root-manifest `[build-dependencies]` support for build-only dependency
+    groups
+  - `mog cache status|path` introspection commands plus `mog cache prune`
   - resolution that prefers installed project metadata
   - install-aware LSP workspace flow with automatic dependency installation
 - not yet complete inside Phase 1:
   - complete manifest/source schema for git fetches and more advanced registry
     transports beyond the current file-registry model
-  - richer dev-dependency consumers and workflow orchestration beyond the
-    current root-manifest `mog test` / `mog build` script-entry model
+  - richer workflow orchestration beyond the current root-manifest
+    `mog test` / `mog build` script-entry model and dependency-group support
   - CI/enterprise policy controls beyond the current local `--locked` /
     `--offline` behavior
 
@@ -1052,6 +1074,8 @@ Current status:
   - transitive published source-package installs through the registry index
   - registry artifact digest verification during install
   - lockfile/install metadata pinning for registry identity and artifact digest
+  - package-manifest `license` enforcement during validate/publish while
+    retaining additive read compatibility for older manifests
   - cached offline reinstalls for previously fetched registry source packages
   - lockfile-first install/run behavior with explicit `mog update` refreshes
   - `mog add` support for published package specs
@@ -1091,6 +1115,8 @@ Current status:
     requests
   - `--prefer-prebuilt` and `--no-native-build` CLI surface
   - lockfile/install-metadata pinning of the selected native target
+  - native `mog_runtime` compatibility metadata pinned through registry,
+    lockfile, install-registry, and cache metadata
   - host-target source-build fallback when a matching prebuilt is unavailable
   - `build_from_source` lock/install/cache metadata for published native
     packages
@@ -1146,7 +1172,7 @@ Current status:
     `mog run`
   - SHA-256-prefixed digest generation for published artifacts and generated
     package metadata
-  - signed `registry.v2` metadata verification for trusted registries
+  - signed `registry.v3` metadata verification for trusted registries
   - hosted-registry default trust enforcement with
     `[registries.<alias>].trusted_keys`
   - explicit hosted-registry unsigned compatibility through

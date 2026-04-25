@@ -22,6 +22,8 @@ struct PackageRegistryEntry {
     std::string libraryPath;
     std::string apiPath;
     std::string description;
+    std::string license;
+    std::string mogRuntime;
     std::vector<std::string> dependencyIds;
     std::vector<std::string> dependencyGroups;
     std::string sourceType;

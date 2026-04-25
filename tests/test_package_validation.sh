@@ -78,9 +78,15 @@ cat <<'EOF_MANIFEST' > "$TEMP_DIR/mog/fake/package.toml"
 namespace = "mog"
 name = "fake"
 version = "0.1.0"
+license = "MIT"
 abi_version = 3
+mog_runtime = "^0.1.0"
 description = "fake"
 dependencies = []
+
+[native]
+build = "cmake"
+targets = ["linux-x86_64-gnu"]
 EOF_MANIFEST
 
 run_expect_failure \
@@ -95,9 +101,15 @@ kind = "native"
 namespace = "examples"
 name = "invalid-system-dep"
 version = "0.1.0"
+license = "MIT"
 abi_version = 3
+mog_runtime = "^0.1.0"
 description = "invalid system dependency"
 dependencies = []
+
+[native]
+build = "cmake"
+targets = ["linux-x86_64-gnu"]
 
 [system-dependencies]
 sdl2 = ">=2.0.0"
@@ -116,6 +128,7 @@ import_name = "source-system-dep"
 namespace = "examples"
 name = "source-system-dep"
 version = "0.1.0"
+license = "MIT"
 description = "source package with native-only metadata"
 entry = "src/main.mog"
 dependencies = []
