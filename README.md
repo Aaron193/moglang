@@ -561,7 +561,14 @@ project, run:
 This downloads `registry-public-key.v1` from the hosted registry root and
 stores the trusted key in the user registry profile.
 
-Registry publishing can sign `registry.v2` indexes with a `registry-key.v1`
+Hosted registries can optionally advertise `registry-service.v1` from the
+registry root. When present, Mog publishes artifacts to content-addressed
+`blobs/sha256/<digest>` paths and rewrites `index.toml` with conditional
+`ETag`/`If-Match` updates to avoid blind index overwrites. If the service file
+is absent, Mog falls back to the legacy hosted `index.toml` + artifact `PUT`
+workflow for compatibility.
+
+Registry publishing can sign `registry.v3` indexes with a `registry-key.v1`
 file:
 
 ```bash

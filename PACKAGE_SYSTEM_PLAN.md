@@ -9,7 +9,7 @@ Last updated: 2026-04-25.
 Phase snapshot:
 
 - Phase 1 local package-management baseline: substantially complete
-- Phase 2 registry and publishing: partially implemented
+- Phase 2 registry and publishing: substantially complete
 - Phase 3 native artifact distribution: substantially complete for the current
   CMake-based model (broader non-CMake/native build-system policy remains)
 - Phase 4 enterprise and security features: in progress (policy baseline,
@@ -69,6 +69,9 @@ repository. The current codebase supports:
 - root-manifest registry configuration via `[registries.<name>]`
 - hosted `http(s)` registry index/download/publish flows backed by the current
   registry index formats
+- hosted `registry-service.v1` capability discovery with content-addressed
+  artifact uploads and ETag-guarded `index.toml` writes, while retaining
+  compatibility fallback to legacy hosted `index.toml` + artifact `PUT` flows
 - registry-pinned lock/install metadata including registry identity and
   artifact digests
 - lock/install/registry metadata pinning of package `mog_runtime`
@@ -158,8 +161,9 @@ repository. The current codebase supports:
 
 Not implemented yet (post-v1 / follow-on work):
 
-- richer hosted-registry service contracts beyond the current `index.toml` +
-  artifact upload/download workflow
+- richer hosted-registry publish policy and service contracts beyond the
+  current `registry-service.v1` discovery, content-addressed artifact uploads,
+  and ETag-guarded `index.toml` writes
 - richer enterprise policy workflows beyond the current root-manifest registry,
   native-namespace, CI-locked install controls, and hosted public-key
   bootstrap
@@ -1081,7 +1085,7 @@ Deliver:
 
 Current status:
 
-- partially implemented
+- substantially complete
 - shipped in the current Phase 2A/2B source-package slice:
   - static file-registry index format for published source packages
   - root manifest registry configuration via `[registries.<name>]`
@@ -1098,15 +1102,20 @@ Current status:
   - `mog publish` for source packages to the current file-registry format
   - hosted `http(s)` registry install/update/publish using cached `index.toml`
     downloads and cached artifact directories
+  - optional hosted `registry-service.v1` discovery for content-addressed
+    artifact uploads plus ETag-guarded hosted `index.toml` updates, while
+    retaining compatibility fallback to the legacy hosted `index.toml` +
+    artifact `PUT` contract
   - `mog login` / `mog logout` registry auth flows using bearer tokens stored
     in user config
   - git dependency fetch/install using pinned `rev`, `tag`, or `branch`
     selectors and resolved commit pinning in `mog.lock`
 - not yet complete inside Phase 2:
-  - richer hosted registry APIs and publish policy beyond the current
-    `index.toml` + artifact upload contract
-  - richer publish workflow concerns such as version/tag enforcement and
-    registry-side authentication
+  - richer publish policy beyond the current hosted transport, such as
+    version/tag enforcement, clean-tree checks, or registry-enforced publish
+    rules
+  - richer registry-side authentication and service workflow beyond the
+    current hosted discovery, upload, and conditional-write contract
 
 ### Phase 3: Native Artifact Distribution
 

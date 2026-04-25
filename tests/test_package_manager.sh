@@ -156,6 +156,23 @@ index = 'schema_version = "registry.v1"\n\n' + "\n".join(records)
 PY
 }
 
+strip_registry_index_signature() {
+    local registry_dir="$1"
+    python3 - "$registry_dir" <<'PY'
+from pathlib import Path
+import sys
+
+index_path = Path(sys.argv[1]) / "index.toml"
+lines = []
+for line in index_path.read_text(encoding="utf-8").splitlines():
+    stripped = line.strip()
+    if stripped.startswith('signing_key_id = ') or stripped.startswith('signature = '):
+        continue
+    lines.append(line)
+index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+}
+
 create_signing_key() {
     local key_file="$1"
     local key_id="$2"
@@ -324,6 +341,7 @@ PY
     cat > "$server_script" <<'PY'
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
+import hashlib
 import os
 import sys
 
@@ -332,16 +350,39 @@ port = int(sys.argv[2])
 token = sys.argv[3]
 
 class Handler(SimpleHTTPRequestHandler):
+    def _relative_path(self):
+        return self.path.split("?", 1)[0].split("#", 1)[0].lstrip("/")
+
     def translate_path(self, path):
         path = path.split("?", 1)[0].split("#", 1)[0]
         path = path.lstrip("/")
         return str((root / path).resolve())
 
+    def _service_enabled(self):
+        return (root / "registry-service.v1").is_file()
+
+    def _emit_index_etag(self):
+        return self._service_enabled() and not (root / "disable-index-etag").exists()
+
+    def _index_etag(self):
+        index_path = root / "index.toml"
+        if not index_path.is_file():
+            return None
+        digest = hashlib.sha256(index_path.read_bytes()).hexdigest()
+        return f'"{digest}"'
+
     def _authorized(self):
-        path = self.path.split("?", 1)[0].split("#", 1)[0].lstrip("/")
-        if path == "registry-public-key.v1":
+        path = self._relative_path()
+        if path in ("registry-public-key.v1", "registry-service.v1"):
             return True
         return self.headers.get("Authorization", "") == f"Bearer {token}"
+
+    def end_headers(self):
+        if self.command == "GET" and self._relative_path() == "index.toml" and self._emit_index_etag():
+            etag = self._index_etag()
+            if etag is not None:
+                self.send_header("ETag", etag)
+        super().end_headers()
 
     def do_GET(self):
         if not self._authorized():
@@ -357,7 +398,27 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"unauthorized")
             return
+        relative_path = self._relative_path()
         target = Path(self.translate_path(self.path))
+        if self._service_enabled() and relative_path == "index.toml":
+            if (root / "conflict-once").exists():
+                (root / "conflict-once").unlink()
+                self.send_response(412)
+                self.end_headers()
+                self.wfile.write(b"stale index etag")
+                return
+            current_etag = self._index_etag()
+            if current_etag is None:
+                if self.headers.get("If-None-Match", "").strip() != "*":
+                    self.send_response(412)
+                    self.end_headers()
+                    self.wfile.write(b"missing initial If-None-Match: *")
+                    return
+            elif self.headers.get("If-Match", "").strip() != current_etag:
+                self.send_response(412)
+                self.end_headers()
+                self.wfile.write(b"stale index etag")
+                return
         target.parent.mkdir(parents=True, exist_ok=True)
         length = int(self.headers.get("Content-Length", "0"))
         with open(target, "wb") as handle:
@@ -2352,6 +2413,11 @@ create_signing_key "$HOSTED_KEY_FILE" "hosted-registry"
 HOSTED_PUBLIC_KEY_FILE="$HOSTED_PUBLISH_WORKSPACE/hosted-registry-public-key.toml"
 create_public_key_file "$HOSTED_KEY_FILE" "$HOSTED_PUBLIC_KEY_FILE"
 cp "$HOSTED_PUBLIC_KEY_FILE" "$HOSTED_REGISTRY_DIR/registry-public-key.v1"
+cat > "$HOSTED_REGISTRY_DIR/registry-service.v1" <<'EOF_HOSTED_SERVICE'
+schema_version = "registry-service.v1"
+artifact_upload_mode = "content-addressed"
+index_update_mode = "etag-if-match"
+EOF_HOSTED_SERVICE
 HOSTED_TRUSTED_KEY="$(trusted_key_spec "$HOSTED_KEY_FILE")"
 HOSTED_PUBLISH_CONFIG="$TEMP_DIR/hosted-publish-config"
 mkdir -p "$HOSTED_PUBLISH_WORKSPACE/pkg/src"
@@ -2414,6 +2480,53 @@ if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
     "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg >/dev/null); then
     echo "[FAIL] publish should upload a hosted registry package"
+    exit 1
+fi
+
+if ! grep -Fq 'artifact_path = "blobs/sha256/' "$HOSTED_REGISTRY_DIR/index.toml"; then
+    echo "[FAIL] registry-service.v1 publish should store content-addressed artifact paths"
+    cat "$HOSTED_REGISTRY_DIR/index.toml"
+    exit 1
+fi
+
+if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && \
+    XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
+    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg >/dev/null); then
+    echo "[FAIL] repeated hosted publish with identical contents should remain idempotent"
+    exit 1
+fi
+
+touch "$HOSTED_REGISTRY_DIR/conflict-once"
+if (cd "$HOSTED_PUBLISH_WORKSPACE" && \
+    XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
+    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg \
+    >/tmp/mog_hosted_conflict_failure.txt 2>&1); then
+    echo "[FAIL] hosted publish should fail when the registry index changes concurrently"
+    cat /tmp/mog_hosted_conflict_failure.txt
+    exit 1
+fi
+
+if ! grep -Eq "index.toml changed|Rerun 'mog publish'|412" \
+    /tmp/mog_hosted_conflict_failure.txt; then
+    echo "[FAIL] hosted publish conflict should explain the stale registry index"
+    cat /tmp/mog_hosted_conflict_failure.txt
+    exit 1
+fi
+
+touch "$HOSTED_REGISTRY_DIR/disable-index-etag"
+if (cd "$HOSTED_PUBLISH_WORKSPACE" && \
+    XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
+    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg \
+    >/tmp/mog_hosted_missing_etag_failure.txt 2>&1); then
+    echo "[FAIL] registry-service.v1 publish should require an ETag on index downloads"
+    cat /tmp/mog_hosted_missing_etag_failure.txt
+    exit 1
+fi
+rm -f "$HOSTED_REGISTRY_DIR/disable-index-etag"
+
+if ! grep -Eq "ETag|registry-service.v1" /tmp/mog_hosted_missing_etag_failure.txt; then
+    echo "[FAIL] missing ETag failure should mention the hosted protocol requirement"
+    cat /tmp/mog_hosted_missing_etag_failure.txt
     exit 1
 fi
 
@@ -2718,7 +2831,9 @@ if ! grep -Eq "401|download failed|unauthorized" /tmp/mog_hosted_auth_failure.tx
     exit 1
 fi
 
-write_registry_index "$HOSTED_REGISTRY_DIR"
+HOSTED_SIGNED_INDEX_BACKUP="$TEMP_DIR/hosted-signed-index.toml"
+cp "$HOSTED_REGISTRY_DIR/index.toml" "$HOSTED_SIGNED_INDEX_BACKUP"
+strip_registry_index_signature "$HOSTED_REGISTRY_DIR"
 
 HOSTED_INSECURE_DIR="$TEMP_DIR/hosted-insecure"
 mkdir -p "$HOSTED_INSECURE_DIR"
@@ -2751,6 +2866,79 @@ HOSTED_INSECURE_OUTPUT="$("$MOG" run "$HOSTED_INSECURE_DIR/app.mog")"
 if [[ "$HOSTED_INSECURE_OUTPUT" != *"utility from hosted registry"* ]]; then
     echo "[FAIL] allow_insecure hosted install should still run downloaded packages"
     echo "$HOSTED_INSECURE_OUTPUT"
+    exit 1
+fi
+
+cp "$HOSTED_SIGNED_INDEX_BACKUP" "$HOSTED_REGISTRY_DIR/index.toml"
+
+rm -f "$HOSTED_REGISTRY_DIR/registry-service.v1"
+mkdir -p "$HOSTED_PUBLISH_WORKSPACE/legacy-pkg/src"
+cat > "$HOSTED_PUBLISH_WORKSPACE/legacy-pkg/mog.toml" <<'EOF_HOSTED_LEGACY_PACKAGE'
+kind = "source"
+import_name = "legacy_util"
+namespace = "acme"
+name = "legacy-util"
+version = "1.0.0"
+license = "MIT"
+author = "Hosted registry legacy test"
+description = "Legacy hosted utility package."
+entry = "src/main.mog"
+dependencies = []
+EOF_HOSTED_LEGACY_PACKAGE
+
+cat > "$HOSTED_PUBLISH_WORKSPACE/legacy-pkg/src/main.mog" <<'EOF_HOSTED_LEGACY_SRC'
+const MESSAGE str = "utility from legacy hosted registry"
+
+fn Name() str {
+    return MESSAGE
+}
+EOF_HOSTED_LEGACY_SRC
+
+if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && \
+    XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
+    "$MOG" login default --token "$HOSTED_TOKEN" >/dev/null && \
+    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" legacy-pkg >/dev/null); then
+    echo "[FAIL] hosted publish should fall back to the legacy transport when registry-service.v1 is absent"
+    exit 1
+fi
+
+if ! grep -Fq 'artifact_path = "packages/acme/legacy-util/1.0.0"' \
+    "$HOSTED_REGISTRY_DIR/index.toml"; then
+    echo "[FAIL] legacy hosted publish should keep the classic package path layout"
+    cat "$HOSTED_REGISTRY_DIR/index.toml"
+    exit 1
+fi
+
+HOSTED_LEGACY_CONSUMER_DIR="$TEMP_DIR/hosted-legacy-consumer"
+mkdir -p "$HOSTED_LEGACY_CONSUMER_DIR"
+cat > "$HOSTED_LEGACY_CONSUMER_DIR/mog.toml" <<EOF_HOSTED_LEGACY_CONSUMER
+kind = "project"
+name = "hosted-legacy-consumer"
+version = "0.1.0"
+description = "hosted legacy consumer"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
+trusted_keys = ["$HOSTED_TRUSTED_KEY"]
+
+[dependencies]
+legacy_util = { package = "acme:legacy-util", version = "1.0.0" }
+EOF_HOSTED_LEGACY_CONSUMER
+
+cat > "$HOSTED_LEGACY_CONSUMER_DIR/app.mog" <<'EOF_HOSTED_LEGACY_APP'
+const legacy_util = @import("legacy_util")
+print(legacy_util.Name())
+EOF_HOSTED_LEGACY_APP
+
+if ! (cd "$HOSTED_LEGACY_CONSUMER_DIR" && \
+    XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
+    "$MOG" install >/dev/null); then
+    echo "[FAIL] legacy hosted fallback should still produce installable packages"
+    exit 1
+fi
+
+if [[ "$(cd "$HOSTED_LEGACY_CONSUMER_DIR" && "$MOG" run app.mog)" != *"utility from legacy hosted registry"* ]]; then
+    echo "[FAIL] legacy hosted fallback packages should execute normally"
     exit 1
 fi
 
