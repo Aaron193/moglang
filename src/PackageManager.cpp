@@ -14,6 +14,7 @@
 #include <unordered_set>
 
 #include "Crypto.hpp"
+#include "ModuleResolver.hpp"
 #include "NativePackage.hpp"
 #include "PackageManifest.hpp"
 
@@ -357,6 +358,42 @@ std::string defaultProjectName(const std::string& projectRoot) {
 std::string normalizeRelativePath(std::string pathText) {
     std::replace(pathText.begin(), pathText.end(), '\\', '/');
     return pathText;
+}
+
+bool validateProjectScriptPath(const char* scriptName,
+                               std::string& scriptPath,
+                               std::string& outError) {
+    if (scriptPath.empty()) {
+        outError = std::string("Project script '") + scriptName +
+                   "' cannot be empty.";
+        return false;
+    }
+
+    const std::filesystem::path candidate(scriptPath);
+    if (candidate.is_absolute()) {
+        outError = std::string("Project script '") + scriptName +
+                   "' must be a relative path.";
+        return false;
+    }
+
+    const std::filesystem::path normalized = candidate.lexically_normal();
+    const std::string normalizedText =
+        normalizeRelativePath(normalized.generic_string());
+    if (normalizedText.empty() || normalizedText == "." ||
+        normalizedText == ".." || normalizedText.rfind("../", 0) == 0) {
+        outError = std::string("Project script '") + scriptName +
+                   "' must stay within the project root.";
+        return false;
+    }
+
+    if (!hasSourceModuleExtension(normalizedText)) {
+        outError = std::string("Project script '") + scriptName +
+                   "' must use the .mog extension.";
+        return false;
+    }
+
+    scriptPath = normalizedText;
+    return true;
 }
 
 struct RegistryDependencyPin {
@@ -5962,6 +5999,22 @@ void writeNativeToolchainTables(
     }
 }
 
+void writeScriptTable(std::ofstream& out, const ProjectScriptConfig& scripts) {
+    if (scripts.test.empty() && scripts.build.empty()) {
+        return;
+    }
+
+    out << "\n[scripts]\n";
+    if (!scripts.test.empty()) {
+        out << "test = " << quoteTomlString(normalizeRelativePath(scripts.test))
+            << "\n";
+    }
+    if (!scripts.build.empty()) {
+        out << "build = " << quoteTomlString(normalizeRelativePath(scripts.build))
+            << "\n";
+    }
+}
+
 }  // namespace
 
 bool loadProjectManifestData(const std::string& projectRoot,
@@ -5982,6 +6035,7 @@ bool loadProjectManifestData(const std::string& projectRoot,
 
     enum class Section {
         ROOT,
+        SCRIPTS,
         WORKSPACE,
         POLICY,
         REGISTRY,
@@ -6008,6 +6062,10 @@ bool loadProjectManifestData(const std::string& projectRoot,
         }
         if (content == "[dev-dependencies]") {
             section = Section::DEV_DEPENDENCIES;
+            continue;
+        }
+        if (content == "[scripts]") {
+            section = Section::SCRIPTS;
             continue;
         }
         if (content == "[workspace]") {
@@ -6102,6 +6160,27 @@ bool loadProjectManifestData(const std::string& projectRoot,
                 }
             } else {
                 continue;
+            }
+            continue;
+        }
+
+        if (section == Section::SCRIPTS) {
+            std::string* target = nullptr;
+            if (key == "test") {
+                target = &outManifest.scripts.test;
+            } else if (key == "build") {
+                target = &outManifest.scripts.build;
+            } else {
+                outError = "Unsupported scripts field '" + key + "'.";
+                return false;
+            }
+
+            if (!parseQuotedString(value, *target, parseError)) {
+                outError = "Invalid scripts field '" + key + "': " + parseError;
+                return false;
+            }
+            if (!validateProjectScriptPath(key.c_str(), *target, outError)) {
+                return false;
             }
             continue;
         }
@@ -6249,6 +6328,15 @@ bool loadProjectManifestData(const std::string& projectRoot,
         return false;
     }
 
+    if (!outManifest.scripts.test.empty() &&
+        !validateProjectScriptPath("test", outManifest.scripts.test, outError)) {
+        return false;
+    }
+    if (!outManifest.scripts.build.empty() &&
+        !validateProjectScriptPath("build", outManifest.scripts.build, outError)) {
+        return false;
+    }
+
     sortRegistries(outManifest.registries);
     sortNativeToolchains(outManifest.nativeToolchains);
     sortDependencies(outManifest.dependencies);
@@ -6273,6 +6361,7 @@ bool writeProjectManifestData(const std::string& projectRoot,
     out << "name = " << quoteTomlString(manifest.name) << "\n";
     out << "version = " << quoteTomlString(manifest.version) << "\n";
     out << "description = " << quoteTomlString(manifest.description) << "\n";
+    writeScriptTable(out, manifest.scripts);
     if (!manifest.workspaceMembers.empty()) {
         out << "\n[workspace]\n";
         out << "members = "
@@ -7411,5 +7500,18 @@ bool auditProjectPackages(const std::string& projectRoot,
         }
     }
     outReport = report.str();
+    return true;
+}
+
+bool describeProjectCachePaths(const std::string& projectRoot,
+                               ProjectCachePaths& outPaths,
+                               std::string& outError) {
+    outError.clear();
+    outPaths = ProjectCachePaths{};
+    outPaths.userPackages = canonicalOrLexical(userCacheRoot());
+    outPaths.projectFallbackPackages =
+        canonicalOrLexical(projectFallbackCacheRoot(projectRoot));
+    outPaths.registry = canonicalOrLexical(registryCacheRoot());
+    outPaths.git = canonicalOrLexical(gitCacheRoot());
     return true;
 }

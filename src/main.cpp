@@ -32,6 +32,9 @@ static void printUsage(const char* executable) {
         << "  remove <alias>         Remove a dependency and install the updated graph\n"
         << "  install [flags]        Install dependencies using mog.lock when it is current\n"
         << "  update [flags]         Re-resolve dependencies and rewrite install metadata\n"
+        << "  test [flags]           Run the root [scripts].test entry with dev dependencies\n"
+        << "  build [flags]          Run the root [scripts].build entry with dev dependencies\n"
+        << "  cache <subcommand>     Inspect package-manager cache and store locations\n"
         << "  login <registry> [--token <token>]\n"
         << "                         Store a hosted-registry bearer token\n"
         << "  logout <registry>      Remove a hosted-registry bearer token\n"
@@ -47,10 +50,19 @@ static void printUsage(const char* executable) {
         << "  untrust <registry> --key-id <key_id>\n"
         << "  login <registry> [--token <token>]\n"
         << "  logout <registry>\n"
+        << "Cache subcommands:\n"
+        << "  status\n"
+        << "  path <user|project|registry|git>\n"
         << "Flags for install/update/run:\n"
         << "  --locked --offline --prefer-prebuilt --no-native-build\n"
         << "  --target <triple> | --target=<triple>\n"
         << "  --cmake-toolchain <path> | --cmake-toolchain=<path>\n"
+        << "Flags for test/build:\n"
+        << "  --locked --offline --prefer-prebuilt --no-native-build\n"
+        << "  --target <triple> | --target=<triple>\n"
+        << "  --cmake-toolchain <path> | --cmake-toolchain=<path>\n"
+        << "  --trace --show-return --disassemble --frontend-timings --frontend-timings-json\n"
+        << "  --package-path <dir> | --package-path=<dir>\n"
         << "Flags for publish:\n"
         << "  --registry <alias> | --registry=<alias>\n"
         << "  --signing-key <path> | --signing-key=<path>\n"
@@ -310,6 +322,102 @@ static std::string currentManagedProjectRoot() {
     return currentProjectRoot();
 }
 
+static std::string canonicalOrAbsolutePath(const std::filesystem::path& path) {
+    std::error_code ec;
+    const std::filesystem::path resolved =
+        std::filesystem::weakly_canonical(path, ec);
+    if (!ec) {
+        return resolved.string();
+    }
+
+    const std::filesystem::path absolute = std::filesystem::absolute(path, ec);
+    if (!ec) {
+        return absolute.lexically_normal().string();
+    }
+
+    return path.lexically_normal().string();
+}
+
+static bool pathEscapesRoot(const std::filesystem::path& root,
+                            const std::filesystem::path& candidate) {
+    const std::filesystem::path relative = candidate.lexically_relative(root);
+    if (relative.empty()) {
+        return candidate != root;
+    }
+    const std::string relativeText = relative.generic_string();
+    return relative.is_absolute() || relativeText == ".." ||
+           relativeText.rfind("../", 0) == 0;
+}
+
+static bool resolveProjectScriptPath(const std::string& projectRoot,
+                                     const std::string& rawScriptPath,
+                                     std::filesystem::path& outScriptPath,
+                                     std::string& outError) {
+    outError.clear();
+    outScriptPath.clear();
+
+    if (rawScriptPath.empty()) {
+        outError = "Project script path cannot be empty.";
+        return false;
+    }
+    if (!hasSourceModuleExtension(rawScriptPath)) {
+        outError = "Project script path must use the .mog extension.";
+        return false;
+    }
+
+    const std::filesystem::path rootPath =
+        canonicalOrAbsolutePath(projectRoot);
+    const std::filesystem::path scriptPath =
+        std::filesystem::path(rootPath) / std::filesystem::path(rawScriptPath);
+    const std::filesystem::path resolvedPath =
+        canonicalOrAbsolutePath(scriptPath);
+    if (pathEscapesRoot(rootPath, resolvedPath)) {
+        outError = "Project script must stay within the project root.";
+        return false;
+    }
+    if (!std::filesystem::exists(resolvedPath)) {
+        outError = "Configured script does not exist: " + rawScriptPath;
+        return false;
+    }
+    if (!std::filesystem::is_regular_file(resolvedPath)) {
+        outError = "Configured script is not a file: " + rawScriptPath;
+        return false;
+    }
+
+    outScriptPath = resolvedPath;
+    return true;
+}
+
+static size_t countFilesystemEntries(const std::filesystem::path& root) {
+    std::error_code ec;
+    if (!std::filesystem::exists(root, ec) || ec) {
+        return 0;
+    }
+
+    size_t count = 0;
+    std::filesystem::recursive_directory_iterator it(
+        root, std::filesystem::directory_options::skip_permission_denied, ec);
+    if (ec) {
+        return 0;
+    }
+
+    for (const auto& entry : it) {
+        (void)entry;
+        ++count;
+    }
+    return count;
+}
+
+static void printCacheSummaryLine(const char* label,
+                                  const std::string& pathText) {
+    const std::filesystem::path path(pathText);
+    const bool exists = std::filesystem::exists(path);
+    std::cout << label << " = " << pathText << "\n";
+    std::cout << label << "_exists = " << (exists ? "yes" : "no") << "\n";
+    std::cout << label << "_entries = "
+              << (exists ? countFilesystemEntries(path) : 0) << std::endl;
+}
+
 static std::string inferValidationRootForPackage(const std::string& packageDir) {
     PackageManifest manifest;
     std::string error;
@@ -420,6 +528,121 @@ static int runFile(const RuntimeOptions& options) {
     }
 
     return 0;
+}
+
+static int runProjectScriptCommand(int argc, char** argv,
+                                   const char* commandName) {
+    RuntimeOptions options;
+    try {
+        std::filesystem::path executablePath = std::filesystem::weakly_canonical(argv[0]);
+        options.packagePaths.push_back(
+            (executablePath.parent_path() / "packages").string());
+    } catch (const std::exception&) {
+    }
+
+    std::string parseError;
+    if (!parseRuntimeArgs(argc, argv, 2, options, parseError)) {
+        if (parseError == "help") {
+            printUsage(argv[0]);
+            return 0;
+        }
+        std::cerr << parseError << std::endl;
+        printUsage(argv[0]);
+        return 1;
+    }
+    if (!options.sourceFile.empty()) {
+        std::cerr << commandName << " does not accept a source file." << std::endl;
+        return 1;
+    }
+
+    const std::string projectRoot = currentManagedProjectRoot();
+    ProjectManifestData manifest;
+    if (!loadProjectManifestData(projectRoot, manifest, parseError)) {
+        std::cerr << commandName << " failed: " << parseError << std::endl;
+        return 1;
+    }
+
+    const std::string scriptPath =
+        std::string(commandName) == "test" ? manifest.scripts.test
+                                            : manifest.scripts.build;
+    if (scriptPath.empty()) {
+        std::cerr << commandName << " failed: mog.toml is missing [scripts]."
+                  << commandName << std::endl;
+        return 1;
+    }
+
+    std::filesystem::path resolvedScriptPath;
+    if (!resolveProjectScriptPath(projectRoot, scriptPath, resolvedScriptPath,
+                                  parseError)) {
+        std::cerr << commandName << " failed: " << parseError << std::endl;
+        return 1;
+    }
+
+    options.sourceFile = resolvedScriptPath.string();
+    options.installOptions.includeDevDependencies = true;
+    return runFile(options);
+}
+
+static int runCacheCommand(int argc, char** argv) {
+    if (argc < 3) {
+        std::cerr << "cache requires a subcommand." << std::endl;
+        return 1;
+    }
+
+    ProjectCachePaths paths;
+    std::string error;
+    if (!describeProjectCachePaths(currentManagedProjectRoot(), paths, error)) {
+        std::cerr << "Cache command failed: " << error << std::endl;
+        return 1;
+    }
+
+    const std::string subcommand = argv[2];
+    if (subcommand == "status") {
+        if (argc != 3) {
+            std::cerr << "cache status does not accept extra arguments."
+                      << std::endl;
+            return 1;
+        }
+
+        printCacheSummaryLine("user_packages", paths.userPackages);
+        printCacheSummaryLine("project_fallback_packages",
+                              paths.projectFallbackPackages);
+        printCacheSummaryLine("registry", paths.registry);
+        printCacheSummaryLine("git", paths.git);
+        return 0;
+    }
+
+    if (subcommand == "path") {
+        if (argc != 4) {
+            std::cerr << "cache path requires exactly one cache kind."
+                      << std::endl;
+            return 1;
+        }
+
+        const std::string kind = argv[3];
+        if (kind == "user") {
+            std::cout << paths.userPackages << std::endl;
+            return 0;
+        }
+        if (kind == "project") {
+            std::cout << paths.projectFallbackPackages << std::endl;
+            return 0;
+        }
+        if (kind == "registry") {
+            std::cout << paths.registry << std::endl;
+            return 0;
+        }
+        if (kind == "git") {
+            std::cout << paths.git << std::endl;
+            return 0;
+        }
+
+        std::cerr << "Unknown cache path kind: " << kind << std::endl;
+        return 1;
+    }
+
+    std::cerr << "Unknown cache subcommand: " << subcommand << std::endl;
+    return 1;
 }
 
 static int runRepl(const RuntimeOptions& options) {
@@ -953,6 +1176,12 @@ int main(int argc, char** argv) {
         }
         installOptions.update = command == "update";
         return runInstallCommand(currentManagedProjectRoot(), installOptions);
+    }
+    if (command == "test" || command == "build") {
+        return runProjectScriptCommand(argc, argv, command.c_str());
+    }
+    if (command == "cache") {
+        return runCacheCommand(argc, argv);
     }
     if (command == "publish") {
         return runPublishCommand(argc, argv);

@@ -4,7 +4,7 @@
 
 In progress.
 
-Last updated: 2026-04-23.
+Last updated: 2026-04-25.
 
 Phase snapshot:
 
@@ -27,6 +27,9 @@ repository. The current codebase supports:
 - `mog install`
 - `mog update`
 - `mog run <file>`
+- `mog test`
+- `mog build`
+- `mog cache status|path`
 - `mog validate-package <dir>`
 - `--locked` installs and runs against an existing `mog.lock`
 - `--offline` installs for local path/workspace dependency graphs
@@ -42,6 +45,7 @@ repository. The current codebase supports:
   back to legacy local scanning for compatibility
 - workspace-root discovery for CLI/runtime/LSP package installs
 - root manifest workspace metadata via `[workspace] members = [...]`
+- root-manifest `[scripts]` support for `test` and `build` entry points
 - dependency source-kind tracking and dependency-group tracking in generated
   lock/install metadata
 - language-server auto-install for workspace projects with `mog.toml`
@@ -818,17 +822,24 @@ Recommended supporting flags:
 Current implementation status:
 
 - implemented commands: `init`, `add`, `install`, `update`, `publish`, `run`,
-  `remove`, `validate-package`, `login`, `logout`, `registry`, `audit`
+  `remove`, `validate-package`, `test`, `build`, `login`, `logout`,
+  `registry`, `cache`, `audit`
 - implemented compatibility path: `mog <file>`
 - implemented legacy flag compatibility: `--validate-package`
 - implemented package-manager flags: `--locked`, `--offline`,
   `--no-native-build`, `--prefer-prebuilt`, `--target`, and
   `publish --signing-key`
+- implemented root-manifest script controls: `[scripts].test` and
+  `[scripts].build`, executed as package-aware Mog entry scripts with
+  dev-dependency installs
 - implemented root-manifest policy controls:
   `allowed_registries`, `allowed_native_namespaces`,
   registry `trusted_keys`, registry `allow_insecure`, and
   `require_locked_in_ci`
-- not implemented yet: `test`, `build`, and `cache`
+- implemented cache inspection commands: `mog cache status` and
+  `mog cache path <user|project|registry|git>`
+- not implemented yet: cache eviction/pruning workflows and broader
+  build/test orchestration beyond root-manifest Mog entry scripts
 
 ## Tooling Integration
 
@@ -996,13 +1007,15 @@ Current status:
   - local source-package install support
   - explicit `--locked` and `--offline` flows for local dependency graphs
   - root manifest workspace metadata and workspace-root discovery
+  - root-manifest `[scripts]` support for `mog test` / `mog build`
+  - read-only `mog cache status|path` introspection commands
   - resolution that prefers installed project metadata
   - install-aware LSP workspace flow with automatic dependency installation
 - not yet complete inside Phase 1:
   - complete manifest/source schema for git fetches and more advanced registry
     transports beyond the current file-registry model
-  - richer dev-dependency consumers such as dedicated `mog test` / `mog build`
-    workflows that use the recorded dependency-group metadata
+  - richer dev-dependency consumers and workflow orchestration beyond the
+    current root-manifest `mog test` / `mog build` script-entry model
   - CI/enterprise policy controls beyond the current local `--locked` /
     `--offline` behavior
 

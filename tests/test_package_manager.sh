@@ -49,8 +49,14 @@ POLICY_NATIVE_DIR=""
 POLICY_CI_DIR=""
 REMOVE_DIR=""
 REMOVE_DEV_DIR=""
+SCRIPT_WORKFLOW_DIR=""
+SCRIPT_MISSING_DIR=""
+SCRIPT_INVALID_ABS_DIR=""
+SCRIPT_INVALID_EXT_DIR=""
+SCRIPT_INVALID_ESCAPE_DIR=""
+CACHE_STATUS_DIR=""
 HOSTED_SERVER_PID=""
-trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_EXTERNAL_BUNDLE_DIR:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${WINDOW_BUNDLE_ROOT:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}" "${POLICY_REGISTRY_DIR:-}" "${POLICY_NATIVE_DIR:-}" "${POLICY_CI_DIR:-}" "${REMOVE_DIR:-}" "${REMOVE_DEV_DIR:-}"' EXIT
+trap 'if [[ -n "${HOSTED_SERVER_PID:-}" ]]; then kill "${HOSTED_SERVER_PID}" >/dev/null 2>&1 || true; fi; rm -rf "${TEMP_DIR:-}" "${REMOTE_DIR:-}" "${WORKSPACE_DIR:-}" "${RANGE_DIR:-}" "${ADD_DIR:-}" "${ADD_RANGE_DIR:-}" "${PUBLISH_WORKSPACE:-}" "${PUBLISHED_GREETER_DIR:-}" "${DIGEST_DIR:-}" "${NATIVE_PUBLISH_WORKSPACE:-}" "${NATIVE_EXTERNAL_BUNDLE_DIR:-}" "${NATIVE_CONSUMER_DIR:-}" "${NATIVE_BAD_DIR:-}" "${NATIVE_SOURCE_DIR:-}" "${NATIVE_CROSS_TARGET_DIR:-}" "${NATIVE_CROSS_TARGET_MANIFEST_DIR:-}" "${NATIVE_CROSS_TARGET_OVERRIDE_DIR:-}" "${NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR:-}" "${NATIVE_CROSS_TARGET_NO_BUILD_DIR:-}" "${NATIVE_NO_CMAKE_DIR:-}" "${NATIVE_BUILD_FAIL_DIR:-}" "${NATIVE_SYSDEP_FAIL_DIR:-}" "${NATIVE_TARGET_DIR:-}" "${NATIVE_TARGET_FAIL_DIR:-}" "${WINDOW_PUBLISH_DIR:-}" "${WINDOW_BUNDLE_ROOT:-}" "${NATIVE_CROSS_TARGET_ENV_DIR:-}" "${HOSTED_REGISTRY_DIR:-}" "${HOSTED_PUBLISH_WORKSPACE:-}" "${HOSTED_CONSUMER_DIR:-}" "${GIT_REPO_DIR:-}" "${GIT_CONSUMER_DIR:-}" "${GIT_OFFLINE_FAIL_DIR:-}" "${POLICY_REGISTRY_DIR:-}" "${POLICY_NATIVE_DIR:-}" "${POLICY_CI_DIR:-}" "${REMOVE_DIR:-}" "${REMOVE_DEV_DIR:-}" "${SCRIPT_WORKFLOW_DIR:-}" "${SCRIPT_MISSING_DIR:-}" "${SCRIPT_INVALID_ABS_DIR:-}" "${SCRIPT_INVALID_EXT_DIR:-}" "${SCRIPT_INVALID_ESCAPE_DIR:-}" "${CACHE_STATUS_DIR:-}"' EXIT
 
 detect_host_target() {
     local os
@@ -2874,6 +2880,187 @@ fi
 
 if [[ "$(cd "$POLICY_CI_DIR" && CI=1 "$MOG" run --locked app.mog)" != *"hello from source package"* ]]; then
     echo "[FAIL] run --locked should satisfy the CI locked policy"
+    exit 1
+fi
+
+SCRIPT_WORKFLOW_DIR="$(mktemp -d)"
+mkdir -p "$SCRIPT_WORKFLOW_DIR/tests" "$SCRIPT_WORKFLOW_DIR/tools"
+cat > "$SCRIPT_WORKFLOW_DIR/mog.toml" <<EOF_SCRIPTS
+kind = "project"
+name = "script-workflow"
+version = "0.1.0"
+description = "script workflow test"
+
+[scripts]
+test = "./tests/main.mog"
+build = "tools/build.mog"
+
+[dependencies]
+math = { path = "$PROJECT_ROOT/packages/examples/math", package = "examples:math", version = "0.1.0" }
+
+[dev-dependencies]
+hello = { path = "$PROJECT_ROOT/packages/examples/hello", package = "examples:hello", version = "0.1.0" }
+EOF_SCRIPTS
+
+cat > "$SCRIPT_WORKFLOW_DIR/tests/main.mog" <<'EOF_SCRIPT_TEST'
+const hello = @import("hello")
+print("script test")
+print(hello.Greet())
+EOF_SCRIPT_TEST
+
+cat > "$SCRIPT_WORKFLOW_DIR/tools/build.mog" <<'EOF_SCRIPT_BUILD'
+const hello = @import("hello")
+print("script build")
+print(hello.Greet())
+EOF_SCRIPT_BUILD
+
+if ! (cd "$SCRIPT_WORKFLOW_DIR" && "$MOG" remove math >/dev/null); then
+    echo "[FAIL] script workflow setup should preserve [scripts] through manifest rewrites"
+    exit 1
+fi
+
+if ! grep -Fq '[scripts]' "$SCRIPT_WORKFLOW_DIR/mog.toml" || \
+   ! grep -Fq 'test = "tests/main.mog"' "$SCRIPT_WORKFLOW_DIR/mog.toml" || \
+   ! grep -Fq 'build = "tools/build.mog"' "$SCRIPT_WORKFLOW_DIR/mog.toml"; then
+    echo "[FAIL] project manifest rewrites should round-trip the [scripts] table"
+    cat "$SCRIPT_WORKFLOW_DIR/mog.toml"
+    exit 1
+fi
+
+SCRIPT_TEST_OUTPUT="$(cd "$SCRIPT_WORKFLOW_DIR" && "$MOG" test)"
+if [[ "$SCRIPT_TEST_OUTPUT" != *"script test"* || \
+      "$SCRIPT_TEST_OUTPUT" != *"hello from source package"* ]]; then
+    echo "[FAIL] mog test should run the configured script and install dev dependencies"
+    echo "$SCRIPT_TEST_OUTPUT"
+    exit 1
+fi
+
+SCRIPT_BUILD_OUTPUT="$(cd "$SCRIPT_WORKFLOW_DIR" && "$MOG" build --locked --offline)"
+if [[ "$SCRIPT_BUILD_OUTPUT" != *"script build"* || \
+      "$SCRIPT_BUILD_OUTPUT" != *"hello from source package"* ]]; then
+    echo "[FAIL] mog build should honor locked/offline execution for configured scripts"
+    echo "$SCRIPT_BUILD_OUTPUT"
+    exit 1
+fi
+
+SCRIPT_MISSING_DIR="$(mktemp -d)"
+cat > "$SCRIPT_MISSING_DIR/mog.toml" <<'EOF_SCRIPT_MISSING'
+kind = "project"
+name = "script-missing"
+version = "0.1.0"
+description = "missing script"
+EOF_SCRIPT_MISSING
+
+if (cd "$SCRIPT_MISSING_DIR" && "$MOG" test >/tmp/mog_script_missing_failure.txt 2>&1); then
+    echo "[FAIL] mog test should reject projects without [scripts].test"
+    cat /tmp/mog_script_missing_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq '[scripts].test' /tmp/mog_script_missing_failure.txt; then
+    echo "[FAIL] missing test-script failures should mention [scripts].test"
+    cat /tmp/mog_script_missing_failure.txt
+    exit 1
+fi
+
+SCRIPT_INVALID_ABS_DIR="$(mktemp -d)"
+cat > "$SCRIPT_INVALID_ABS_DIR/mog.toml" <<EOF_SCRIPT_INVALID_ABS
+kind = "project"
+name = "script-invalid-abs"
+version = "0.1.0"
+description = "invalid absolute script"
+
+[scripts]
+test = "$PROJECT_ROOT/tests/sample.mog"
+EOF_SCRIPT_INVALID_ABS
+
+if (cd "$SCRIPT_INVALID_ABS_DIR" && "$MOG" test >/tmp/mog_script_abs_failure.txt 2>&1); then
+    echo "[FAIL] absolute script paths should be rejected"
+    cat /tmp/mog_script_abs_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "must be a relative path" /tmp/mog_script_abs_failure.txt; then
+    echo "[FAIL] absolute script failures should explain the relative-path requirement"
+    cat /tmp/mog_script_abs_failure.txt
+    exit 1
+fi
+
+SCRIPT_INVALID_EXT_DIR="$(mktemp -d)"
+cat > "$SCRIPT_INVALID_EXT_DIR/mog.toml" <<'EOF_SCRIPT_INVALID_EXT'
+kind = "project"
+name = "script-invalid-ext"
+version = "0.1.0"
+description = "invalid extension script"
+
+[scripts]
+test = "tests/main.txt"
+EOF_SCRIPT_INVALID_EXT
+
+if (cd "$SCRIPT_INVALID_EXT_DIR" && "$MOG" test >/tmp/mog_script_ext_failure.txt 2>&1); then
+    echo "[FAIL] script paths with non-.mog extensions should be rejected"
+    cat /tmp/mog_script_ext_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "must use the .mog extension" /tmp/mog_script_ext_failure.txt; then
+    echo "[FAIL] invalid script-extension failures should explain the .mog requirement"
+    cat /tmp/mog_script_ext_failure.txt
+    exit 1
+fi
+
+SCRIPT_INVALID_ESCAPE_DIR="$(mktemp -d)"
+cat > "$SCRIPT_INVALID_ESCAPE_DIR/mog.toml" <<'EOF_SCRIPT_INVALID_ESCAPE'
+kind = "project"
+name = "script-invalid-escape"
+version = "0.1.0"
+description = "invalid escaping script"
+
+[scripts]
+test = "../outside.mog"
+EOF_SCRIPT_INVALID_ESCAPE
+
+if (cd "$SCRIPT_INVALID_ESCAPE_DIR" && "$MOG" test >/tmp/mog_script_escape_failure.txt 2>&1); then
+    echo "[FAIL] script paths that escape the project root should be rejected"
+    cat /tmp/mog_script_escape_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "must stay within the project root" /tmp/mog_script_escape_failure.txt; then
+    echo "[FAIL] escaping script failures should explain the project-root restriction"
+    cat /tmp/mog_script_escape_failure.txt
+    exit 1
+fi
+
+CACHE_STATUS_DIR="$(mktemp -d)"
+EXPECTED_CACHE_ROOT="$TEMP_DIR/cache-root"
+EXPECTED_USER_CACHE="$EXPECTED_CACHE_ROOT/packages"
+EXPECTED_PROJECT_CACHE="$CACHE_STATUS_DIR/.mog/cache/packages/local"
+EXPECTED_REGISTRY_CACHE="$EXPECTED_CACHE_ROOT/registry"
+EXPECTED_GIT_CACHE="$EXPECTED_CACHE_ROOT/git"
+
+CACHE_PATH_USER="$(cd "$CACHE_STATUS_DIR" && MOG_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$MOG" cache path user)"
+CACHE_PATH_PROJECT="$(cd "$CACHE_STATUS_DIR" && MOG_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$MOG" cache path project)"
+CACHE_PATH_REGISTRY="$(cd "$CACHE_STATUS_DIR" && MOG_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$MOG" cache path registry)"
+CACHE_PATH_GIT="$(cd "$CACHE_STATUS_DIR" && MOG_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$MOG" cache path git)"
+
+if [[ "$CACHE_PATH_USER" != "$EXPECTED_USER_CACHE" || \
+      "$CACHE_PATH_PROJECT" != "$EXPECTED_PROJECT_CACHE" || \
+      "$CACHE_PATH_REGISTRY" != "$EXPECTED_REGISTRY_CACHE" || \
+      "$CACHE_PATH_GIT" != "$EXPECTED_GIT_CACHE" ]]; then
+    echo "[FAIL] cache path should report the expected cache roots"
+    printf 'user=%s\nproject=%s\nregistry=%s\ngit=%s\n' \
+        "$CACHE_PATH_USER" "$CACHE_PATH_PROJECT" "$CACHE_PATH_REGISTRY" "$CACHE_PATH_GIT"
+    exit 1
+fi
+
+CACHE_STATUS_OUTPUT="$(cd "$CACHE_STATUS_DIR" && MOG_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$MOG" cache status)"
+if [[ "$CACHE_STATUS_OUTPUT" != *"user_packages = $EXPECTED_USER_CACHE"* || \
+      "$CACHE_STATUS_OUTPUT" != *"project_fallback_packages = $EXPECTED_PROJECT_CACHE"* || \
+      "$CACHE_STATUS_OUTPUT" != *"registry = $EXPECTED_REGISTRY_CACHE"* || \
+      "$CACHE_STATUS_OUTPUT" != *"git = $EXPECTED_GIT_CACHE"* ]]; then
+    echo "[FAIL] cache status should report all cache roots"
+    echo "$CACHE_STATUS_OUTPUT"
     exit 1
 fi
 

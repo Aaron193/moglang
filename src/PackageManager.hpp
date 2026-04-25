@@ -24,11 +24,17 @@ struct ProjectPolicyConfig {
     bool requireLockedInCi = false;
 };
 
+struct ProjectScriptConfig {
+    std::string test;
+    std::string build;
+};
+
 struct ProjectManifestData {
     std::string kind = "project";
     std::string name;
     std::string version = "0.1.0";
     std::string description;
+    ProjectScriptConfig scripts;
     std::vector<std::string> workspaceMembers;
     ProjectPolicyConfig policy;
     std::vector<ProjectRegistryConfig> registries;
@@ -74,6 +80,13 @@ struct ProjectRegistryStatus {
     bool trustFromProject = false;
     bool trustFromUser = false;
     std::vector<std::string> trustedKeyIds;
+};
+
+struct ProjectCachePaths {
+    std::string userPackages;
+    std::string projectFallbackPackages;
+    std::string registry;
+    std::string git;
 };
 
 bool loadProjectManifestData(const std::string& projectRoot,
@@ -150,3 +163,7 @@ bool auditProjectPackages(const std::string& projectRoot,
                           std::string& outReport,
                           bool& outHasFindings,
                           std::string& outError);
+
+bool describeProjectCachePaths(const std::string& projectRoot,
+                               ProjectCachePaths& outPaths,
+                               std::string& outError);
