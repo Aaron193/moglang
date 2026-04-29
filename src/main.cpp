@@ -46,7 +46,7 @@ static void printUsage(const char* executable) {
         << "Registry subcommands:\n"
         << "  list\n"
         << "  status <registry>\n"
-        << "  trust <registry> (--key <key_id:base64> | --key-file <path> | --bootstrap)\n"
+        << "  trust <registry> (--key <key_id:base64> | --key-file <path> | --bootstrap | --refresh)\n"
         << "  untrust <registry> --key-id <key_id>\n"
         << "  login <registry> [--token <token>]\n"
         << "  logout <registry>\n"
@@ -1033,6 +1033,7 @@ static int runRegistryCommand(int argc, char** argv) {
         std::string keySpec;
         std::string keyFilePath;
         bool bootstrap = false;
+        bool refresh = false;
         for (int index = 3; index < argc; ++index) {
             const std::string arg = argv[index];
             if (arg == "--key") {
@@ -1053,6 +1054,8 @@ static int runRegistryCommand(int argc, char** argv) {
                 keyFilePath = arg.substr(11);
             } else if (arg == "--bootstrap") {
                 bootstrap = true;
+            } else if (arg == "--refresh") {
+                refresh = true;
             } else if (!arg.empty() && arg[0] == '-') {
                 std::cerr << "Unknown option: " << arg << std::endl;
                 return 1;
@@ -1065,16 +1068,48 @@ static int runRegistryCommand(int argc, char** argv) {
             }
         }
 
-        std::string trustedKeyId;
+        RegistryTrustResult result;
         std::string error;
         if (!trustProjectRegistry(currentManagedProjectRoot(), registryAlias, keySpec,
-                                  keyFilePath, bootstrap, trustedKeyId, error)) {
+                                  keyFilePath, bootstrap, refresh, result,
+                                  error)) {
             std::cerr << "Registry trust failed: " << error << std::endl;
             return 1;
         }
 
-        std::cout << "Trusted key '" << trustedKeyId << "' for registry '"
-                  << registryAlias << "'" << std::endl;
+        if (refresh) {
+            std::cout << "Refreshed trust for registry '" << registryAlias << "'"
+                      << std::endl;
+            std::cout << "trusted_key_ids = "
+                      << (result.trustedKeyIds.empty()
+                              ? std::string("none")
+                              : joinStrings(result.trustedKeyIds))
+                      << std::endl;
+            std::cout << "added_key_ids = "
+                      << (result.addedKeyIds.empty()
+                              ? std::string("none")
+                              : joinStrings(result.addedKeyIds))
+                      << std::endl;
+            std::cout << "removed_key_ids = "
+                      << (result.removedKeyIds.empty()
+                              ? std::string("none")
+                              : joinStrings(result.removedKeyIds))
+                      << std::endl;
+            std::cout << "revoked_key_ids = "
+                      << (result.revokedKeyIds.empty()
+                              ? std::string("none")
+                              : joinStrings(result.revokedKeyIds))
+                      << std::endl;
+        } else {
+            const std::string trustedKeyId =
+                !result.addedKeyIds.empty()
+                    ? result.addedKeyIds.front()
+                    : (!result.trustedKeyIds.empty() ? result.trustedKeyIds.back()
+                                                     : std::string("unknown"));
+            std::cout << "Trusted key '" << trustedKeyId
+                      << "' for registry '" << registryAlias << "'"
+                      << std::endl;
+        }
         return 0;
     }
 

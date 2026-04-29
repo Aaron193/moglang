@@ -15,9 +15,10 @@ Phase snapshot:
 - Phase 4 enterprise and security features: in progress (policy baseline,
   signed registry/advisory/artifact metadata, hosted-registry trust
   enforcement, lockfile-based `mog audit`, hosted `registry-public-key.v1`
-  bootstrap, user-level registry trust flows, and signed-artifact policy
-  enforcement are implemented; richer enterprise policy and broader
-  supply-chain trust features remain)
+  bootstrap, signed `registry-trust.v1` trust metadata with key
+  rotation/revocation enforcement, user-level registry trust flows, and
+  signed-artifact policy enforcement are implemented; richer enterprise
+  policy and broader supply-chain trust features remain)
 
 Phase 1 local package-management work is now substantially implemented in the
 repository. The current codebase supports:
@@ -159,6 +160,9 @@ repository. The current codebase supports:
 - `mog registry list|status|trust|untrust|login|logout` management commands
 - `mog registry trust <registry> --bootstrap` for hosted registries that serve
   `registry-public-key.v1` from the registry root
+- signed `registry-trust.v1` metadata for active/revoked registry keys, with
+  automatic trust merging during install/audit/status flows and explicit
+  `mog registry trust <registry> --refresh` user-profile refreshes
 - `registry-public-key.v1` public-key import support, while also accepting
   `registry-key.v1` files for trust bootstrap
 - effective hosted-registry trust/auth merging across project manifest,
@@ -176,9 +180,9 @@ Not implemented yet (post-v1 / follow-on work):
 - richer enterprise policy workflows beyond the current root-manifest registry,
   native-namespace, CI-locked install controls, and hosted public-key
   bootstrap
-- transparency/revocation, provenance, key rotation, or other richer
-  supply-chain trust features beyond the current signed metadata +
-  signed-artifact + SHA-256 digest model
+- provenance, transparency, or other richer supply-chain trust features
+  beyond the current signed metadata + signed-artifact + active/revoked
+  registry-key + SHA-256 digest model
 
 This document describes the target package architecture for Mog, the required
 user-facing workflows, internal invariants, security posture, and a phased
@@ -822,6 +826,8 @@ Current implementation status:
   native artifacts through `registry.v4`
 - root-manifest policy now supports `require_signed_artifacts = true`
 - lock/install metadata now pin `artifact_signature` and `registry_key_id`
+- signed `registry-trust.v1` metadata now supports active-key rotation and
+  revoked-key enforcement for registry indexes, advisories, and artifacts
 
 ## Validation Requirements
 
@@ -892,6 +898,7 @@ Current implementation status:
   `publish --signing-key`, `publish --require-clean-git`, and
   `publish --tag`
 - implemented hosted trust bootstrap: `mog registry trust <registry> --bootstrap`
+- implemented trust refresh: `mog registry trust <registry> --refresh`
 - implemented root-manifest script controls: `[scripts].test` and
   `[scripts].build`, executed as package-aware Mog entry scripts with
   dependency-group-aware dev/build installs
@@ -1241,6 +1248,9 @@ Current status:
     for hosted-registry bootstrap and local trust management
   - `mog registry trust <registry> --bootstrap` using hosted
     `registry-public-key.v1`
+  - signed `registry-trust.v1` metadata with active/revoked key sets,
+    automatic trust merging for install/audit/status flows, and explicit
+    `mog registry trust <registry> --refresh` user-profile updates
   - `registry-public-key.v1` import support, with `registry-key.v1`
     compatibility for trust bootstrap
   - effective trust merging from project-declared `trusted_keys` plus
@@ -1251,8 +1261,8 @@ Current status:
   - richer private-registry bootstrap workflows such as organization-wide key
     distribution and non-manual bootstrap beyond the current hosted
     `registry-public-key.v1` + user-level stored trust/token model
-  - richer supply-chain trust features such as provenance records,
-    transparency, and key rotation/revocation
+  - richer supply-chain trust features such as provenance records and
+    transparency beyond the current active/revoked registry-key model
 
 ## Recommended Immediate Decisions
 

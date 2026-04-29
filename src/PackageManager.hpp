@@ -67,6 +67,13 @@ struct AuditOptions {
     bool offline = false;
 };
 
+struct RegistryTrustResult {
+    std::vector<std::string> trustedKeyIds;
+    std::vector<std::string> revokedKeyIds;
+    std::vector<std::string> addedKeyIds;
+    std::vector<std::string> removedKeyIds;
+};
+
 struct PublishOptions {
     std::string registryAlias;
     std::string signingKeyPath;
@@ -156,7 +163,8 @@ bool trustProjectRegistry(const std::string& projectRoot,
                           const std::string& keySpec,
                           const std::string& keyFilePath,
                           bool bootstrap,
-                          std::string& outTrustedKeyId,
+                          bool refresh,
+                          RegistryTrustResult& outResult,
                           std::string& outError);
 
 bool untrustProjectRegistry(const std::string& projectRoot,

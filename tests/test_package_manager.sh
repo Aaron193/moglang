@@ -324,6 +324,117 @@ output_path.write_text(
 PY
 }
 
+write_signed_registry_trust() {
+    local output_path="$1"
+    local signing_key_file="$2"
+    local active_key_file="$3"
+    local revoked_key_file="$4"
+    local revoked_reason="${5:-}"
+    local pem_file="${signing_key_file%.toml}.pem"
+    local payload_path="$TEMP_DIR/registry_trust_payload.toml"
+    local sig_path="$TEMP_DIR/registry_trust.sig"
+
+    python3 - "$active_key_file" "$revoked_key_file" "$payload_path" \
+        "$revoked_reason" <<'PY'
+from pathlib import Path
+import sys
+
+def read_fields(path_str):
+    fields = {}
+    for line in Path(path_str).read_text(encoding="utf-8").splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        fields[key.strip()] = value.strip().strip('"')
+    return fields
+
+active_fields = read_fields(sys.argv[1])
+revoked_fields = read_fields(sys.argv[2])
+payload_path = Path(sys.argv[3])
+revoked_reason = sys.argv[4]
+
+records = [
+    {
+        "key_id": active_fields["key_id"],
+        "public_key": active_fields["public_key"],
+        "status": "active",
+        "reason": "",
+    },
+    {
+        "key_id": revoked_fields["key_id"],
+        "public_key": revoked_fields["public_key"],
+        "status": "revoked",
+        "reason": revoked_reason,
+    },
+]
+records.sort(key=lambda record: record["key_id"])
+
+parts = ['schema_version = "registry-trust.v1"']
+for record in records:
+    parts.extend([
+        "",
+        "[[key]]",
+        f'key_id = "{record["key_id"]}"',
+        f'public_key = "{record["public_key"]}"',
+        f'status = "{record["status"]}"',
+    ])
+    if record["reason"]:
+        parts.extend([
+            'reason = """',
+            record["reason"],
+            '"""',
+        ])
+payload_path.write_text("\n".join(parts) + "\n", encoding="utf-8")
+PY
+
+    local signing_key_id
+    signing_key_id="$(python3 - "$signing_key_file" <<'PY'
+from pathlib import Path
+import sys
+
+fields = {}
+for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    if "=" not in line:
+        continue
+    key, value = line.split("=", 1)
+    fields[key.strip()] = value.strip().strip('"')
+print(fields["key_id"])
+PY
+)"
+
+    openssl pkeyutl -sign -inkey "$pem_file" -rawin -in "$payload_path" \
+        -out "$sig_path" >/dev/null 2>&1
+
+    local signature_b64
+    signature_b64="$(python3 - "$sig_path" <<'PY'
+from pathlib import Path
+import base64
+import sys
+sys.stdout.write(base64.b64encode(Path(sys.argv[1]).read_bytes()).decode("ascii"))
+PY
+)"
+
+    python3 - "$output_path" "$signing_key_id" "$signature_b64" \
+        "$payload_path" <<'PY'
+from pathlib import Path
+import sys
+
+output_path = Path(sys.argv[1])
+key_id = sys.argv[2]
+signature = sys.argv[3]
+payload_path = Path(sys.argv[4])
+payload = payload_path.read_text(encoding="utf-8")
+body = payload.split("\n", 1)[1] if "\n" in payload else ""
+output_path.write_text(
+    f'schema_version = "registry-trust.v1"\n'
+    f'signing_key_id = "{key_id}"\n'
+    f'signature = "{signature}"\n'
+    f'{body}',
+    encoding="utf-8",
+)
+PY
+}
+
 start_hosted_registry_server() {
     local registry_dir="$1"
     local token="$2"
@@ -373,7 +484,11 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _authorized(self):
         path = self._relative_path()
-        if path in ("registry-public-key.v1", "registry-service.v1"):
+        if path in ("registry-public-key.v1", "registry-service.v1", "registry-trust.v1"):
+            return True
+        if path.endswith("/registry-public-key.v1") or \
+           path.endswith("/registry-service.v1") or \
+           path.endswith("/registry-trust.v1"):
             return True
         return self.headers.get("Authorization", "") == f"Bearer {token}"
 
@@ -2802,6 +2917,276 @@ if ! (cd "$HOSTED_AFTER_UNTRUST_DIR" && \
     MOG_CACHE_DIR="$TEMP_DIR/hosted-restored-trust-cache" \
     "$MOG" install >/dev/null); then
     echo "[FAIL] restoring trust from registry-key.v1 should allow hosted installs again"
+    exit 1
+fi
+
+HOSTED_ROTATED_KEY_FILE="$TEMP_DIR/hosted-rotated-key.toml"
+ROTATION_REGISTRY_A="$TEMP_DIR/rotation-registry-a"
+ROTATION_REGISTRY_B="$TEMP_DIR/rotation-registry-b"
+ROTATION_PUBLISH_A="$TEMP_DIR/rotation-publish-a"
+ROTATION_PUBLISH_B="$TEMP_DIR/rotation-publish-b"
+ROTATION_HOSTED_B_DIR="$HOSTED_REGISTRY_DIR/rotation-b"
+ROTATION_HOSTED_REVOKED_DIR="$HOSTED_REGISTRY_DIR/rotation-revoked-a"
+create_signing_key "$HOSTED_ROTATED_KEY_FILE" "hosted-rotated"
+HOSTED_ROTATED_TRUSTED_KEY="$(trusted_key_spec "$HOSTED_ROTATED_KEY_FILE")"
+
+mkdir -p "$ROTATION_REGISTRY_A" "$ROTATION_REGISTRY_B"
+mkdir -p "$ROTATION_PUBLISH_A/pkg/src" "$ROTATION_PUBLISH_B/pkg/src"
+
+cat > "$ROTATION_PUBLISH_A/mog.toml" <<EOF_ROTATION_PUBLISH_A
+kind = "project"
+name = "rotation-publish-a"
+version = "0.1.0"
+description = "rotation publish a"
+
+[registries.default]
+index = "$ROTATION_REGISTRY_A/index.toml"
+trusted_keys = ["$HOSTED_TRUSTED_KEY"]
+EOF_ROTATION_PUBLISH_A
+
+cat > "$ROTATION_PUBLISH_B/mog.toml" <<EOF_ROTATION_PUBLISH_B
+kind = "project"
+name = "rotation-publish-b"
+version = "0.1.0"
+description = "rotation publish b"
+
+[registries.default]
+index = "$ROTATION_REGISTRY_B/index.toml"
+trusted_keys = ["$HOSTED_ROTATED_TRUSTED_KEY"]
+EOF_ROTATION_PUBLISH_B
+
+cat > "$ROTATION_PUBLISH_A/pkg/mog.toml" <<'EOF_ROTATION_PACKAGE'
+kind = "source"
+import_name = "rotation_util"
+namespace = "acme"
+name = "rotation-util"
+version = "1.0.0"
+license = "MIT"
+author = "Rotation test"
+description = "Rotation utility package."
+entry = "src/main.mog"
+dependencies = []
+EOF_ROTATION_PACKAGE
+cp "$ROTATION_PUBLISH_A/pkg/mog.toml" "$ROTATION_PUBLISH_B/pkg/mog.toml"
+
+cat > "$ROTATION_PUBLISH_A/pkg/src/main.mog" <<'EOF_ROTATION_PACKAGE_SRC'
+const MESSAGE str = "utility from rotated hosted registry"
+
+fn Name() str {
+    return MESSAGE
+}
+EOF_ROTATION_PACKAGE_SRC
+cp "$ROTATION_PUBLISH_A/pkg/src/main.mog" "$ROTATION_PUBLISH_B/pkg/src/main.mog"
+
+if ! (cd "$ROTATION_PUBLISH_A" && \
+    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg >/dev/null); then
+    echo "[FAIL] rotation test setup should publish a source package signed by the original key"
+    exit 1
+fi
+
+if ! (cd "$ROTATION_PUBLISH_B" && \
+    "$MOG" publish --signing-key "$HOSTED_ROTATED_KEY_FILE" pkg >/dev/null); then
+    echo "[FAIL] rotation test setup should publish a source package signed by the rotated key"
+    exit 1
+fi
+
+rm -rf "$ROTATION_HOSTED_B_DIR" "$ROTATION_HOSTED_REVOKED_DIR"
+mkdir -p "$ROTATION_HOSTED_B_DIR" "$ROTATION_HOSTED_REVOKED_DIR"
+cp -R "$ROTATION_REGISTRY_B"/. "$ROTATION_HOSTED_B_DIR/"
+cp -R "$ROTATION_REGISTRY_A"/. "$ROTATION_HOSTED_REVOKED_DIR/"
+create_public_key_file "$HOSTED_KEY_FILE" "$ROTATION_HOSTED_B_DIR/registry-public-key.v1"
+create_public_key_file "$HOSTED_KEY_FILE" "$ROTATION_HOSTED_REVOKED_DIR/registry-public-key.v1"
+write_signed_registry_trust \
+    "$ROTATION_HOSTED_B_DIR/registry-trust.v1" \
+    "$HOSTED_KEY_FILE" \
+    "$HOSTED_ROTATED_KEY_FILE" \
+    "$HOSTED_KEY_FILE" \
+    "rotated to hosted-rotated"
+write_signed_registry_trust \
+    "$ROTATION_HOSTED_REVOKED_DIR/registry-trust.v1" \
+    "$HOSTED_KEY_FILE" \
+    "$HOSTED_ROTATED_KEY_FILE" \
+    "$HOSTED_KEY_FILE" \
+    "hosted-registry revoked"
+
+ROTATION_AUTO_DIR="$TEMP_DIR/rotation-auto"
+ROTATION_OFFLINE_DIR="$TEMP_DIR/rotation-offline"
+ROTATION_REVOKED_DIR="$TEMP_DIR/rotation-revoked"
+ROTATION_REFRESH_DIR="$TEMP_DIR/rotation-refresh"
+ROTATION_REFRESH_USER_DIR="$TEMP_DIR/rotation-refresh-user"
+ROTATION_REFRESH_CONFIG="$TEMP_DIR/rotation-refresh-config"
+ROTATION_CACHE_DIR="$TEMP_DIR/rotation-cache"
+ROTATION_NO_METADATA_DIR="$TEMP_DIR/rotation-no-metadata"
+mkdir -p "$ROTATION_AUTO_DIR" "$ROTATION_OFFLINE_DIR" "$ROTATION_REVOKED_DIR" \
+    "$ROTATION_REFRESH_DIR" "$ROTATION_REFRESH_USER_DIR" "$ROTATION_NO_METADATA_DIR"
+
+cat > "$ROTATION_AUTO_DIR/mog.toml" <<EOF_ROTATION_AUTO
+kind = "project"
+name = "rotation-auto"
+version = "0.1.0"
+description = "rotation auto"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/rotation-b/index.toml"
+trusted_keys = ["$HOSTED_TRUSTED_KEY"]
+
+[dependencies]
+rotation_util = { package = "acme:rotation-util", version = "1.0.0" }
+EOF_ROTATION_AUTO
+cp "$ROTATION_AUTO_DIR/mog.toml" "$ROTATION_OFFLINE_DIR/mog.toml"
+
+cat > "$ROTATION_AUTO_DIR/app.mog" <<'EOF_ROTATION_APP'
+const rotation_util = @import("rotation_util")
+print(rotation_util.Name())
+EOF_ROTATION_APP
+cp "$ROTATION_AUTO_DIR/app.mog" "$ROTATION_OFFLINE_DIR/app.mog"
+
+if ! (cd "$ROTATION_AUTO_DIR" && \
+    MOG_CACHE_DIR="$ROTATION_CACHE_DIR" \
+    MOG_REGISTRY_TOKEN="$HOSTED_TOKEN" \
+    "$MOG" install >/dev/null); then
+    echo "[FAIL] hosted installs should automatically apply signed trust metadata for rotated keys"
+    exit 1
+fi
+
+if [[ "$(cd "$ROTATION_AUTO_DIR" && "$MOG" run app.mog)" != *"utility from rotated hosted registry"* ]]; then
+    echo "[FAIL] rotated hosted packages should execute normally after automatic trust metadata application"
+    exit 1
+fi
+
+if ! (cd "$ROTATION_OFFLINE_DIR" && \
+    MOG_CACHE_DIR="$ROTATION_CACHE_DIR" \
+    "$MOG" install --offline >/dev/null); then
+    echo "[FAIL] offline hosted installs should reuse cached registry trust metadata"
+    exit 1
+fi
+
+cat > "$ROTATION_REVOKED_DIR/mog.toml" <<EOF_ROTATION_REVOKED
+kind = "project"
+name = "rotation-revoked"
+version = "0.1.0"
+description = "rotation revoked"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/rotation-revoked-a/index.toml"
+trusted_keys = ["$HOSTED_TRUSTED_KEY"]
+
+[dependencies]
+rotation_util = { package = "acme:rotation-util", version = "1.0.0" }
+EOF_ROTATION_REVOKED
+cp "$ROTATION_AUTO_DIR/app.mog" "$ROTATION_REVOKED_DIR/app.mog"
+
+if (cd "$ROTATION_REVOKED_DIR" && \
+    MOG_CACHE_DIR="$TEMP_DIR/rotation-revoked-cache" \
+    MOG_REGISTRY_TOKEN="$HOSTED_TOKEN" \
+    "$MOG" install >/tmp/mog_rotation_revoked_failure.txt 2>&1); then
+    echo "[FAIL] registry installs should reject indexes signed by revoked keys"
+    cat /tmp/mog_rotation_revoked_failure.txt
+    exit 1
+fi
+
+if ! grep -Eq "revoked key|unknown key" /tmp/mog_rotation_revoked_failure.txt; then
+    echo "[FAIL] revoked-key install failures should explain the rejected signing key"
+    cat /tmp/mog_rotation_revoked_failure.txt
+    exit 1
+fi
+
+cat > "$ROTATION_NO_METADATA_DIR/mog.toml" <<EOF_ROTATION_NO_METADATA
+kind = "project"
+name = "rotation-no-metadata"
+version = "0.1.0"
+description = "rotation no metadata"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
+trusted_keys = ["$HOSTED_TRUSTED_KEY"]
+EOF_ROTATION_NO_METADATA
+
+if (cd "$ROTATION_NO_METADATA_DIR" && \
+    XDG_CONFIG_HOME="$ROTATION_REFRESH_CONFIG" \
+    "$MOG" registry trust default --refresh \
+    >/tmp/mog_rotation_refresh_missing_failure.txt 2>&1); then
+    echo "[FAIL] registry trust --refresh should fail when registry-trust.v1 is missing"
+    cat /tmp/mog_rotation_refresh_missing_failure.txt
+    exit 1
+fi
+
+if ! grep -Eq "registry-trust.v1|trust refresh" \
+    /tmp/mog_rotation_refresh_missing_failure.txt; then
+    echo "[FAIL] missing trust metadata failures should mention registry-trust.v1"
+    cat /tmp/mog_rotation_refresh_missing_failure.txt
+    exit 1
+fi
+
+cat > "$ROTATION_REFRESH_DIR/mog.toml" <<EOF_ROTATION_REFRESH
+kind = "project"
+name = "rotation-refresh"
+version = "0.1.0"
+description = "rotation refresh"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/rotation-b/index.toml"
+trusted_keys = ["$HOSTED_TRUSTED_KEY"]
+EOF_ROTATION_REFRESH
+
+ROTATION_REFRESH_OUTPUT="$(
+    cd "$ROTATION_REFRESH_DIR" && \
+    XDG_CONFIG_HOME="$ROTATION_REFRESH_CONFIG" \
+    "$MOG" registry trust default --refresh
+)"
+if [[ "$ROTATION_REFRESH_OUTPUT" != *"trusted_key_ids = hosted-rotated"* ]] || \
+   [[ "$ROTATION_REFRESH_OUTPUT" != *"revoked_key_ids = hosted-registry"* ]]; then
+    echo "[FAIL] registry trust --refresh should report the active and revoked key IDs"
+    echo "$ROTATION_REFRESH_OUTPUT"
+    exit 1
+fi
+
+if ! grep -Fq 'hosted-rotated' "$ROTATION_REFRESH_CONFIG/mog/registries.toml" || \
+   grep -Fq 'hosted-registry' "$ROTATION_REFRESH_CONFIG/mog/registries.toml"; then
+    echo "[FAIL] registry trust --refresh should rewrite stored user trust to the active key set"
+    cat "$ROTATION_REFRESH_CONFIG/mog/registries.toml"
+    exit 1
+fi
+
+write_signed_registry_trust \
+    "$ROTATION_HOSTED_B_DIR/registry-trust.v1" \
+    "$HOSTED_ROTATED_KEY_FILE" \
+    "$HOSTED_ROTATED_KEY_FILE" \
+    "$HOSTED_KEY_FILE" \
+    "rotated to hosted-rotated"
+
+cat > "$ROTATION_REFRESH_USER_DIR/mog.toml" <<EOF_ROTATION_REFRESH_USER
+kind = "project"
+name = "rotation-refresh-user"
+version = "0.1.0"
+description = "rotation refresh user"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_PORT/rotation-b/index.toml"
+
+[dependencies]
+rotation_util = { package = "acme:rotation-util", version = "1.0.0" }
+EOF_ROTATION_REFRESH_USER
+cp "$ROTATION_AUTO_DIR/app.mog" "$ROTATION_REFRESH_USER_DIR/app.mog"
+
+if ! (cd "$ROTATION_REFRESH_USER_DIR" && \
+    XDG_CONFIG_HOME="$ROTATION_REFRESH_CONFIG" \
+    MOG_CACHE_DIR="$TEMP_DIR/rotation-refresh-user-cache" \
+    MOG_REGISTRY_TOKEN="$HOSTED_TOKEN" \
+    "$MOG" install >/dev/null); then
+    echo "[FAIL] refreshed user trust should allow hosted installs without project trusted_keys"
+    exit 1
+fi
+
+ROTATION_REFRESH_STATUS="$(
+    cd "$ROTATION_REFRESH_USER_DIR" && \
+    XDG_CONFIG_HOME="$ROTATION_REFRESH_CONFIG" \
+    "$MOG" registry status default
+)"
+if [[ "$ROTATION_REFRESH_STATUS" != *"trust = user"* ]] || \
+   [[ "$ROTATION_REFRESH_STATUS" != *"trusted_key_ids = hosted-rotated"* ]]; then
+    echo "[FAIL] registry status should report the refreshed user trust"
+    echo "$ROTATION_REFRESH_STATUS"
     exit 1
 fi
 
