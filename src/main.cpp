@@ -67,6 +67,8 @@ static void printUsage(const char* executable) {
         << "Flags for publish:\n"
         << "  --registry <alias> | --registry=<alias>\n"
         << "  --signing-key <path> | --signing-key=<path>\n"
+        << "  --require-clean-git\n"
+        << "  --tag <tag> | --tag=<tag>\n"
         << "  --target <triple> | --target=<triple>\n"
         << "  --native-artifact-dir <dir> | --native-artifact-dir=<dir>\n"
         << "Additional flags for run:\n"
@@ -215,6 +217,16 @@ static bool parsePublishArgs(int argc, char** argv, int startIndex,
             options.signingKeyPath = argv[++index];
         } else if (arg.rfind("--signing-key=", 0) == 0) {
             options.signingKeyPath = arg.substr(14);
+        } else if (arg == "--require-clean-git") {
+            options.requireCleanGit = true;
+        } else if (arg == "--tag") {
+            if (index + 1 >= argc) {
+                outError = "Missing value for --tag.";
+                return false;
+            }
+            options.expectedTag = argv[++index];
+        } else if (arg.rfind("--tag=", 0) == 0) {
+            options.expectedTag = arg.substr(6);
         } else if (arg == "--target") {
             if (index + 1 >= argc) {
                 outError = "Missing value for --target.";

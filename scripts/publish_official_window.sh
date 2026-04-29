@@ -11,8 +11,8 @@ WINDOW_DYLIB="$PROJECT_ROOT/build/packages/mog/window/package.dylib"
 usage() {
     cat <<'EOF'
 Usage:
-  scripts/publish_official_window.sh --registry-path <dir> [--signing-key <file>] [--bundle-root <dir>]
-  scripts/publish_official_window.sh --registry <alias> [--workspace <dir>] [--signing-key <file>] [--bundle-root <dir>]
+  scripts/publish_official_window.sh --registry-path <dir> [--signing-key <file>] [--bundle-root <dir>] [--require-clean-git] [--tag <tag>]
+  scripts/publish_official_window.sh --registry <alias> [--workspace <dir>] [--signing-key <file>] [--bundle-root <dir>] [--require-clean-git] [--tag <tag>]
 
 Options:
   --registry-path <dir>  Publish using a temporary workspace rooted at <dir>.
@@ -20,6 +20,8 @@ Options:
   --workspace <dir>      Workspace directory to use with --registry. Defaults to $PWD.
   --signing-key <file>   Sign the registry index with the given registry-key.v1 file.
   --bundle-root <dir>    Publish one or more prepared native bundles found under <dir>.
+  --require-clean-git    Require a clean git tree for the package directory before publish.
+  --tag <tag>            Require the given git tag to point at HEAD and match the manifest version.
 
 Environment:
   MOG_PUBLISH_REGISTRY_PATH  Like --registry-path <dir>.
@@ -27,6 +29,9 @@ Environment:
   MOG_PUBLISH_WORKSPACE      Like --workspace <dir>.
   MOG_PUBLISH_SIGNING_KEY    Like --signing-key <file>.
   MOG_PUBLISH_BUNDLE_ROOT    Like --bundle-root <dir>.
+  MOG_PUBLISH_REQUIRE_CLEAN_GIT
+                            When set to 1 or true, pass --require-clean-git.
+  MOG_PUBLISH_TAG            Like --tag <tag>.
 EOF
 }
 
@@ -35,6 +40,8 @@ registry_alias="${MOG_PUBLISH_REGISTRY:-}"
 workspace_dir="${MOG_PUBLISH_WORKSPACE:-$PWD}"
 signing_key="${MOG_PUBLISH_SIGNING_KEY:-}"
 bundle_root="${MOG_PUBLISH_BUNDLE_ROOT:-}"
+require_clean_git="${MOG_PUBLISH_REQUIRE_CLEAN_GIT:-}"
+publish_tag="${MOG_PUBLISH_TAG:-}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -101,6 +108,23 @@ while [[ $# -gt 0 ]]; do
             ;;
         --bundle-root=*)
             bundle_root="${1#*=}"
+            shift
+            ;;
+        --require-clean-git)
+            require_clean_git="true"
+            shift
+            ;;
+        --tag)
+            if [[ $# -lt 2 ]]; then
+                echo "Missing value for --tag." >&2
+                usage >&2
+                exit 1
+            fi
+            publish_tag="$2"
+            shift 2
+            ;;
+        --tag=*)
+            publish_tag="${1#*=}"
             shift
             ;;
         --help|-h)
@@ -170,6 +194,12 @@ fi
 
 if [[ -n "$signing_key" ]]; then
     publish_args+=(--signing-key "$signing_key")
+fi
+if [[ "$require_clean_git" == "1" || "$require_clean_git" == "true" ]]; then
+    publish_args+=(--require-clean-git)
+fi
+if [[ -n "$publish_tag" ]]; then
+    publish_args+=(--tag "$publish_tag")
 fi
 
 publish_one() {

@@ -148,6 +148,8 @@ EOF
         if: ${{ steps.prepare.outputs.should_publish == 'true' }}
         env:
           MOG_PUBLISH_BUNDLE_ROOT: ${{ github.workspace }}/dist/publish-bundles
+          MOG_PUBLISH_REQUIRE_CLEAN_GIT: "true"
+          MOG_PUBLISH_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
           ./scripts/publish_official_window.sh \
             --registry release \

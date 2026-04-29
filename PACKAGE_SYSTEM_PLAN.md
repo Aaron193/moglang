@@ -82,7 +82,9 @@ repository. The current codebase supports:
 - published-package support in `mog add`, including `namespace/name` and
   `namespace/name@constraint` specs
 - source-package `mog publish` to the current static file-registry format,
-  including exact dependency pinning and idempotent re-publish checks
+  including exact dependency pinning, idempotent re-publish checks, and
+  opt-in git publish preflight controls via `--require-clean-git` and
+  `--tag <tag>`
 - `mog login <registry>` / `mog logout <registry>` hosted-registry auth flows
   backed by user config and bearer tokens
 - git dependency fetch/install using `git` plus exactly one of `rev`, `tag`,
@@ -168,8 +170,9 @@ repository. The current codebase supports:
 Not implemented yet (post-v1 / follow-on work):
 
 - richer hosted-registry publish policy and service contracts beyond the
-  current `registry-service.v1` discovery, content-addressed artifact uploads,
-  and ETag-guarded `index.toml` writes
+  current client-side git publish preflight (`--require-clean-git`,
+  `--tag <tag>`), `registry-service.v1` discovery, content-addressed artifact
+  uploads, and ETag-guarded `index.toml` writes
 - richer enterprise policy workflows beyond the current root-manifest registry,
   native-namespace, CI-locked install controls, and hosted public-key
   bootstrap
@@ -484,8 +487,11 @@ Current implementation status:
   host-target prebuilt artifact in the current registry format
 - hosted publishes now require `mog login <registry>` credentials when the
   registry uses `http(s)`
-- does not yet enforce richer publish policy such as git tag/version matching,
-  signed uploads, or multi-host prebuilt release automation
+- opt-in publish hardening is now implemented via `--require-clean-git` and
+  `--tag <tag>`, including package-directory-scoped clean-tree checks and
+  tag-to-`HEAD`/manifest-version validation
+- does not yet enforce richer registry-side publish policy such as
+  registry-enforced publish rules or multi-host prebuilt release automation
 
 ## Package Layout
 
@@ -871,6 +877,8 @@ Recommended supporting flags:
 - `--no-native-build`
 - `--prefer-prebuilt`
 - `--target`
+- `--require-clean-git`
+- `--tag`
 
 Current implementation status:
 
@@ -880,8 +888,9 @@ Current implementation status:
 - implemented compatibility path: `mog <file>`
 - implemented legacy flag compatibility: `--validate-package`
 - implemented package-manager flags: `--locked`, `--offline`,
-  `--no-native-build`, `--prefer-prebuilt`, `--target`, and
-  `publish --signing-key`
+  `--no-native-build`, `--prefer-prebuilt`, `--target`,
+  `publish --signing-key`, `publish --require-clean-git`, and
+  `publish --tag`
 - implemented hosted trust bootstrap: `mog registry trust <registry> --bootstrap`
 - implemented root-manifest script controls: `[scripts].test` and
   `[scripts].build`, executed as package-aware Mog entry scripts with
@@ -1113,6 +1122,8 @@ Current status:
   - lockfile-first install/run behavior with explicit `mog update` refreshes
   - `mog add` support for published package specs
   - `mog publish` for source packages to the current file-registry format
+  - opt-in client-side publish hardening via `mog publish
+    --require-clean-git` and `mog publish --tag <tag>`
   - hosted `http(s)` registry install/update/publish using cached `index.toml`
     downloads and cached artifact directories
   - optional hosted `registry-service.v1` discovery for content-addressed
@@ -1124,9 +1135,9 @@ Current status:
   - git dependency fetch/install using pinned `rev`, `tag`, or `branch`
     selectors and resolved commit pinning in `mog.lock`
 - not yet complete inside Phase 2:
-  - richer publish policy beyond the current hosted transport, such as
-    version/tag enforcement, clean-tree checks, or registry-enforced publish
-    rules
+  - richer registry-side publish policy beyond the current client-side
+    `--require-clean-git` / `--tag <tag>` preflight, such as
+    registry-enforced publish rules
   - richer registry-side authentication and service workflow beyond the
     current hosted discovery, upload, and conditional-write contract
 

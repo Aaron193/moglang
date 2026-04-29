@@ -5222,6 +5222,138 @@ bool readGitHeadCommit(const std::filesystem::path& repoDir, std::string& outCom
     return true;
 }
 
+bool readGitWorktreeRoot(const std::filesystem::path& dir,
+                         std::filesystem::path& outRepoRoot,
+                         std::string& outError) {
+    outRepoRoot.clear();
+
+    std::string output;
+    const std::string command =
+        "git -C " + shellQuote(dir.string()) + " rev-parse --show-toplevel";
+    if (!runCapturedSystemCommand(command, output, outError)) {
+        outError = "Could not locate a git worktree for '" + dir.string() +
+                   "': " + outError;
+        return false;
+    }
+
+    const std::string trimmed = trim(output);
+    if (trimmed.empty()) {
+        outError = "Could not locate a git worktree for '" + dir.string() + "'.";
+        return false;
+    }
+
+    outRepoRoot = canonicalOrLexical(trimmed);
+    return true;
+}
+
+bool readGitTagCommit(const std::filesystem::path& repoDir, std::string_view tag,
+                      std::string& outCommit, std::string& outError) {
+    outCommit.clear();
+
+    std::string output;
+    const std::string command =
+        "git -C " + shellQuote(repoDir.string()) + " rev-parse -q --verify " +
+        shellQuote("refs/tags/" + std::string(tag) + "^{}");
+    if (!runCapturedSystemCommand(command, output, outError)) {
+        outError = "Could not resolve git tag '" + std::string(tag) + "' in '" +
+                   repoDir.string() + "': " + outError;
+        return false;
+    }
+
+    outCommit = trim(output);
+    if (outCommit.empty()) {
+        outError = "Could not resolve git tag '" + std::string(tag) + "' in '" +
+                   repoDir.string() + "'.";
+        return false;
+    }
+    return true;
+}
+
+std::string normalizeGitTagVersion(std::string_view tag) {
+    std::string normalized(tag);
+    if (!normalized.empty() && normalized.front() == 'v') {
+        normalized.erase(normalized.begin());
+    }
+    return normalized;
+}
+
+bool ensurePublishGitPreflight(const std::filesystem::path& packageDir,
+                               const PackageManifest& manifest,
+                               const PublishOptions& options,
+                               std::string& outError) {
+    outError.clear();
+    if (!options.requireCleanGit && options.expectedTag.empty()) {
+        return true;
+    }
+
+    std::filesystem::path repoRoot;
+    if (!readGitWorktreeRoot(packageDir, repoRoot, outError)) {
+        return false;
+    }
+
+    std::error_code ec;
+    std::filesystem::path relativePackagePath =
+        std::filesystem::relative(packageDir, repoRoot, ec);
+    if (ec || relativePackagePath.empty() || relativePackagePath == ".." ||
+        relativePackagePath.string().rfind("..", 0) == 0) {
+        outError = "Could not determine package path relative to git worktree '" +
+                   repoRoot.string() + "'.";
+        return false;
+    }
+
+    if (options.requireCleanGit) {
+        std::string statusOutput;
+        const std::string command =
+            "git -C " + shellQuote(repoRoot.string()) +
+            " status --porcelain --untracked-files=all -- " +
+            shellQuote(relativePackagePath.lexically_normal().generic_string());
+        if (!runCapturedSystemCommand(command, statusOutput, outError)) {
+            outError = "Could not inspect git status for '" + packageDir.string() +
+                       "': " + outError;
+            return false;
+        }
+        const std::string trimmedStatus = trim(statusOutput);
+        if (!trimmedStatus.empty()) {
+            std::istringstream stream(trimmedStatus);
+            std::string firstLine;
+            std::getline(stream, firstLine);
+            outError = "Publish requires a clean git tree under '" +
+                       relativePackagePath.generic_string() +
+                       "', but found changes such as: " + firstLine;
+            return false;
+        }
+    }
+
+    if (!options.expectedTag.empty()) {
+        std::string headCommit;
+        if (!readGitHeadCommit(repoRoot, headCommit, outError)) {
+            return false;
+        }
+
+        std::string tagCommit;
+        if (!readGitTagCommit(repoRoot, options.expectedTag, tagCommit, outError)) {
+            return false;
+        }
+
+        if (tagCommit != headCommit) {
+            outError = "Publish requires git tag '" + options.expectedTag +
+                       "' to point at HEAD (" + headCommit +
+                       "), but it resolves to " + tagCommit + ".";
+            return false;
+        }
+
+        const std::string normalizedTagVersion =
+            normalizeGitTagVersion(options.expectedTag);
+        if (normalizedTagVersion != manifest.version) {
+            outError = "Publish requires git tag '" + options.expectedTag +
+                       "' to match manifest version '" + manifest.version + "'.";
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool ensureGitDependencySource(const DependencySpec& dependency, bool offline,
                                std::filesystem::path& outSourceDir,
                                std::string& outCommit, std::string& outError) {
@@ -7652,6 +7784,9 @@ bool publishProjectPackage(const std::string& projectRoot,
         outError = "Package '" + manifest.packageNamespace + ":" +
                    manifest.packageName +
                    "' cannot be published because its manifest sets publish = false.";
+        return false;
+    }
+    if (!ensurePublishGitPreflight(packagePath, manifest, options, outError)) {
         return false;
     }
 

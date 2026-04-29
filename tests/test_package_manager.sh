@@ -2990,6 +2990,208 @@ if ! (cd "$AUDIT_PUBLISH_WORKSPACE" && \
     exit 1
 fi
 
+PUBLISH_GIT_SOURCE_CLEAN="$TEMP_DIR/publish-git-source-clean"
+mkdir -p "$PUBLISH_GIT_SOURCE_CLEAN/pkg/src"
+cat > "$PUBLISH_GIT_SOURCE_CLEAN/mog.toml" <<EOF_PUBLISH_GIT_SOURCE_ROOT
+kind = "project"
+name = "publish-git-source-root"
+version = "0.1.0"
+description = "git publish source root"
+
+[registries.default]
+index = "$AUDIT_REGISTRY_DIR/index.toml"
+trusted_keys = ["$AUDIT_TRUSTED_KEY"]
+EOF_PUBLISH_GIT_SOURCE_ROOT
+
+cat > "$PUBLISH_GIT_SOURCE_CLEAN/pkg/mog.toml" <<'EOF_PUBLISH_GIT_SOURCE_PACKAGE'
+kind = "source"
+import_name = "publish_git_source"
+namespace = "acme"
+name = "git-source-publish"
+version = "1.2.3"
+license = "MIT"
+author = "Publish git test"
+description = "Git-guarded source publish package."
+entry = "src/main.mog"
+dependencies = []
+EOF_PUBLISH_GIT_SOURCE_PACKAGE
+
+cat > "$PUBLISH_GIT_SOURCE_CLEAN/pkg/src/main.mog" <<'EOF_PUBLISH_GIT_SOURCE_SRC'
+const MESSAGE str = "publish source"
+
+fn Name() str {
+    return MESSAGE
+}
+EOF_PUBLISH_GIT_SOURCE_SRC
+
+git -C "$PUBLISH_GIT_SOURCE_CLEAN" init --initial-branch=main >/dev/null
+git -C "$PUBLISH_GIT_SOURCE_CLEAN" config user.email "mog-tests@example.com"
+git -C "$PUBLISH_GIT_SOURCE_CLEAN" config user.name "Mog Tests"
+git -C "$PUBLISH_GIT_SOURCE_CLEAN" add . >/dev/null
+git -C "$PUBLISH_GIT_SOURCE_CLEAN" commit -m "init" >/dev/null
+git -C "$PUBLISH_GIT_SOURCE_CLEAN" tag v1.2.3
+
+PUBLISH_GIT_SOURCE_SUCCESS="$TEMP_DIR/publish-git-source-success"
+cp -R "$PUBLISH_GIT_SOURCE_CLEAN" "$PUBLISH_GIT_SOURCE_SUCCESS"
+printf '%s\n' "unrelated dirty file" > "$PUBLISH_GIT_SOURCE_SUCCESS/outside.txt"
+
+if ! (cd "$PUBLISH_GIT_SOURCE_SUCCESS" && \
+    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+      --require-clean-git --tag v1.2.3 pkg >/dev/null); then
+    echo "[FAIL] publish --require-clean-git should ignore unrelated dirty files outside the package directory"
+    exit 1
+fi
+
+PUBLISH_GIT_SOURCE_TRACKED_DIRTY="$TEMP_DIR/publish-git-source-tracked-dirty"
+cp -R "$PUBLISH_GIT_SOURCE_CLEAN" "$PUBLISH_GIT_SOURCE_TRACKED_DIRTY"
+printf '\nconst EXTRA str = "dirty tracked change"\n' >> \
+    "$PUBLISH_GIT_SOURCE_TRACKED_DIRTY/pkg/src/main.mog"
+
+if (cd "$PUBLISH_GIT_SOURCE_TRACKED_DIRTY" && \
+    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+      --require-clean-git --tag v1.2.3 pkg \
+      >/tmp/mog_publish_clean_git_tracked_failure.txt 2>&1); then
+    echo "[FAIL] publish --require-clean-git should reject tracked changes under the package directory"
+    cat /tmp/mog_publish_clean_git_tracked_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "clean git tree" /tmp/mog_publish_clean_git_tracked_failure.txt; then
+    echo "[FAIL] tracked publish clean-tree failures should mention the clean git requirement"
+    cat /tmp/mog_publish_clean_git_tracked_failure.txt
+    exit 1
+fi
+
+PUBLISH_GIT_SOURCE_UNTRACKED_DIRTY="$TEMP_DIR/publish-git-source-untracked-dirty"
+cp -R "$PUBLISH_GIT_SOURCE_CLEAN" "$PUBLISH_GIT_SOURCE_UNTRACKED_DIRTY"
+printf '%s\n' "untracked package file" > \
+    "$PUBLISH_GIT_SOURCE_UNTRACKED_DIRTY/pkg/UNTRACKED.txt"
+
+if (cd "$PUBLISH_GIT_SOURCE_UNTRACKED_DIRTY" && \
+    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+      --require-clean-git --tag v1.2.3 pkg \
+      >/tmp/mog_publish_clean_git_untracked_failure.txt 2>&1); then
+    echo "[FAIL] publish --require-clean-git should reject untracked files under the package directory"
+    cat /tmp/mog_publish_clean_git_untracked_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "clean git tree" /tmp/mog_publish_clean_git_untracked_failure.txt; then
+    echo "[FAIL] untracked publish clean-tree failures should mention the clean git requirement"
+    cat /tmp/mog_publish_clean_git_untracked_failure.txt
+    exit 1
+fi
+
+PUBLISH_GIT_SOURCE_MISSING_TAG="$TEMP_DIR/publish-git-source-missing-tag"
+cp -R "$PUBLISH_GIT_SOURCE_CLEAN" "$PUBLISH_GIT_SOURCE_MISSING_TAG"
+
+if (cd "$PUBLISH_GIT_SOURCE_MISSING_TAG" && \
+    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+      --tag missing-tag pkg \
+      >/tmp/mog_publish_missing_tag_failure.txt 2>&1); then
+    echo "[FAIL] publish --tag should reject missing git tags"
+    cat /tmp/mog_publish_missing_tag_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "Could not resolve git tag 'missing-tag'" \
+    /tmp/mog_publish_missing_tag_failure.txt; then
+    echo "[FAIL] missing publish tag failures should mention the unresolved tag"
+    cat /tmp/mog_publish_missing_tag_failure.txt
+    exit 1
+fi
+
+PUBLISH_GIT_SOURCE_VERSION_MISMATCH="$TEMP_DIR/publish-git-source-version-mismatch"
+cp -R "$PUBLISH_GIT_SOURCE_CLEAN" "$PUBLISH_GIT_SOURCE_VERSION_MISMATCH"
+git -C "$PUBLISH_GIT_SOURCE_VERSION_MISMATCH" tag v9.9.9
+
+if (cd "$PUBLISH_GIT_SOURCE_VERSION_MISMATCH" && \
+    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+      --tag v9.9.9 pkg \
+      >/tmp/mog_publish_tag_version_failure.txt 2>&1); then
+    echo "[FAIL] publish --tag should reject tags that do not match the manifest version"
+    cat /tmp/mog_publish_tag_version_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "match manifest version" /tmp/mog_publish_tag_version_failure.txt; then
+    echo "[FAIL] publish tag/version mismatch failures should mention the manifest version"
+    cat /tmp/mog_publish_tag_version_failure.txt
+    exit 1
+fi
+
+PUBLISH_GIT_SOURCE_STALE_TAG="$TEMP_DIR/publish-git-source-stale-tag"
+cp -R "$PUBLISH_GIT_SOURCE_CLEAN" "$PUBLISH_GIT_SOURCE_STALE_TAG"
+printf '%s\n' "head moved" > "$PUBLISH_GIT_SOURCE_STALE_TAG/commit-after-tag.txt"
+git -C "$PUBLISH_GIT_SOURCE_STALE_TAG" add commit-after-tag.txt >/dev/null
+git -C "$PUBLISH_GIT_SOURCE_STALE_TAG" commit -m "move head" >/dev/null
+
+if (cd "$PUBLISH_GIT_SOURCE_STALE_TAG" && \
+    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+      --tag v1.2.3 pkg \
+      >/tmp/mog_publish_stale_tag_failure.txt 2>&1); then
+    echo "[FAIL] publish --tag should reject tags that are not at HEAD"
+    cat /tmp/mog_publish_stale_tag_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "to point at HEAD" /tmp/mog_publish_stale_tag_failure.txt; then
+    echo "[FAIL] stale publish tag failures should mention the HEAD requirement"
+    cat /tmp/mog_publish_stale_tag_failure.txt
+    exit 1
+fi
+
+COUNTER_PUBLISH_LIBRARY=""
+if [[ -f "$PROJECT_ROOT/build/packages/examples/counter/package.so" ]]; then
+    COUNTER_PUBLISH_LIBRARY="$PROJECT_ROOT/build/packages/examples/counter/package.so"
+elif [[ -f "$PROJECT_ROOT/build/packages/examples/counter/package.dylib" ]]; then
+    COUNTER_PUBLISH_LIBRARY="$PROJECT_ROOT/build/packages/examples/counter/package.dylib"
+fi
+
+if [[ -z "$COUNTER_PUBLISH_LIBRARY" ]]; then
+    echo "[FAIL] native publish git tests require a built counter package library"
+    exit 1
+fi
+
+PUBLISH_GIT_NATIVE="$TEMP_DIR/publish-git-native"
+PUBLISH_GIT_NATIVE_REGISTRY="$TEMP_DIR/publish-git-native-registry"
+mkdir -p "$PUBLISH_GIT_NATIVE_REGISTRY"
+mkdir -p "$PUBLISH_GIT_NATIVE/examples/counter"
+cat > "$PUBLISH_GIT_NATIVE/mog.toml" <<EOF_PUBLISH_GIT_NATIVE_ROOT
+kind = "project"
+name = "publish-git-native-root"
+version = "0.1.0"
+description = "git publish native root"
+
+[registries.default]
+index = "$PUBLISH_GIT_NATIVE_REGISTRY/index.toml"
+trusted_keys = ["$AUDIT_TRUSTED_KEY"]
+EOF_PUBLISH_GIT_NATIVE_ROOT
+
+cp "$PROJECT_ROOT/packages/examples/counter/mog.toml" \
+    "$PUBLISH_GIT_NATIVE/examples/counter/mog.toml"
+cp "$PROJECT_ROOT/packages/examples/counter/package.api.mog" \
+    "$PUBLISH_GIT_NATIVE/examples/counter/package.api.mog"
+cp "$COUNTER_PUBLISH_LIBRARY" \
+    "$PUBLISH_GIT_NATIVE/examples/counter/$(basename "$COUNTER_PUBLISH_LIBRARY")"
+
+git -C "$PUBLISH_GIT_NATIVE" init --initial-branch=main >/dev/null
+git -C "$PUBLISH_GIT_NATIVE" config user.email "mog-tests@example.com"
+git -C "$PUBLISH_GIT_NATIVE" config user.name "Mog Tests"
+git -C "$PUBLISH_GIT_NATIVE" add . >/dev/null
+git -C "$PUBLISH_GIT_NATIVE" commit -m "init" >/dev/null
+git -C "$PUBLISH_GIT_NATIVE" tag v0.1.0
+
+if ! (cd "$PUBLISH_GIT_NATIVE" && \
+    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+      --require-clean-git --tag v0.1.0 \
+      --target "$HOST_TARGET" \
+      --native-artifact-dir examples/counter \
+      examples/counter >/dev/null); then
+    echo "[FAIL] native publish should support git preflight checks with --target and --native-artifact-dir"
+    exit 1
+fi
+
 cat > "$AUDIT_CONSUMER_DIR/mog.toml" <<EOF_AUDIT_CONSUMER
 kind = "project"
 name = "audit-consumer"

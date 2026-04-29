@@ -72,6 +72,8 @@ struct PublishOptions {
     std::string signingKeyPath;
     std::string target;
     std::string nativeArtifactDir;
+    bool requireCleanGit = false;
+    std::string expectedTag;
 };
 
 struct StoredRegistryProfile {
