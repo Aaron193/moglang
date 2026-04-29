@@ -3014,6 +3014,159 @@ if ! (cd "$AUDIT_CONSUMER_DIR" && "$MOG" install >/dev/null); then
     exit 1
 fi
 
+if ! grep -Fq 'schema_version = "registry.v4"' "$AUDIT_REGISTRY_DIR/index.toml" || \
+   ! grep -Fq 'artifact_signature = "' "$AUDIT_REGISTRY_DIR/index.toml"; then
+    echo "[FAIL] signed publish should emit registry.v4 artifact signatures"
+    cat "$AUDIT_REGISTRY_DIR/index.toml"
+    exit 1
+fi
+
+if ! grep -Fq 'artifact_signature = "' "$AUDIT_CONSUMER_DIR/mog.lock" || \
+   ! grep -Fq 'artifact_signature = "' "$AUDIT_CONSUMER_DIR/.mog/install/registry.toml"; then
+    echo "[FAIL] signed registry installs should pin artifact signatures in lock/install metadata"
+    cat "$AUDIT_CONSUMER_DIR/mog.lock"
+    cat "$AUDIT_CONSUMER_DIR/.mog/install/registry.toml"
+    exit 1
+fi
+
+POLICY_SIGNED_DIR="$TEMP_DIR/policy-signed"
+mkdir -p "$POLICY_SIGNED_DIR"
+cat > "$POLICY_SIGNED_DIR/mog.toml" <<EOF_POLICY_SIGNED
+kind = "project"
+name = "policy-signed-test"
+version = "0.1.0"
+description = "policy signed test"
+
+[policy]
+require_signed_artifacts = true
+
+[registries.default]
+index = "$REGISTRY_DIR"
+
+[dependencies]
+http = { package = "acme:http", version = "1.0.0" }
+EOF_POLICY_SIGNED
+
+if (cd "$POLICY_SIGNED_DIR" && "$MOG" install >/tmp/mog_policy_signed_failure.txt 2>&1); then
+    echo "[FAIL] signed-artifact policy should reject unsigned registry packages"
+    cat /tmp/mog_policy_signed_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "requires signed artifacts" /tmp/mog_policy_signed_failure.txt; then
+    echo "[FAIL] signed-artifact policy failures should mention signed artifacts"
+    cat /tmp/mog_policy_signed_failure.txt
+    exit 1
+fi
+
+POLICY_SIGNED_OK_DIR="$TEMP_DIR/policy-signed-ok"
+mkdir -p "$POLICY_SIGNED_OK_DIR"
+cat > "$POLICY_SIGNED_OK_DIR/mog.toml" <<EOF_POLICY_SIGNED_OK
+kind = "project"
+name = "policy-signed-ok"
+version = "0.1.0"
+description = "policy signed ok"
+
+[policy]
+require_signed_artifacts = true
+
+[registries.default]
+index = "$AUDIT_REGISTRY_DIR/index.toml"
+trusted_keys = ["$AUDIT_TRUSTED_KEY"]
+
+[dependencies]
+audit_util = { package = "acme:audit-util", version = "1.0.0" }
+EOF_POLICY_SIGNED_OK
+
+cat > "$POLICY_SIGNED_OK_DIR/app.mog" <<'EOF_POLICY_SIGNED_OK_APP'
+const audit_util = @import("audit_util")
+print(audit_util.Name())
+EOF_POLICY_SIGNED_OK_APP
+
+if ! (cd "$POLICY_SIGNED_OK_DIR" && "$MOG" install >/dev/null); then
+    echo "[FAIL] signed-artifact policy should allow signed source packages"
+    exit 1
+fi
+
+if [[ "$(cd "$POLICY_SIGNED_OK_DIR" && "$MOG" run app.mog)" != *"utility from audit registry"* ]]; then
+    echo "[FAIL] signed-artifact policy should still run signed source packages"
+    exit 1
+fi
+
+if ! (cd "$AUDIT_PUBLISH_WORKSPACE" && \
+    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+      "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" >/dev/null); then
+    echo "[FAIL] signed local registry publish should support native packages"
+    exit 1
+fi
+
+POLICY_SIGNED_NATIVE_DIR="$TEMP_DIR/policy-signed-native"
+mkdir -p "$POLICY_SIGNED_NATIVE_DIR"
+cat > "$POLICY_SIGNED_NATIVE_DIR/mog.toml" <<EOF_POLICY_SIGNED_NATIVE
+kind = "project"
+name = "policy-signed-native"
+version = "0.1.0"
+description = "policy signed native"
+
+[policy]
+require_signed_artifacts = true
+
+[registries.default]
+index = "$AUDIT_REGISTRY_DIR/index.toml"
+trusted_keys = ["$AUDIT_TRUSTED_KEY"]
+
+[dependencies]
+counter = { package = "examples:counter", version = "0.1.0" }
+EOF_POLICY_SIGNED_NATIVE
+
+cat > "$POLICY_SIGNED_NATIVE_DIR/app.mog" <<'EOF_POLICY_SIGNED_NATIVE_APP'
+const counter = @import("counter")
+
+const value = counter.create(10i64)
+print(counter.add(value, 5i64))
+EOF_POLICY_SIGNED_NATIVE_APP
+
+if ! (cd "$POLICY_SIGNED_NATIVE_DIR" && "$MOG" install >/dev/null); then
+    echo "[FAIL] signed-artifact policy should allow signed native packages"
+    exit 1
+fi
+
+if [[ "$(cd "$POLICY_SIGNED_NATIVE_DIR" && "$MOG" run app.mog)" != *"15"* ]]; then
+    echo "[FAIL] signed-artifact policy should still run signed native packages"
+    exit 1
+fi
+
+AUDIT_TAMPER_DIR="$AUDIT_ROOT/tamper"
+rm -rf "$AUDIT_TAMPER_DIR"
+cp -R "$AUDIT_CONSUMER_DIR" "$AUDIT_TAMPER_DIR"
+python3 - "$AUDIT_TAMPER_DIR/mog.lock" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+updated = text.replace(
+    'artifact_signature = "',
+    'artifact_signature = "tampered-',
+    1,
+)
+if updated == text:
+    raise SystemExit("failed to tamper with artifact_signature")
+path.write_text(updated, encoding="utf-8")
+PY
+
+if (cd "$AUDIT_TAMPER_DIR" && "$MOG" install --locked >/tmp/mog_artifact_signature_failure.txt 2>&1); then
+    echo "[FAIL] locked installs should reject tampered artifact signatures"
+    cat /tmp/mog_artifact_signature_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "artifact signature verification failed" /tmp/mog_artifact_signature_failure.txt; then
+    echo "[FAIL] tampered artifact signature failures should explain signature verification"
+    cat /tmp/mog_artifact_signature_failure.txt
+    exit 1
+fi
+
 AUDIT_CLEAN_OUTPUT="$(
     cd "$AUDIT_CONSUMER_DIR" && "$MOG" audit
 )"

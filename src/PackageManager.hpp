@@ -28,6 +28,7 @@ struct ProjectPolicyConfig {
     std::vector<std::string> allowedRegistries;
     std::vector<std::string> allowedNativeNamespaces;
     bool requireLockedInCi = false;
+    bool requireSignedArtifacts = false;
 };
 
 struct ProjectScriptConfig {

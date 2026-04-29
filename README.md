@@ -518,6 +518,7 @@ description = "demo project"
 allowed_registries = ["default"]
 allowed_native_namespaces = ["mog"]
 require_locked_in_ci = true
+require_signed_artifacts = true
 
 [registries.default]
 index = "./registry/index.toml"
@@ -545,7 +546,9 @@ When `[policy]` is present, Mog enforces it during `install` and install-aware
 `run` workflows. `allowed_registries` restricts registry-sourced dependencies,
 `allowed_native_namespaces` restricts native packages regardless of source, and
 `require_locked_in_ci = true` requires `--locked` whenever the `CI`
-environment variable is set.
+environment variable is set. `require_signed_artifacts = true` rejects
+registry packages whose selected artifact is not signed by a trusted registry
+key.
 
 Hosted `http(s)` registries now require trust configuration by default.
 Projects can pin trusted Ed25519 registry keys with
@@ -568,13 +571,18 @@ registry root. When present, Mog publishes artifacts to content-addressed
 is absent, Mog falls back to the legacy hosted `index.toml` + artifact `PUT`
 workflow for compatibility.
 
-Registry publishing can sign `registry.v3` indexes with a `registry-key.v1`
-file:
+Registry publishing can sign `registry.v4` indexes and detached artifact
+signatures with a `registry-key.v1` file:
 
 ```bash
 ./build/interpreter publish --signing-key ./keys/release.toml ./packages/mog/window
 ./build/interpreter publish --target linux-arm64-gnu --native-artifact-dir ./dist/window-bundle ./packages/mog/window
 ```
+
+When signed registry artifacts are installed, Mog pins `artifact_signature`
+and `registry_key_id` in both `mog.lock` and `.mog/install/registry.toml` so
+locked reinstalls continue to verify the selected artifact without refetching
+registry metadata.
 
 Lockfile-based vulnerability checks are also available:
 

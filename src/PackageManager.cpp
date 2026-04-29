@@ -531,11 +531,13 @@ struct RegistryIndexRecord {
     SemanticVersion parsedVersion;
     std::string artifactPath;
     std::string artifactDigest;
+    std::string artifactSignature;
     std::string license;
     std::string mogRuntime;
     std::vector<std::string> nativeTargets;
     std::vector<std::string> nativeArtifactPaths;
     std::vector<std::string> nativeArtifactDigests;
+    std::vector<std::string> nativeArtifactSignatures;
     std::vector<RegistryDependencyPin> dependencies;
 };
 
@@ -1403,7 +1405,8 @@ bool parseMultilineStringValue(const std::string& initialValue, std::ifstream& f
     return false;
 }
 
-std::string canonicalRegistryIndexPayload(std::vector<RegistryIndexRecord> records) {
+std::string canonicalRegistryIndexPayload(std::vector<RegistryIndexRecord> records,
+                                          std::string_view schemaVersion) {
     std::sort(records.begin(), records.end(),
               [](const RegistryIndexRecord& lhs,
                  const RegistryIndexRecord& rhs) {
@@ -1415,7 +1418,8 @@ std::string canonicalRegistryIndexPayload(std::vector<RegistryIndexRecord> recor
               });
 
     std::ostringstream out;
-    out << "schema_version = " << quoteTomlString("registry.v3") << "\n";
+    out << "schema_version = " << quoteTomlString(std::string(schemaVersion))
+        << "\n";
     for (const auto& record : records) {
         out << "\n[[package]]\n";
         out << "package_id = " << quoteTomlString(record.packageId) << "\n";
@@ -1432,6 +1436,10 @@ std::string canonicalRegistryIndexPayload(std::vector<RegistryIndexRecord> recor
         if (!record.artifactDigest.empty()) {
             out << "artifact_digest = " << quoteTomlString(record.artifactDigest) << "\n";
         }
+        if (!record.artifactSignature.empty()) {
+            out << "artifact_signature = "
+                << quoteTomlString(record.artifactSignature) << "\n";
+        }
 
         if (!record.nativeTargets.empty()) {
             std::vector<size_t> indexes(record.nativeTargets.size());
@@ -1445,14 +1453,22 @@ std::string canonicalRegistryIndexPayload(std::vector<RegistryIndexRecord> recor
             std::vector<std::string> targets;
             std::vector<std::string> paths;
             std::vector<std::string> digests;
+            std::vector<std::string> signatures;
             for (size_t index : indexes) {
                 targets.push_back(record.nativeTargets[index]);
                 paths.push_back(record.nativeArtifactPaths[index]);
                 digests.push_back(record.nativeArtifactDigests[index]);
+                if (!record.nativeArtifactSignatures.empty()) {
+                    signatures.push_back(record.nativeArtifactSignatures[index]);
+                }
             }
             out << "native_targets = " << quoteTomlArray(targets) << "\n";
             out << "native_artifact_paths = " << quoteTomlArray(paths) << "\n";
             out << "native_artifact_digests = " << quoteTomlArray(digests) << "\n";
+            if (!record.nativeArtifactSignatures.empty()) {
+                out << "native_artifact_signatures = "
+                    << quoteTomlArray(signatures) << "\n";
+            }
         }
 
         std::vector<std::string> pins;
@@ -1463,6 +1479,38 @@ std::string canonicalRegistryIndexPayload(std::vector<RegistryIndexRecord> recor
         out << "dependencies = " << quoteTomlArray(pins) << "\n";
     }
     return out.str();
+}
+
+std::string canonicalArtifactSignaturePayload(std::string_view packageId,
+                                              std::string_view version,
+                                              std::string_view artifactTarget,
+                                              std::string_view artifactDigest) {
+    std::ostringstream out;
+    out << "schema_version = " << quoteTomlString("artifact-signature.v1") << "\n";
+    out << "package_id = " << quoteTomlString(std::string(packageId)) << "\n";
+    out << "version = " << quoteTomlString(std::string(version)) << "\n";
+    out << "artifact_target = "
+        << quoteTomlString(std::string(artifactTarget)) << "\n";
+    out << "artifact_digest = "
+        << quoteTomlString(std::string(artifactDigest)) << "\n";
+    return out.str();
+}
+
+bool signPublishedArtifact(const RegistrySigningKeyFile& signingKey,
+                           std::string_view packageId,
+                           std::string_view version,
+                           std::string_view artifactTarget,
+                           std::string_view artifactDigest,
+                           std::string& outSignatureBase64,
+                           std::string& outError) {
+    const std::string canonicalPayload = canonicalArtifactSignaturePayload(
+        packageId, version, artifactTarget, artifactDigest);
+    if (!signEd25519Message(signingKey.privateKeyDerBase64, canonicalPayload,
+                            outSignatureBase64, outError)) {
+        outError = "Could not sign published artifact: " + outError;
+        return false;
+    }
+    return true;
 }
 
 std::string canonicalAdvisoriesPayload(std::vector<AdvisoryRecord> records) {
@@ -1673,6 +1721,28 @@ bool registryRequiresTrustedSignatures(const ProjectRegistryConfig& config,
     return !config.trustedKeys.empty() || (isRemote && !config.allowInsecure);
 }
 
+bool findTrustedRegistryKey(const ProjectRegistryConfig& config,
+                            std::string_view signingKeyId,
+                            RegistryTrustedKey& outKey,
+                            std::string& outError) {
+    outKey = RegistryTrustedKey{};
+    for (const std::string& rawTrustedKey : config.trustedKeys) {
+        RegistryTrustedKey parsedKey;
+        if (!parseTrustedRegistryKey(rawTrustedKey, parsedKey, outError)) {
+            outError = "Registry '" + config.alias + "' has invalid trusted_keys: " +
+                       outError;
+            return false;
+        }
+        if (parsedKey.keyId == signingKeyId) {
+            outKey = std::move(parsedKey);
+            return true;
+        }
+    }
+    outError = "Registry '" + config.alias + "' was signed by unknown key '" +
+               std::string(signingKeyId) + "'.";
+    return false;
+}
+
 bool verifyRegistrySignatureEnvelope(const ProjectRegistryConfig& config,
                                      bool isRemote,
                                      std::string_view signingKeyId,
@@ -1696,24 +1766,8 @@ bool verifyRegistrySignatureEnvelope(const ProjectRegistryConfig& config,
     }
 
     RegistryTrustedKey trustedKey;
-    bool foundKey = false;
-    for (const std::string& rawTrustedKey : config.trustedKeys) {
-        RegistryTrustedKey parsedKey;
-        if (!parseTrustedRegistryKey(rawTrustedKey, parsedKey, outError)) {
-            outError = "Registry '" + config.alias + "' has invalid trusted_keys: " +
-                       outError;
-            return false;
-        }
-        if (parsedKey.keyId == signingKeyId) {
-            trustedKey = std::move(parsedKey);
-            foundKey = true;
-            break;
-        }
-    }
-    if (!foundKey) {
-        outError = "Registry '" + config.alias + "' was signed by unknown key '" +
-                   std::string(signingKeyId) + "'." +
-                   hostedRegistryBootstrapHint(config.alias, isRemote);
+    if (!findTrustedRegistryKey(config, signingKeyId, trustedKey, outError)) {
+        outError += hostedRegistryBootstrapHint(config.alias, isRemote);
         return false;
     }
 
@@ -1721,6 +1775,79 @@ bool verifyRegistrySignatureEnvelope(const ProjectRegistryConfig& config,
                               signatureBase64, outError)) {
         outError = "Registry '" + config.alias + "' signature verification failed: " +
                    outError;
+        return false;
+    }
+    return true;
+}
+
+bool registryArtifactSignaturesRequired(const ProjectPolicyConfig& policy,
+                                        const ProjectRegistryConfig& config) {
+    return policy.requireSignedArtifacts ||
+           (!config.allowInsecure && !config.trustedKeys.empty());
+}
+
+std::string registryArtifactTarget(const PackageRegistryEntry& entry) {
+    if (entry.kind != "native" || entry.buildFromSource) {
+        return "source";
+    }
+    return entry.selectedTarget.empty() ? detectHostTarget() : entry.selectedTarget;
+}
+
+bool verifyRegistryArtifactSignature(const ProjectPolicyConfig& policy,
+                                     const ProjectRegistryConfig& config,
+                                     bool isRemote,
+                                     const PackageRegistryEntry& entry,
+                                     std::string& outError) {
+    outError.clear();
+    const bool requireSignature =
+        registryArtifactSignaturesRequired(policy, config);
+    if (!requireSignature) {
+        if (entry.registryKeyId.empty() || entry.artifactSignature.empty()) {
+            return true;
+        }
+        if (config.trustedKeys.empty()) {
+            return true;
+        }
+    }
+    if (entry.registryKeyId.empty() || entry.artifactSignature.empty()) {
+        outError = "Registry artifact for '" + entry.packageId + "@" +
+                   entry.version + "' target '" + registryArtifactTarget(entry) +
+                   "' must be signed.";
+        if (requireSignature && config.trustedKeys.empty()) {
+            outError += " Configure trusted_keys for registry '" + config.alias +
+                        "' before requiring signed artifacts.";
+        } else if (isRemote) {
+            outError += hostedRegistryBootstrapHint(config.alias, isRemote);
+        }
+        return false;
+    }
+    if (config.trustedKeys.empty()) {
+        if (requireSignature) {
+            outError = "Project policy requires signed artifacts, but registry '" +
+                       config.alias +
+                       "' has no trusted_keys configured." +
+                       hostedRegistryBootstrapHint(config.alias, isRemote);
+            return false;
+        }
+        return true;
+    }
+
+    RegistryTrustedKey trustedKey;
+    if (!findTrustedRegistryKey(config, entry.registryKeyId, trustedKey, outError)) {
+        if (isRemote) {
+            outError += hostedRegistryBootstrapHint(config.alias, isRemote);
+        }
+        return false;
+    }
+
+    const std::string canonicalPayload = canonicalArtifactSignaturePayload(
+        entry.packageId, entry.version, registryArtifactTarget(entry),
+        entry.artifactDigest);
+    if (!verifyEd25519Message(trustedKey.publicKeyDerBase64, canonicalPayload,
+                              entry.artifactSignature, outError)) {
+        outError = "Registry artifact signature verification failed for '" +
+                   entry.packageId + "@" + entry.version + "' target '" +
+                   registryArtifactTarget(entry) + "': " + outError;
         return false;
     }
     return true;
@@ -2885,6 +3012,10 @@ bool writeInstallRegistryFile(const std::filesystem::path& outputPath,
             out << "artifact_digest = " << quoteTomlString(entry.artifactDigest)
                 << "\n";
         }
+        if (!entry.artifactSignature.empty()) {
+            out << "artifact_signature = "
+                << quoteTomlString(entry.artifactSignature) << "\n";
+        }
         if (!entry.registryKeyId.empty()) {
             out << "registry_key_id = " << quoteTomlString(entry.registryKeyId)
                 << "\n";
@@ -2990,6 +3121,10 @@ bool writeLockfile(const std::filesystem::path& outputPath,
             out << "artifact_digest = " << quoteTomlString(entry.artifactDigest)
                 << "\n";
         }
+        if (!entry.artifactSignature.empty()) {
+            out << "artifact_signature = "
+                << quoteTomlString(entry.artifactSignature) << "\n";
+        }
         if (!entry.registryKeyId.empty()) {
             out << "registry_key_id = " << quoteTomlString(entry.registryKeyId)
                 << "\n";
@@ -3044,21 +3179,22 @@ bool writeRegistryIndexFile(const std::filesystem::path& outputPath,
     }
 
     if (signingKey != nullptr) {
-        const std::string canonicalPayload = canonicalRegistryIndexPayload(records);
+        const std::string canonicalPayload =
+            canonicalRegistryIndexPayload(records, "registry.v4");
         std::string signatureBase64;
         if (!signEd25519Message(signingKey->privateKeyDerBase64, canonicalPayload,
                                 signatureBase64, outError)) {
             outError = "Could not sign registry index: " + outError;
             return false;
         }
-        out << "schema_version = " << quoteTomlString("registry.v3") << "\n";
+        out << "schema_version = " << quoteTomlString("registry.v4") << "\n";
         out << "signing_key_id = " << quoteTomlString(signingKey->keyId) << "\n";
         out << "signature = " << quoteTomlString(signatureBase64) << "\n";
         out << canonicalPayload.substr(canonicalPayload.find('\n') + 1);
         return true;
     }
 
-    out << "schema_version = " << quoteTomlString("registry.v3") << "\n";
+    out << "schema_version = " << quoteTomlString("registry.v4") << "\n";
     for (const auto& record : records) {
         out << "\n[[package]]\n";
         out << "package_id = " << quoteTomlString(record.packageId) << "\n";
@@ -3077,6 +3213,10 @@ bool writeRegistryIndexFile(const std::filesystem::path& outputPath,
             out << "artifact_digest = " << quoteTomlString(record.artifactDigest)
                 << "\n";
         }
+        if (!record.artifactSignature.empty()) {
+            out << "artifact_signature = "
+                << quoteTomlString(record.artifactSignature) << "\n";
+        }
         if (!record.nativeTargets.empty()) {
             std::vector<size_t> nativeIndexes(record.nativeTargets.size());
             for (size_t index = 0; index < nativeIndexes.size(); ++index) {
@@ -3091,10 +3231,14 @@ bool writeRegistryIndexFile(const std::filesystem::path& outputPath,
             std::vector<std::string> targets;
             std::vector<std::string> paths;
             std::vector<std::string> digests;
+            std::vector<std::string> signatures;
             for (size_t index : nativeIndexes) {
                 targets.push_back(record.nativeTargets[index]);
                 paths.push_back(record.nativeArtifactPaths[index]);
                 digests.push_back(record.nativeArtifactDigests[index]);
+                if (!record.nativeArtifactSignatures.empty()) {
+                    signatures.push_back(record.nativeArtifactSignatures[index]);
+                }
             }
 
             out << "native_targets = " << quoteTomlArray(targets)
@@ -3102,6 +3246,10 @@ bool writeRegistryIndexFile(const std::filesystem::path& outputPath,
             out << "native_artifact_paths = " << quoteTomlArray(paths) << "\n";
             out << "native_artifact_digests = "
                 << quoteTomlArray(digests) << "\n";
+            if (!record.nativeArtifactSignatures.empty()) {
+                out << "native_artifact_signatures = "
+                    << quoteTomlArray(signatures) << "\n";
+            }
         }
 
         std::vector<std::string> pins;
@@ -3142,6 +3290,7 @@ struct CacheEntryMetadata {
     std::string gitCommit;
     std::string artifactPath;
     std::string artifactDigest;
+    std::string artifactSignature;
     std::string registryKeyId;
     std::string selectedTarget;
     bool buildFromSource = false;
@@ -3175,6 +3324,8 @@ bool writeCacheMetadataFile(const std::filesystem::path& outputPath,
     out << "git_commit = " << quoteTomlString(entry.gitCommit) << "\n";
     out << "artifact_path = " << quoteTomlString(entry.artifactPath) << "\n";
     out << "artifact_digest = " << quoteTomlString(entry.artifactDigest) << "\n";
+    out << "artifact_signature = "
+        << quoteTomlString(entry.artifactSignature) << "\n";
     out << "registry_key_id = " << quoteTomlString(entry.registryKeyId) << "\n";
     out << "selected_target = " << quoteTomlString(entry.selectedTarget) << "\n";
     out << "build_from_source = "
@@ -3271,6 +3422,8 @@ bool loadCacheMetadataFile(const std::filesystem::path& metadataPath,
             outMetadata.artifactPath = parsed;
         } else if (key == "artifact_digest") {
             outMetadata.artifactDigest = parsed;
+        } else if (key == "artifact_signature") {
+            outMetadata.artifactSignature = parsed;
         } else if (key == "registry_key_id") {
             outMetadata.registryKeyId = parsed;
         } else if (key == "selected_target") {
@@ -3306,6 +3459,7 @@ bool cacheMetadataMatchesEntry(const CacheEntryMetadata& metadata,
            metadata.gitCommit == entry.gitCommit &&
            metadata.artifactPath == entry.artifactPath &&
            metadata.artifactDigest == entry.artifactDigest &&
+           metadata.artifactSignature == entry.artifactSignature &&
            metadata.registryKeyId == entry.registryKeyId &&
            metadata.selectedTarget == entry.selectedTarget &&
            metadata.buildFromSource == entry.buildFromSource &&
@@ -3717,7 +3871,8 @@ bool loadRegistryIndex(const std::string& projectRoot,
             !current.artifactPath.empty() || !current.artifactDigest.empty();
         const bool hasNativeArtifacts = !current.nativeTargets.empty() ||
                                        !current.nativeArtifactPaths.empty() ||
-                                       !current.nativeArtifactDigests.empty();
+                                       !current.nativeArtifactDigests.empty() ||
+                                       !current.nativeArtifactSignatures.empty();
         if (current.packageId.empty() || current.version.empty() ||
             (!hasPrimaryArtifact && !hasNativeArtifacts)) {
             outError = "Registry '" + config.alias +
@@ -3740,6 +3895,12 @@ bool loadRegistryIndex(const std::string& projectRoot,
             current.nativeTargets.size() != current.nativeArtifactDigests.size()) {
             outError = "Registry '" + config.alias +
                        "' native artifact fields must define the same number of targets, paths, and digests.";
+            return false;
+        }
+        if (!current.nativeArtifactSignatures.empty() &&
+            current.nativeTargets.size() != current.nativeArtifactSignatures.size()) {
+            outError = "Registry '" + config.alias +
+                       "' native artifact signatures must define the same number of entries as native_targets.";
             return false;
         }
         for (const std::string& nativeDigest : current.nativeArtifactDigests) {
@@ -3874,6 +4035,15 @@ bool loadRegistryIndex(const std::string& projectRoot,
             }
             continue;
         }
+        if (key == "native_artifact_signatures") {
+            if (!parseQuotedStringArray(value, current.nativeArtifactSignatures,
+                                        outError)) {
+                outError = "Invalid registry index line " +
+                           std::to_string(lineNumber) + ": " + outError;
+                return false;
+            }
+            continue;
+        }
 
         std::string parsed;
         if (!parseQuotedString(value, parsed, outError)) {
@@ -3894,6 +4064,8 @@ bool loadRegistryIndex(const std::string& projectRoot,
             current.artifactPath = parsed;
         } else if (key == "artifact_digest") {
             current.artifactDigest = parsed;
+        } else if (key == "artifact_signature") {
+            current.artifactSignature = parsed;
         } else {
             outError = "Unsupported registry index field '" + key + "'.";
             return false;
@@ -3915,21 +4087,25 @@ bool loadRegistryIndex(const std::string& projectRoot,
 
     if (outIndex.schemaVersion != "registry.v1" &&
         outIndex.schemaVersion != "registry.v2" &&
-        outIndex.schemaVersion != "registry.v3") {
+        outIndex.schemaVersion != "registry.v3" &&
+        outIndex.schemaVersion != "registry.v4") {
         outError = "Registry '" + config.alias + "' uses unsupported schema '" +
                    outIndex.schemaVersion + "'.";
         return false;
     }
 
     if (outIndex.schemaVersion == "registry.v2" ||
-        outIndex.schemaVersion == "registry.v3") {
+        outIndex.schemaVersion == "registry.v3" ||
+        outIndex.schemaVersion == "registry.v4") {
         std::vector<RegistryIndexRecord> canonicalRecords;
         canonicalRecords.reserve(outIndex.recordsByKey.size());
         for (const auto& [key, record] : outIndex.recordsByKey) {
             canonicalRecords.push_back(record);
         }
-        const std::string canonicalPayload =
-            canonicalRegistryIndexPayload(std::move(canonicalRecords));
+        const std::string payloadSchemaVersion =
+            outIndex.schemaVersion == "registry.v4" ? "registry.v4" : "registry.v3";
+        const std::string canonicalPayload = canonicalRegistryIndexPayload(
+            std::move(canonicalRecords), payloadSchemaVersion);
         if (!verifyRegistrySignatureEnvelope(effectiveProfile.config, location.isRemote,
                                              outIndex.signingKeyId,
                                              outIndex.signatureBase64,
@@ -4453,15 +4629,18 @@ bool selectRegistryArtifact(const RegistryIndexRecord& record,
                             const InstallOptions* options,
                             std::string& outArtifactPath,
                             std::string& outArtifactDigest,
+                            std::string& outArtifactSignature,
                             std::string& outSelectedTarget,
                             std::string& outError) {
     outArtifactPath.clear();
     outArtifactDigest.clear();
+    outArtifactSignature.clear();
     outSelectedTarget.clear();
 
     if (record.nativeTargets.empty()) {
         outArtifactPath = record.artifactPath;
         outArtifactDigest = record.artifactDigest;
+        outArtifactSignature = record.artifactSignature;
         if (options != nullptr) {
             outSelectedTarget = effectiveInstallTarget(options);
         }
@@ -4476,6 +4655,9 @@ bool selectRegistryArtifact(const RegistryIndexRecord& record,
             static_cast<size_t>(std::distance(record.nativeTargets.begin(), targetIt));
         outArtifactPath = record.nativeArtifactPaths[index];
         outArtifactDigest = record.nativeArtifactDigests[index];
+        if (!record.nativeArtifactSignatures.empty()) {
+            outArtifactSignature = record.nativeArtifactSignatures[index];
+        }
         outSelectedTarget = desiredTarget;
         return true;
     }
@@ -4483,6 +4665,9 @@ bool selectRegistryArtifact(const RegistryIndexRecord& record,
     if (options == nullptr && !record.nativeTargets.empty()) {
         outArtifactPath = record.nativeArtifactPaths.front();
         outArtifactDigest = record.nativeArtifactDigests.front();
+        if (!record.nativeArtifactSignatures.empty()) {
+            outArtifactSignature = record.nativeArtifactSignatures.front();
+        }
         outSelectedTarget = record.nativeTargets.front();
         return true;
     }
@@ -4498,6 +4683,7 @@ bool selectRegistryArtifact(const RegistryIndexRecord& record,
         }
         outArtifactPath = record.artifactPath;
         outArtifactDigest = record.artifactDigest;
+        outArtifactSignature = record.artifactSignature;
         outSelectedTarget = desiredTarget;
         return true;
     }
@@ -4558,9 +4744,11 @@ bool resolveRegistryPackageNode(
 
     std::string rawArtifactPath;
     std::string artifactDigest;
+    std::string artifactSignature;
     std::string selectedTarget;
     if (!selectRegistryArtifact(record, packageId, options, rawArtifactPath,
-                                artifactDigest, selectedTarget, outError)) {
+                                artifactDigest, artifactSignature, selectedTarget,
+                                outError)) {
         return false;
     }
 
@@ -4642,6 +4830,7 @@ bool resolveRegistryPackageNode(
     node.entry.registry = registryAlias;
     node.entry.artifactPath = artifactPath.string();
     node.entry.artifactDigest = artifactDigest;
+    node.entry.artifactSignature = artifactSignature;
     node.entry.registryKeyId = indexIt->second.signingKeyId;
     node.entry.selectedTarget.clear();
     node.entry.buildFromSource = false;
@@ -5558,6 +5747,28 @@ bool materializeCacheEntry(const PackageRegistryEntry& sourceEntry,
         }
     }
 
+    if (sourceEntry.sourceType == "registry") {
+        const ProjectRegistryConfig* registry =
+            findRegistryConfig(manifest, sourceEntry.registry);
+        if (registry == nullptr) {
+            outError = "Dependency '" + sourceEntry.packageId +
+                       "' references unknown registry '" +
+                       sourceEntry.registry + "'.";
+            return false;
+        }
+        EffectiveRegistryProfile effectiveProfile;
+        if (!resolveEffectiveRegistryProfile(projectRoot, *registry, effectiveProfile,
+                                             outError)) {
+            return false;
+        }
+        if (!verifyRegistryArtifactSignature(manifest.policy,
+                                             effectiveProfile.config,
+                                             effectiveProfile.isRemote,
+                                             sourceEntry, outError)) {
+            return false;
+        }
+    }
+
     if (sourceEntry.kind == "source") {
         if (!copyDirectoryRecursive(sourceDir, cacheDir, outError)) {
             return false;
@@ -5643,6 +5854,8 @@ bool materializeProjectInstall(const PackageRegistryEntry& sourceEntry,
                                    sourceEntry.gitCommit + "|" +
                                    sourceEntry.artifactPath + "|" +
                                    sourceEntry.artifactDigest + "|" +
+                                   sourceEntry.artifactSignature + "|" +
+                                   sourceEntry.registryKeyId + "|" +
                                    sourceEntry.selectedTarget + "|" +
                                    (sourceEntry.buildFromSource ? "source-build|" : "prebuilt|") +
                                    sourceEntry.manifestDigest + "|" +
@@ -6124,6 +6337,7 @@ bool packageEntryMatchesResolution(const PackageRegistryEntry& expected,
            expected.gitCommit == actual.gitCommit &&
            expected.artifactPath == actual.artifactPath &&
            expected.artifactDigest == actual.artifactDigest &&
+           expected.artifactSignature == actual.artifactSignature &&
            expected.registryKeyId == actual.registryKeyId &&
            expected.selectedTarget == actual.selectedTarget &&
            expected.buildFromSource == actual.buildFromSource &&
@@ -6560,6 +6774,14 @@ bool enforceResolvedEntryPolicies(const ProjectManifestData& manifest,
                        entry.packageNamespace + "'.";
             return false;
         }
+        if (manifest.policy.requireSignedArtifacts &&
+            entry.sourceType == "registry" &&
+            (entry.artifactSignature.empty() || entry.registryKeyId.empty())) {
+            outError = "Project policy requires signed artifacts, but registry package '" +
+                       entry.packageId + "@" + entry.version +
+                       "' does not record an artifact signature.";
+            return false;
+        }
     }
     return true;
 }
@@ -6659,7 +6881,8 @@ void writeRegistryTables(std::ofstream& out,
 void writePolicyTable(std::ofstream& out, const ProjectPolicyConfig& policy) {
     if (policy.allowedRegistries.empty() &&
         policy.allowedNativeNamespaces.empty() &&
-        !policy.requireLockedInCi) {
+        !policy.requireLockedInCi &&
+        !policy.requireSignedArtifacts) {
         return;
     }
 
@@ -6677,6 +6900,9 @@ void writePolicyTable(std::ofstream& out, const ProjectPolicyConfig& policy) {
     }
     if (policy.requireLockedInCi) {
         out << "require_locked_in_ci = true\n";
+    }
+    if (policy.requireSignedArtifacts) {
+        out << "require_signed_artifacts = true\n";
     }
 }
 
@@ -6948,6 +7174,14 @@ bool loadProjectManifestData(const std::string& projectRoot,
             } else if (key == "require_locked_in_ci") {
                 if (!parseBoolValue(value,
                                     outManifest.policy.requireLockedInCi,
+                                    parseError)) {
+                    outError =
+                        "Invalid policy field '" + key + "': " + parseError;
+                    return false;
+                }
+            } else if (key == "require_signed_artifacts") {
+                if (!parseBoolValue(value,
+                                    outManifest.policy.requireSignedArtifacts,
                                     parseError)) {
                     outError =
                         "Invalid policy field '" + key + "': " + parseError;
@@ -7595,6 +7829,23 @@ bool publishProjectPackage(const std::string& projectRoot,
             return false;
         }
     }
+    std::string sourceArtifactSignature;
+    std::string nativeArtifactSignature;
+    if (signingKeyPtr != nullptr) {
+        if (!signPublishedArtifact(*signingKeyPtr, packageEntry.packageId,
+                                   packageEntry.version, "source",
+                                   sourceArtifactDigest, sourceArtifactSignature,
+                                   outError)) {
+            return false;
+        }
+        if (packageEntry.kind == "native" &&
+            !signPublishedArtifact(*signingKeyPtr, packageEntry.packageId,
+                                   packageEntry.version, publishedTarget,
+                                   nativeArtifactDigest, nativeArtifactSignature,
+                                   outError)) {
+            return false;
+        }
+    }
 
     const bool useHostedServicePaths =
         registryLocation.isRemote && hostedService.enabled &&
@@ -7674,6 +7925,14 @@ bool publishProjectPackage(const std::string& projectRoot,
                            "' with different published contents.";
                 return false;
             }
+            if (!existingRecordIt->artifactSignature.empty() &&
+                !sourceArtifactSignature.empty() &&
+                existingRecordIt->artifactSignature != sourceArtifactSignature) {
+                outError = "Registry already contains '" + packageEntry.packageId +
+                           "@" + packageEntry.version +
+                           "' with different published signatures.";
+                return false;
+            }
             auto targetIt = std::find(existingRecordIt->nativeTargets.begin(),
                                       existingRecordIt->nativeTargets.end(),
                                       publishedTarget);
@@ -7692,12 +7951,31 @@ bool publishProjectPackage(const std::string& projectRoot,
                                "' with different published contents.";
                     return false;
                 }
+                if (!existingRecordIt->nativeArtifactSignatures.empty() &&
+                    !nativeArtifactSignature.empty() &&
+                    existingRecordIt->nativeArtifactSignatures[targetIndex] !=
+                        nativeArtifactSignature) {
+                    outError = "Registry already contains '" +
+                               packageEntry.packageId + "@" +
+                               packageEntry.version + "' for target '" +
+                               publishedTarget +
+                               "' with different published signatures.";
+                    return false;
+                }
             }
         } else if (existingRecordIt->artifactDigest != sourceArtifactDigest ||
                    existingRecordIt->artifactPath != relativeSourceArtifactPath) {
             outError = "Registry already contains '" + packageEntry.packageId +
                        "@" + packageEntry.version +
                        "' with different published contents.";
+            return false;
+        } else if (!existingRecordIt->artifactSignature.empty() &&
+                   !sourceArtifactSignature.empty() &&
+                   existingRecordIt->artifactSignature !=
+                       sourceArtifactSignature) {
+            outError = "Registry already contains '" + packageEntry.packageId +
+                       "@" + packageEntry.version +
+                       "' with different published signatures.";
             return false;
         }
     }
@@ -7742,12 +8020,15 @@ bool publishProjectPackage(const std::string& projectRoot,
         if (packageEntry.kind == "native") {
             record.artifactPath = relativeSourceArtifactPath;
             record.artifactDigest = sourceArtifactDigest;
+            record.artifactSignature = sourceArtifactSignature;
             record.nativeTargets.push_back(publishedTarget);
             record.nativeArtifactPaths.push_back(relativeNativeArtifactPath);
             record.nativeArtifactDigests.push_back(nativeArtifactDigest);
+            record.nativeArtifactSignatures.push_back(nativeArtifactSignature);
         } else {
             record.artifactPath = relativeSourceArtifactPath;
             record.artifactDigest = sourceArtifactDigest;
+            record.artifactSignature = sourceArtifactSignature;
         }
         record.dependencies = dependencyPins;
         records.push_back(std::move(record));
@@ -7756,17 +8037,40 @@ bool publishProjectPackage(const std::string& projectRoot,
         existingRecordIt->mogRuntime = packageEntry.mogRuntime;
         existingRecordIt->artifactPath = relativeSourceArtifactPath;
         existingRecordIt->artifactDigest = sourceArtifactDigest;
+        if (!sourceArtifactSignature.empty()) {
+            existingRecordIt->artifactSignature = sourceArtifactSignature;
+        }
         auto targetIt = std::find(existingRecordIt->nativeTargets.begin(),
                                   existingRecordIt->nativeTargets.end(),
                                   publishedTarget);
         if (targetIt == existingRecordIt->nativeTargets.end()) {
+            if (existingRecordIt->nativeArtifactSignatures.empty() &&
+                !nativeArtifactSignature.empty() &&
+                !existingRecordIt->nativeTargets.empty()) {
+                existingRecordIt->nativeArtifactSignatures.resize(
+                    existingRecordIt->nativeTargets.size());
+            }
             existingRecordIt->nativeTargets.push_back(publishedTarget);
             existingRecordIt->nativeArtifactPaths.push_back(relativeNativeArtifactPath);
             existingRecordIt->nativeArtifactDigests.push_back(nativeArtifactDigest);
+            existingRecordIt->nativeArtifactSignatures.push_back(
+                nativeArtifactSignature);
+        } else if (!nativeArtifactSignature.empty()) {
+            if (existingRecordIt->nativeArtifactSignatures.empty()) {
+                existingRecordIt->nativeArtifactSignatures.resize(
+                    existingRecordIt->nativeTargets.size());
+            }
+            const size_t targetIndex = static_cast<size_t>(
+                std::distance(existingRecordIt->nativeTargets.begin(), targetIt));
+            existingRecordIt->nativeArtifactSignatures[targetIndex] =
+                nativeArtifactSignature;
         }
     } else {
         existingRecordIt->license = packageEntry.license;
         existingRecordIt->mogRuntime = packageEntry.mogRuntime;
+        if (!sourceArtifactSignature.empty()) {
+            existingRecordIt->artifactSignature = sourceArtifactSignature;
+        }
     }
 
     if (!writeRegistryIndexFile(indexPath, std::move(records), signingKeyPtr,

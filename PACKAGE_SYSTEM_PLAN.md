@@ -4,7 +4,7 @@
 
 In progress.
 
-Last updated: 2026-04-25.
+Last updated: 2026-04-28.
 
 Phase snapshot:
 
@@ -13,10 +13,11 @@ Phase snapshot:
 - Phase 3 native artifact distribution: substantially complete for the current
   CMake-based model (broader non-CMake/native build-system policy remains)
 - Phase 4 enterprise and security features: in progress (policy baseline,
-  signed registry/advisory metadata, hosted-registry trust enforcement,
-  lockfile-based `mog audit`, hosted `registry-public-key.v1` bootstrap, and
-  user-level registry trust flows are implemented; richer enterprise policy
-  and broader supply-chain trust features remain)
+  signed registry/advisory/artifact metadata, hosted-registry trust
+  enforcement, lockfile-based `mog audit`, hosted `registry-public-key.v1`
+  bootstrap, user-level registry trust flows, and signed-artifact policy
+  enforcement are implemented; richer enterprise policy and broader
+  supply-chain trust features remain)
 
 Phase 1 local package-management work is now substantially implemented in the
 repository. The current codebase supports:
@@ -131,19 +132,24 @@ repository. The current codebase supports:
   publish bundles, and aggregates them into a hosted official-package publish
   step for `mog:window`
 - root-manifest `[policy]` support with `allowed_registries`,
-  `allowed_native_namespaces`, and `require_locked_in_ci`
+  `allowed_native_namespaces`, `require_locked_in_ci`, and
+  `require_signed_artifacts`
 - policy enforcement during `mog install` and install-aware `mog run`,
   including pre-resolution registry allowlist checks and final resolved-graph
   native/registry policy validation
 - SHA-256-prefixed artifact, manifest, API, and cache digests
-- signed `registry.v3` metadata using Ed25519 signing keys passed through
+- signed `registry.v4` metadata using Ed25519 signing keys passed through
   `mog publish --signing-key <registry-key.v1>`
+- signed source/native registry artifacts with detached Ed25519 signatures
+  emitted by `mog publish --signing-key <registry-key.v1>`
+- artifact-signature verification for registry installs, including locked
+  reinstalls and policy-gated `require_signed_artifacts`
 - trusted hosted-registry verification through
   `[registries.<name>].trusted_keys = ["<key_id>:<base64-der-public-key>"]`
 - explicit hosted-registry compatibility override through
   `[registries.<name>].allow_insecure = true`
 - lock/install metadata pinning of the registry signing key via
-  `registry_key_id`
+  `registry_key_id`, plus pinned `artifact_signature`
 - signed `advisories.v1` metadata plus lockfile-based `mog audit`
   and `mog audit --offline`
 - user-level registry bootstrap state in `~/.config/mog/registries.toml`,
@@ -167,9 +173,9 @@ Not implemented yet (post-v1 / follow-on work):
 - richer enterprise policy workflows beyond the current root-manifest registry,
   native-namespace, CI-locked install controls, and hosted public-key
   bootstrap
-- detached artifact-signature workflows, transparency/revocation, or other
-  richer supply-chain trust features beyond the current signed metadata +
-  SHA-256 artifact digest model
+- transparency/revocation, provenance, key rotation, or other richer
+  supply-chain trust features beyond the current signed metadata +
+  signed-artifact + SHA-256 digest model
 
 This document describes the target package architecture for Mog, the required
 user-facing workflows, internal invariants, security posture, and a phased
@@ -804,6 +810,13 @@ as:
 - deny native packages except from approved namespaces
 - require lockfile-only installs in CI
 
+Current implementation status:
+
+- signed artifacts are implemented for registry-published source artifacts and
+  native artifacts through `registry.v4`
+- root-manifest policy now supports `require_signed_artifacts = true`
+- lock/install metadata now pin `artifact_signature` and `registry_key_id`
+
 ## Validation Requirements
 
 The existing package validation work should be expanded and made mandatory in
@@ -876,7 +889,7 @@ Current implementation status:
 - implemented root-manifest policy controls:
   `allowed_registries`, `allowed_native_namespaces`,
   registry `trusted_keys`, registry `allow_insecure`, and
-  `require_locked_in_ci`
+  `require_locked_in_ci`, plus `require_signed_artifacts`
 - implemented root-manifest native toolchain controls:
   `cmake_toolchain`, `generator`, `build_type`, `configure_args`,
   `build_args`, and `env`
@@ -1197,13 +1210,18 @@ Current status:
     `mog run`
   - SHA-256-prefixed digest generation for published artifacts and generated
     package metadata
-  - signed `registry.v3` metadata verification for trusted registries
+  - signed `registry.v4` metadata verification for trusted registries
+  - detached artifact signatures for registry-published source/native
+    artifacts, verified during install and locked reinstall flows
   - hosted-registry default trust enforcement with
     `[registries.<alias>].trusted_keys`
   - explicit hosted-registry unsigned compatibility through
     `[registries.<alias>].allow_insecure = true`
   - `mog publish --signing-key <registry-key.v1>` for signed registry writes
-  - lock/install metadata pinning of `registry_key_id`
+  - `require_signed_artifacts` policy enforcement for registry-sourced
+    packages
+  - lock/install metadata pinning of `registry_key_id` and
+    `artifact_signature`
   - signed `advisories.v1` metadata loading and lockfile-based `mog audit`
   - `mog audit --offline` using cached advisory metadata
   - user-level registry profile storage in `~/.config/mog/registries.toml`
@@ -1222,8 +1240,8 @@ Current status:
   - richer private-registry bootstrap workflows such as organization-wide key
     distribution and non-manual bootstrap beyond the current hosted
     `registry-public-key.v1` + user-level stored trust/token model
-  - richer supply-chain trust features such as detached artifact signatures,
-    transparency, key rotation/revocation, and policy-enforced signature modes
+  - richer supply-chain trust features such as provenance records,
+    transparency, and key rotation/revocation
 
 ## Recommended Immediate Decisions
 
