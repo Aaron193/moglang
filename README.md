@@ -487,6 +487,10 @@ skips the optional `window` package target.
 
 ## Package Manifests
 
+For the full package-manager guide, including dependency sources, registries,
+publishing, signing, policy, audit, native artifacts, and current post-V1
+scope, see `docs/PACKAGE_SYSTEM.md`.
+
 Packages can declare authoring metadata in `mog.toml`:
 
 ```toml
