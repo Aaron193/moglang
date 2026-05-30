@@ -126,6 +126,29 @@ run_expect_failure \
     "$INTERPRETER" --validate-package "$TEMP_DIR/examples/invalid-system-dep" ||
     failed=1
 
+mkdir -p "$TEMP_DIR/examples/unsupported-native-build"
+cat <<'EOF_UNSUPPORTED_NATIVE_BUILD' > "$TEMP_DIR/examples/unsupported-native-build/package.toml"
+kind = "native"
+namespace = "examples"
+name = "unsupported-native-build"
+version = "0.1.0"
+license = "MIT"
+abi_version = 3
+mog_runtime = "^0.1.0"
+description = "unsupported native build"
+dependencies = []
+
+[native]
+build = "make"
+targets = ["linux-x86_64-gnu"]
+EOF_UNSUPPORTED_NATIVE_BUILD
+
+run_expect_failure \
+    "reject unsupported native build backend" \
+    "Native package manifest [native].build must currently be \"cmake\"." \
+    "$INTERPRETER" --validate-package "$TEMP_DIR/examples/unsupported-native-build" ||
+    failed=1
+
 mkdir -p "$TEMP_DIR/examples/source-system-dep/src"
 cat <<'EOF_SOURCE_SYSDEP' > "$TEMP_DIR/examples/source-system-dep/package.toml"
 kind = "source"

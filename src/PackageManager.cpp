@@ -613,6 +613,15 @@ struct HostedRegistryServiceConfig {
     bool enabled = false;
     bool contentAddressedArtifacts = false;
     bool conditionalIndexUpdates = false;
+    std::string publishPolicyPath;
+};
+
+struct HostedRegistryPublishPolicy {
+    bool enabled = false;
+    bool requireSignedPublish = false;
+    bool requireCleanGit = false;
+    bool requireTag = false;
+    std::vector<std::string> allowedNamespaces;
 };
 
 const ProjectRegistryConfig* findRegistryConfig(
@@ -630,6 +639,10 @@ bool enforceResolvedEntryPolicies(const ProjectManifestData& manifest,
 bool enforceCiLockedPolicy(const ProjectManifestData& manifest,
                            const InstallOptions& options,
                            std::string& outError);
+bool ensurePublishGitPreflight(const std::filesystem::path& packageDir,
+                               const PackageManifest& manifest,
+                               const PublishOptions& options,
+                               std::string& outError);
 
 struct NativeToolchainSelection {
     std::string target;
@@ -3721,6 +3734,7 @@ bool parseHostedRegistryServiceFile(const std::filesystem::path& servicePath,
     std::string schemaVersion;
     std::string artifactUploadMode;
     std::string indexUpdateMode;
+    std::string publishPolicyPath;
     std::string line;
     size_t lineNumber = 0;
     while (std::getline(file, line)) {
@@ -3751,6 +3765,8 @@ bool parseHostedRegistryServiceFile(const std::filesystem::path& servicePath,
             artifactUploadMode = parsed;
         } else if (key == "index_update_mode") {
             indexUpdateMode = parsed;
+        } else if (key == "publish_policy") {
+            publishPolicyPath = parsed;
         } else {
             outError = "Unsupported hosted registry service field '" + key + "'.";
             return false;
@@ -3781,6 +3797,121 @@ bool parseHostedRegistryServiceFile(const std::filesystem::path& servicePath,
     outService.enabled = true;
     outService.contentAddressedArtifacts = true;
     outService.conditionalIndexUpdates = true;
+    outService.publishPolicyPath = publishPolicyPath;
+    return true;
+}
+
+bool parseHostedRegistryPublishPolicyFile(
+    const std::filesystem::path& policyPath,
+    HostedRegistryPublishPolicy& outPolicy,
+    std::string& outError) {
+    outPolicy = HostedRegistryPublishPolicy{};
+    std::ifstream file(policyPath);
+    if (!file) {
+        outError = "Could not open hosted registry publish policy file '" +
+                   policyPath.string() + "'.";
+        return false;
+    }
+
+    std::string schemaVersion;
+    std::string line;
+    size_t lineNumber = 0;
+    while (std::getline(file, line)) {
+        ++lineNumber;
+        const std::string content = stripComment(line);
+        if (content.empty()) {
+            continue;
+        }
+        const size_t equals = content.find('=');
+        if (equals == std::string::npos) {
+            outError = "Invalid hosted registry publish policy line " +
+                       std::to_string(lineNumber) + ": expected key = value.";
+            return false;
+        }
+        const std::string key = trim(std::string_view(content).substr(0, equals));
+        const std::string value =
+            trim(std::string_view(content).substr(equals + 1));
+        if (key == "schema_version") {
+            if (!parseQuotedString(value, schemaVersion, outError)) {
+                outError = "Invalid hosted registry publish policy line " +
+                           std::to_string(lineNumber) + ": " + outError;
+                return false;
+            }
+        } else if (key == "require_signed_publish") {
+            if (!parseBoolValue(value, outPolicy.requireSignedPublish, outError)) {
+                outError = "Invalid hosted registry publish policy line " +
+                           std::to_string(lineNumber) + ": " + outError;
+                return false;
+            }
+        } else if (key == "require_clean_git") {
+            if (!parseBoolValue(value, outPolicy.requireCleanGit, outError)) {
+                outError = "Invalid hosted registry publish policy line " +
+                           std::to_string(lineNumber) + ": " + outError;
+                return false;
+            }
+        } else if (key == "require_tag") {
+            if (!parseBoolValue(value, outPolicy.requireTag, outError)) {
+                outError = "Invalid hosted registry publish policy line " +
+                           std::to_string(lineNumber) + ": " + outError;
+                return false;
+            }
+        } else if (key == "allowed_namespaces") {
+            if (!parseQuotedStringArray(value, outPolicy.allowedNamespaces,
+                                        outError)) {
+                outError = "Invalid hosted registry publish policy line " +
+                           std::to_string(lineNumber) + ": " + outError;
+                return false;
+            }
+            outPolicy.allowedNamespaces =
+                sortedUniqueStrings(std::move(outPolicy.allowedNamespaces));
+        } else {
+            outError = "Unsupported hosted registry publish policy field '" +
+                       key + "'.";
+            return false;
+        }
+    }
+
+    if (schemaVersion != "registry-publish-policy.v1") {
+        outError =
+            "Hosted registry publish policy must declare schema_version = \"registry-publish-policy.v1\".";
+        return false;
+    }
+    outPolicy.enabled = true;
+    return true;
+}
+
+bool discoverHostedRegistryPublishPolicy(
+    const EffectiveRegistryProfile& profile,
+    const RegistryLocation& location,
+    const HostedRegistryServiceConfig& service,
+    HostedRegistryPublishPolicy& outPolicy,
+    std::string& outError) {
+    outPolicy = HostedRegistryPublishPolicy{};
+    outError.clear();
+    if (!location.isRemote || service.publishPolicyPath.empty()) {
+        return true;
+    }
+
+    std::filesystem::path tempDir;
+    if (!createTemporaryDirectory("mog-registry-publish-policy", tempDir,
+                                  outError)) {
+        return false;
+    }
+    ScopedPathCleanup cleanup{tempDir};
+    const std::filesystem::path policyPath =
+        tempDir / "registry-publish-policy.v1";
+    if (!downloadUrlToFile(joinUrlPath(location.remoteRootUrl,
+                                       service.publishPolicyPath),
+                           profile.token, policyPath, outError)) {
+        outError = "Registry '" + profile.config.alias +
+                   "' publish policy discovery failed: " + outError;
+        return false;
+    }
+    if (!parseHostedRegistryPublishPolicyFile(policyPath, outPolicy, outError)) {
+        outError = "Registry '" + profile.config.alias +
+                   "' publish policy discovery failed: " + outError;
+        return false;
+    }
     return true;
 }
 
@@ -3819,6 +3950,47 @@ bool discoverHostedRegistryService(const EffectiveRegistryProfile& profile,
         outError = "Registry '" + profile.config.alias +
                    "' service discovery failed: " + outError;
         return false;
+    }
+    return true;
+}
+
+bool enforceHostedRegistryPublishPolicy(
+    const HostedRegistryPublishPolicy& policy,
+    const std::filesystem::path& packagePath,
+    const PackageManifest& manifest,
+    const PublishOptions& options,
+    const RegistrySigningKeyFile* signingKey,
+    std::string& outError) {
+    if (!policy.enabled) {
+        return true;
+    }
+    const std::string packageId =
+        makePackageId(manifest.packageNamespace, manifest.packageName);
+    if (policy.requireSignedPublish && signingKey == nullptr) {
+        outError = "Registry publish policy requires signed publishes; pass --signing-key.";
+        return false;
+    }
+    if (policy.requireTag && options.expectedTag.empty()) {
+        outError = "Registry publish policy requires a version tag; pass --tag.";
+        return false;
+    }
+    if (!policy.allowedNamespaces.empty() &&
+        std::find(policy.allowedNamespaces.begin(),
+                  policy.allowedNamespaces.end(),
+                  manifest.packageNamespace) == policy.allowedNamespaces.end()) {
+        outError = "Registry publish policy disallows package namespace '" +
+                   manifest.packageNamespace + "' for '" + packageId + "'.";
+        return false;
+    }
+    if (policy.requireCleanGit) {
+        PublishOptions policyOptions = options;
+        policyOptions.requireCleanGit = true;
+        if (!ensurePublishGitPreflight(packagePath, manifest, policyOptions,
+                                       outError)) {
+            outError = "Registry publish policy requires a clean git package: " +
+                       outError;
+            return false;
+        }
     }
     return true;
 }
@@ -7948,25 +8120,182 @@ bool discoverDependencySpec(const std::string& projectRoot,
 
 bool addProjectDependency(const std::string& projectRoot,
                           const DependencySpec& dependency,
+                          const AddDependencyOptions& options,
                           std::string& outError) {
     ProjectManifestData manifest;
     if (!loadProjectManifestData(projectRoot, manifest, outError)) {
         return false;
     }
+    if (options.group != "runtime" && options.group != "dev" &&
+        options.group != "build") {
+        outError = "Dependency group must be 'runtime', 'dev', or 'build'.";
+        return false;
+    }
 
-    auto existing = std::find_if(
-        manifest.dependencies.begin(), manifest.dependencies.end(),
-        [&](const DependencySpec& candidate) {
-            return candidate.alias == dependency.alias;
-        });
-    if (existing != manifest.dependencies.end()) {
-        *existing = dependency;
-    } else {
-        manifest.dependencies.push_back(dependency);
+    std::vector<DependencySpec>& targetDependencies =
+        options.group == "dev"     ? manifest.devDependencies
+        : options.group == "build" ? manifest.buildDependencies
+                                    : manifest.dependencies;
+
+    auto upsertDependency =
+        [&](std::vector<DependencySpec>& dependencies) {
+            auto existing = std::find_if(
+                dependencies.begin(), dependencies.end(),
+                [&](const DependencySpec& candidate) {
+                    return candidate.alias == dependency.alias;
+                });
+            if (existing == dependencies.end()) {
+                return false;
+            }
+            if (&dependencies == &targetDependencies) {
+                *existing = dependency;
+                return true;
+            }
+            dependencies.erase(existing);
+            return false;
+        };
+
+    const bool updatedTarget = upsertDependency(targetDependencies);
+    if (&targetDependencies != &manifest.dependencies) {
+        upsertDependency(manifest.dependencies);
+    }
+    if (&targetDependencies != &manifest.devDependencies) {
+        upsertDependency(manifest.devDependencies);
+    }
+    if (&targetDependencies != &manifest.buildDependencies) {
+        upsertDependency(manifest.buildDependencies);
+    }
+    if (!updatedTarget) {
+        targetDependencies.push_back(dependency);
     }
 
     sortDependencies(manifest.dependencies);
+    sortDependencies(manifest.devDependencies);
+    sortDependencies(manifest.buildDependencies);
     return writeProjectManifestData(projectRoot, manifest, outError);
+}
+
+bool addProjectDependency(const std::string& projectRoot,
+                          const DependencySpec& dependency,
+                          std::string& outError) {
+    return addProjectDependency(projectRoot, dependency, AddDependencyOptions{},
+                                outError);
+}
+
+bool completeExplicitDependencySpec(const std::string& projectRoot,
+                                    DependencySpec& dependency,
+                                    std::string& outError) {
+    outError.clear();
+    if (!validateDependencySpec(dependency, outError)) {
+        return false;
+    }
+
+    ProjectManifestData manifest;
+    if (!loadProjectManifestData(projectRoot, manifest, outError)) {
+        return false;
+    }
+
+    auto fillFromEntry =
+        [&](const PackageRegistryEntry& entry) {
+            if (dependency.alias.empty()) {
+                dependency.alias = entry.importName;
+            }
+            if (dependency.packageId.empty()) {
+                dependency.packageId = entry.packageId;
+            }
+            if (dependency.version.empty()) {
+                dependency.version = entry.version;
+            }
+        };
+
+    if (!dependency.path.empty()) {
+        PackageRegistryEntry entry;
+        const std::filesystem::path dependencyPath =
+            std::filesystem::path(projectRoot) / dependency.path;
+        if (!loadPackageEntryFromDir(dependencyPath, entry, nullptr, outError)) {
+            outError = "Could not load path dependency '" + dependency.path +
+                       "': " + outError;
+            return false;
+        }
+        fillFromEntry(entry);
+    } else if (dependency.workspace) {
+        if (dependency.packageId.empty()) {
+            outError = "Workspace dependencies require --package namespace:name.";
+            return false;
+        }
+        std::unordered_map<std::string, PackageNode> available;
+        std::unordered_set<std::string> workspacePackageIds;
+        if (!scanWorkspaceMemberPackages(std::filesystem::path(projectRoot),
+                                         manifest, available,
+                                         workspacePackageIds, outError)) {
+            return false;
+        }
+        auto it = available.find(dependency.packageId);
+        if (it == available.end() ||
+            workspacePackageIds.find(dependency.packageId) ==
+                workspacePackageIds.end()) {
+            outError = "Workspace dependency could not find member '" +
+                       dependency.packageId + "'.";
+            return false;
+        }
+        fillFromEntry(it->second.entry);
+    } else if (!dependency.git.empty()) {
+        std::filesystem::path gitSourceDir;
+        std::string gitCommit;
+        if (!ensureGitDependencySource(dependency, false, gitSourceDir, gitCommit,
+                                       outError)) {
+            return false;
+        }
+        PackageRegistryEntry entry;
+        if (!loadPackageEntryFromDir(gitSourceDir, entry, nullptr, outError)) {
+            outError = "Could not load git dependency '" + dependency.git +
+                       "': " + outError;
+            return false;
+        }
+        fillFromEntry(entry);
+    } else if (!dependency.packageId.empty()) {
+        const std::string registryAlias =
+            dependency.registry.empty()
+                ? defaultPublishedRegistryAlias(manifest)
+                : dependency.registry;
+        if (registryAlias.empty()) {
+            outError =
+                "Published package specs require --registry or a configured default registry.";
+            return false;
+        }
+
+        std::unordered_map<std::string, LoadedRegistryIndex> loadedRegistryIndexes;
+        std::unordered_map<std::string, PackageNode> resolvedRegistryNodes;
+        PackageNode publishedNode;
+        if (!resolveRegistryPackageNode(projectRoot, manifest, registryAlias,
+                                        dependency.packageId, dependency.version,
+                                        loadedRegistryIndexes,
+                                        resolvedRegistryNodes, nullptr,
+                                        publishedNode, outError)) {
+            return false;
+        }
+        fillFromEntry(publishedNode.entry);
+        if (dependency.version.empty()) {
+            dependency.version = publishedNode.entry.version;
+        }
+        if (registryAlias != "default") {
+            dependency.registry = registryAlias;
+        }
+    } else {
+        outError =
+            "Explicit dependencies require --path, --workspace, --git, or package metadata.";
+        return false;
+    }
+
+    if (dependency.alias.empty()) {
+        outError = "Dependency alias could not be inferred; pass --alias.";
+        return false;
+    }
+    if (dependency.packageId.empty()) {
+        outError = "Dependency package id could not be inferred; pass --package.";
+        return false;
+    }
+    return validateDependencySpec(dependency, outError);
 }
 
 bool removeProjectDependency(const std::string& projectRoot,
@@ -8045,6 +8374,7 @@ bool publishProjectPackage(const std::string& projectRoot,
     }
 
     HostedRegistryServiceConfig hostedService;
+    HostedRegistryPublishPolicy hostedPublishPolicy;
     if (registryLocation.isRemote) {
         if (effectiveProfile.token.empty()) {
             outError = "Hosted publish requires a stored token. Run 'mog login " +
@@ -8053,6 +8383,12 @@ bool publishProjectPackage(const std::string& projectRoot,
         }
         if (!discoverHostedRegistryService(effectiveProfile, registryLocation,
                                            hostedService, outError)) {
+            return false;
+        }
+        if (!discoverHostedRegistryPublishPolicy(effectiveProfile, registryLocation,
+                                                 hostedService,
+                                                 hostedPublishPolicy,
+                                                 outError)) {
             return false;
         }
     }
@@ -8107,6 +8443,11 @@ bool publishProjectPackage(const std::string& projectRoot,
         outError = "Package '" + manifest.packageNamespace + ":" +
                    manifest.packageName +
                    "' cannot be published because its manifest sets publish = false.";
+        return false;
+    }
+    if (!enforceHostedRegistryPublishPolicy(hostedPublishPolicy, packagePath,
+                                            manifest, options, signingKeyPtr,
+                                            outError)) {
         return false;
     }
     if (!ensurePublishGitPreflight(packagePath, manifest, options, outError)) {

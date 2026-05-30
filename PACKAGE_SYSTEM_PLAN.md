@@ -4,7 +4,7 @@
 
 In progress.
 
-Last updated: 2026-04-28.
+Last updated: 2026-05-30.
 
 Phase snapshot:
 
@@ -16,8 +16,9 @@ Phase snapshot:
   signed registry/advisory/artifact metadata, hosted-registry trust
   enforcement, lockfile-based `mog audit`, hosted `registry-public-key.v1`
   bootstrap, signed `registry-trust.v1` trust metadata with key
-  rotation/revocation enforcement, user-level registry trust flows, and
-  signed-artifact policy enforcement are implemented; richer enterprise
+  rotation/revocation enforcement, hosted publish-policy enforcement,
+  user-level registry trust flows, and signed-artifact policy enforcement are
+  implemented; richer enterprise
   policy and broader supply-chain trust features remain)
 
 Phase 1 local package-management work is now substantially implemented in the
@@ -25,6 +26,8 @@ repository. The current codebase supports:
 
 - `mog init`
 - `mog add <local-package>`
+- explicit `mog add` source flags for path, git, registry, workspace, alias,
+  package, version, and dev/build dependency-group placement
 - `mog remove <alias>`
 - `mog install`
 - `mog update`
@@ -74,6 +77,9 @@ repository. The current codebase supports:
 - hosted `registry-service.v1` capability discovery with content-addressed
   artifact uploads and ETag-guarded `index.toml` writes, while retaining
   compatibility fallback to legacy hosted `index.toml` + artifact `PUT` flows
+- hosted `registry-publish-policy.v1` discovery through `registry-service.v1`,
+  with client-side enforcement for signed publishes, clean git package state,
+  version tags, and allowed namespaces
 - registry-pinned lock/install metadata including registry identity and
   artifact digests
 - lock/install/registry metadata pinning of package `mog_runtime`
@@ -173,10 +179,9 @@ repository. The current codebase supports:
 
 Not implemented yet (post-v1 / follow-on work):
 
-- richer hosted-registry publish policy and service contracts beyond the
-  current client-side git publish preflight (`--require-clean-git`,
-  `--tag <tag>`), `registry-service.v1` discovery, content-addressed artifact
-  uploads, and ETag-guarded `index.toml` writes
+- richer hosted-registry service contracts beyond the current
+  `registry-service.v1`, `registry-publish-policy.v1`, content-addressed
+  artifact uploads, and ETag-guarded `index.toml` writes
 - richer enterprise policy workflows beyond the current root-manifest registry,
   native-namespace, CI-locked install controls, and hosted public-key
   bootstrap
@@ -369,8 +374,11 @@ Current implementation status:
 - published source-package adds currently accept exact versions plus `^` and
   `~` semver constraints
 - git dependency specs now accept exactly one of `rev`, `tag`, or `branch`
-- does not yet auto-discover packages from git specs in `mog add`, and still
-  focuses on local/workspace and published registry discovery
+- explicit `mog add` source flags now support `--path`, `--git`,
+  `--registry`, `--workspace`, `--alias`, `--package`, `--version`, `--dev`,
+  and `--build`
+- `mog add --git` auto-discovers package metadata from the selected checkout
+  when package metadata is not provided explicitly
 
 ### Remove a dependency
 
@@ -494,8 +502,11 @@ Current implementation status:
 - opt-in publish hardening is now implemented via `--require-clean-git` and
   `--tag <tag>`, including package-directory-scoped clean-tree checks and
   tag-to-`HEAD`/manifest-version validation
-- does not yet enforce richer registry-side publish policy such as
-  registry-enforced publish rules or multi-host prebuilt release automation
+- hosted registries can advertise `registry-publish-policy.v1` through
+  `registry-service.v1`, and the client enforces signed-publish, clean-git,
+  tag, and allowed-namespace publish rules before upload
+- does not yet enforce multi-host prebuilt release automation as a registry
+  service workflow
 
 ## Package Layout
 
@@ -897,6 +908,9 @@ Current implementation status:
   `--no-native-build`, `--prefer-prebuilt`, `--target`,
   `publish --signing-key`, `publish --require-clean-git`, and
   `publish --tag`
+- implemented `mog add` flags: `--path`, `--git`, `--registry`,
+  `--workspace`, `--alias`, `--package`, `--version`, `--rev`, `--tag`,
+  `--branch`, `--dev`, and `--build`
 - implemented hosted trust bootstrap: `mog registry trust <registry> --bootstrap`
 - implemented trust refresh: `mog registry trust <registry> --refresh`
 - implemented root-manifest script controls: `[scripts].test` and
@@ -1137,16 +1151,17 @@ Current status:
     artifact uploads plus ETag-guarded hosted `index.toml` updates, while
     retaining compatibility fallback to the legacy hosted `index.toml` +
     artifact `PUT` contract
+  - hosted `registry-publish-policy.v1` discovery through
+    `registry-service.v1`, with client-side publish enforcement for signed
+    publishes, clean git state, version tags, and allowed namespaces
   - `mog login` / `mog logout` registry auth flows using bearer tokens stored
     in user config
   - git dependency fetch/install using pinned `rev`, `tag`, or `branch`
     selectors and resolved commit pinning in `mog.lock`
 - not yet complete inside Phase 2:
-  - richer registry-side publish policy beyond the current client-side
-    `--require-clean-git` / `--tag <tag>` preflight, such as
-    registry-enforced publish rules
   - richer registry-side authentication and service workflow beyond the
-    current hosted discovery, upload, and conditional-write contract
+    current hosted discovery, publish-policy, upload, and conditional-write
+    contract
 
 ### Phase 3: Native Artifact Distribution
 

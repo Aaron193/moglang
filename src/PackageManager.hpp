@@ -111,6 +111,10 @@ struct CachePruneOptions {
     bool dryRun = false;
 };
 
+struct AddDependencyOptions {
+    std::string group = "runtime";
+};
+
 bool loadProjectManifestData(const std::string& projectRoot,
                              ProjectManifestData& outManifest,
                              std::string& outError);
@@ -130,7 +134,16 @@ bool discoverDependencySpec(const std::string& projectRoot,
 
 bool addProjectDependency(const std::string& projectRoot,
                           const DependencySpec& dependency,
+                          const AddDependencyOptions& options,
                           std::string& outError);
+
+bool addProjectDependency(const std::string& projectRoot,
+                          const DependencySpec& dependency,
+                          std::string& outError);
+
+bool completeExplicitDependencySpec(const std::string& projectRoot,
+                                    DependencySpec& dependency,
+                                    std::string& outError);
 
 bool removeProjectDependency(const std::string& projectRoot,
                              const std::string& alias,

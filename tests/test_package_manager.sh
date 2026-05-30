@@ -587,6 +587,70 @@ if ! grep -Fq 'math = { path = "' "$TEMP_DIR/mog.toml" || \
     exit 1
 fi
 
+ADD_FLAGS_DIR="$(mktemp -d)"
+ln -s "$PROJECT_ROOT/packages" "$ADD_FLAGS_DIR/packages"
+mkdir -p "$ADD_FLAGS_DIR/local-build-util/src"
+cat > "$ADD_FLAGS_DIR/local-build-util/mog.toml" <<'EOF_ADD_BUILD_MANIFEST'
+kind = "source"
+import_name = "build_util"
+namespace = "acme"
+name = "build-util"
+version = "0.1.0"
+license = "MIT"
+description = "build dependency add test"
+entry = "src/main.mog"
+dependencies = []
+EOF_ADD_BUILD_MANIFEST
+cat > "$ADD_FLAGS_DIR/local-build-util/src/main.mog" <<'EOF_ADD_BUILD_SRC'
+fn Name() str {
+    return "build util"
+}
+EOF_ADD_BUILD_SRC
+pushd "$ADD_FLAGS_DIR" >/dev/null
+"$MOG" init add-flags-test >/dev/null
+"$MOG" add --path packages/examples/hello --dev >/dev/null
+"$MOG" add --path local-build-util --build >/dev/null
+if ! grep -Fq '[dev-dependencies]' mog.toml || \
+   ! grep -Fq 'hello = { path = "packages/examples/hello"' mog.toml || \
+   ! grep -Fq '[build-dependencies]' mog.toml || \
+   ! grep -Fq 'build_util = { path = "local-build-util"' mog.toml; then
+    echo "[FAIL] add should support explicit path dependencies in dev/build groups"
+    cat mog.toml
+    exit 1
+fi
+
+GIT_PACKAGE_DIR="$ADD_FLAGS_DIR/git-package"
+mkdir -p "$GIT_PACKAGE_DIR/src"
+cat > "$GIT_PACKAGE_DIR/mog.toml" <<'EOF_ADD_GIT_MANIFEST'
+kind = "source"
+import_name = "git_util"
+namespace = "acme"
+name = "git-util"
+version = "0.1.0"
+license = "MIT"
+description = "git add dependency"
+entry = "src/main.mog"
+dependencies = []
+EOF_ADD_GIT_MANIFEST
+cat > "$GIT_PACKAGE_DIR/src/main.mog" <<'EOF_ADD_GIT_SRC'
+fn Name() str {
+    return "git util"
+}
+EOF_ADD_GIT_SRC
+git -C "$GIT_PACKAGE_DIR" init >/dev/null
+git -C "$GIT_PACKAGE_DIR" config user.email "mog@example.invalid"
+git -C "$GIT_PACKAGE_DIR" config user.name "Mog Test"
+git -C "$GIT_PACKAGE_DIR" add .
+git -C "$GIT_PACKAGE_DIR" commit -m "initial git package" >/dev/null
+git -C "$GIT_PACKAGE_DIR" tag v0.1.0
+"$MOG" add --git "$GIT_PACKAGE_DIR" --tag v0.1.0 --alias git_util --dev >/dev/null
+if ! grep -Fq 'git_util = { package = "acme:git-util", version = "0.1.0", git = "'"$GIT_PACKAGE_DIR"'", tag = "v0.1.0" }' mog.toml; then
+    echo "[FAIL] add should auto-discover git package metadata and write git refs"
+    cat mog.toml
+    exit 1
+fi
+popd >/dev/null
+
 if [[ ! -f "$TEMP_DIR/.mog/install/registry.toml" ]]; then
     echo "[FAIL] add/install did not create .mog/install/registry.toml"
     exit 1
@@ -853,6 +917,28 @@ dependencies = []
 EOF_REGISTRY_NATIVE_MANIFEST
 
 write_registry_index "$REGISTRY_DIR"
+
+REGISTRY_ADD_DIR="$(mktemp -d)"
+cat > "$REGISTRY_ADD_DIR/mog.toml" <<EOF_REGISTRY_ADD
+kind = "project"
+name = "registry-add-test"
+version = "0.1.0"
+description = "registry add test"
+
+[registries.internal]
+index = "$REGISTRY_DIR"
+EOF_REGISTRY_ADD
+
+if ! (cd "$REGISTRY_ADD_DIR" && "$MOG" add --registry internal acme/http@^1.0.0 >/dev/null); then
+    echo "[FAIL] add should support explicit non-default registry aliases"
+    exit 1
+fi
+if ! grep -Fq 'http = { package = "acme:http", version = "^1.0.0", registry = "internal" }' \
+    "$REGISTRY_ADD_DIR/mog.toml"; then
+    echo "[FAIL] add should preserve explicit registry aliases in mog.toml"
+    cat "$REGISTRY_ADD_DIR/mog.toml"
+    exit 1
+fi
 
 cat > "$REMOTE_DIR/mog.toml" <<EOF_REMOTE
 kind = "project"
@@ -2642,6 +2728,132 @@ rm -f "$HOSTED_REGISTRY_DIR/disable-index-etag"
 if ! grep -Eq "ETag|registry-service.v1" /tmp/mog_hosted_missing_etag_failure.txt; then
     echo "[FAIL] missing ETag failure should mention the hosted protocol requirement"
     cat /tmp/mog_hosted_missing_etag_failure.txt
+    exit 1
+fi
+
+HOSTED_POLICY_REGISTRY_DIR="$(mktemp -d)"
+HOSTED_POLICY_PORT="$(start_hosted_registry_server "$HOSTED_POLICY_REGISTRY_DIR" "$HOSTED_TOKEN")"
+cp "$HOSTED_PUBLIC_KEY_FILE" "$HOSTED_POLICY_REGISTRY_DIR/registry-public-key.v1"
+cat > "$HOSTED_POLICY_REGISTRY_DIR/registry-service.v1" <<'EOF_HOSTED_POLICY_SERVICE'
+schema_version = "registry-service.v1"
+artifact_upload_mode = "content-addressed"
+index_update_mode = "etag-if-match"
+publish_policy = "registry-publish-policy.v1"
+EOF_HOSTED_POLICY_SERVICE
+cat > "$HOSTED_POLICY_REGISTRY_DIR/registry-publish-policy.v1" <<'EOF_HOSTED_POLICY'
+schema_version = "registry-publish-policy.v1"
+require_signed_publish = true
+require_clean_git = true
+require_tag = true
+allowed_namespaces = ["acme"]
+EOF_HOSTED_POLICY
+
+HOSTED_POLICY_WORKSPACE="$(mktemp -d)"
+HOSTED_POLICY_CONFIG="$TEMP_DIR/hosted-policy-config"
+mkdir -p "$HOSTED_POLICY_WORKSPACE/pkg/src"
+cat > "$HOSTED_POLICY_WORKSPACE/mog.toml" <<EOF_HOSTED_POLICY_ROOT
+kind = "project"
+name = "hosted-policy-root"
+version = "0.1.0"
+description = "hosted policy root"
+
+[registries.default]
+index = "http://127.0.0.1:$HOSTED_POLICY_PORT/index.toml"
+allow_insecure = true
+EOF_HOSTED_POLICY_ROOT
+cat > "$HOSTED_POLICY_WORKSPACE/pkg/mog.toml" <<'EOF_HOSTED_POLICY_PACKAGE'
+kind = "source"
+import_name = "policy_util"
+namespace = "acme"
+name = "policy-util"
+version = "1.0.0"
+license = "MIT"
+description = "Hosted publish policy package."
+entry = "src/main.mog"
+dependencies = []
+EOF_HOSTED_POLICY_PACKAGE
+cat > "$HOSTED_POLICY_WORKSPACE/pkg/src/main.mog" <<'EOF_HOSTED_POLICY_SRC'
+fn Name() str {
+    return "policy util"
+}
+EOF_HOSTED_POLICY_SRC
+mkdir -p "$HOSTED_POLICY_WORKSPACE/bad-pkg/src"
+cat > "$HOSTED_POLICY_WORKSPACE/bad-pkg/mog.toml" <<'EOF_HOSTED_POLICY_BAD_PACKAGE'
+kind = "source"
+import_name = "bad_policy_util"
+namespace = "other"
+name = "bad-policy-util"
+version = "1.0.0"
+license = "MIT"
+description = "Hosted publish policy disallowed package."
+entry = "src/main.mog"
+dependencies = []
+EOF_HOSTED_POLICY_BAD_PACKAGE
+cat > "$HOSTED_POLICY_WORKSPACE/bad-pkg/src/main.mog" <<'EOF_HOSTED_POLICY_BAD_SRC'
+fn Name() str {
+    return "bad policy util"
+}
+EOF_HOSTED_POLICY_BAD_SRC
+git -C "$HOSTED_POLICY_WORKSPACE" init >/dev/null
+git -C "$HOSTED_POLICY_WORKSPACE" config user.email "mog@example.invalid"
+git -C "$HOSTED_POLICY_WORKSPACE" config user.name "Mog Test"
+git -C "$HOSTED_POLICY_WORKSPACE" add .
+git -C "$HOSTED_POLICY_WORKSPACE" commit -m "initial hosted policy package" >/dev/null
+git -C "$HOSTED_POLICY_WORKSPACE" tag v1.0.0
+
+if ! (cd "$HOSTED_POLICY_WORKSPACE" && \
+    XDG_CONFIG_HOME="$HOSTED_POLICY_CONFIG" \
+    "$MOG" login default --token "$HOSTED_TOKEN" >/dev/null); then
+    echo "[FAIL] hosted policy test should store registry credentials"
+    exit 1
+fi
+
+if (cd "$HOSTED_POLICY_WORKSPACE" && \
+    XDG_CONFIG_HOME="$HOSTED_POLICY_CONFIG" \
+    "$MOG" publish --tag v1.0.0 pkg \
+    >/tmp/mog_hosted_policy_unsigned_failure.txt 2>&1); then
+    echo "[FAIL] hosted publish policy should reject unsigned publishes"
+    cat /tmp/mog_hosted_policy_unsigned_failure.txt
+    exit 1
+fi
+if ! grep -Fq "requires signed publishes" /tmp/mog_hosted_policy_unsigned_failure.txt; then
+    echo "[FAIL] unsigned publish policy failure should mention signed publishes"
+    cat /tmp/mog_hosted_policy_unsigned_failure.txt
+    exit 1
+fi
+
+if (cd "$HOSTED_POLICY_WORKSPACE" && \
+    XDG_CONFIG_HOME="$HOSTED_POLICY_CONFIG" \
+    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg \
+    >/tmp/mog_hosted_policy_tag_failure.txt 2>&1); then
+    echo "[FAIL] hosted publish policy should require version tags"
+    cat /tmp/mog_hosted_policy_tag_failure.txt
+    exit 1
+fi
+if ! grep -Fq "requires a version tag" /tmp/mog_hosted_policy_tag_failure.txt; then
+    echo "[FAIL] tag policy failure should mention --tag"
+    cat /tmp/mog_hosted_policy_tag_failure.txt
+    exit 1
+fi
+
+if (cd "$HOSTED_POLICY_WORKSPACE" && \
+    XDG_CONFIG_HOME="$HOSTED_POLICY_CONFIG" \
+    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" --tag v1.0.0 bad-pkg \
+    >/tmp/mog_hosted_policy_namespace_failure.txt 2>&1); then
+    echo "[FAIL] hosted publish policy should reject disallowed namespaces"
+    cat /tmp/mog_hosted_policy_namespace_failure.txt
+    exit 1
+fi
+if ! grep -Fq "disallows package namespace" /tmp/mog_hosted_policy_namespace_failure.txt; then
+    echo "[FAIL] namespace policy failure should mention the disallowed namespace"
+    cat /tmp/mog_hosted_policy_namespace_failure.txt
+    exit 1
+fi
+
+if ! (cd "$HOSTED_POLICY_WORKSPACE" && \
+    XDG_CONFIG_HOME="$HOSTED_POLICY_CONFIG" \
+    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" --tag v1.0.0 pkg >/dev/null); then
+    echo "[FAIL] hosted publish policy should allow signed clean tagged publishes"
     exit 1
 fi
 

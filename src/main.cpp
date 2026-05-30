@@ -23,6 +23,38 @@ struct RuntimeOptions {
     std::vector<std::string> packagePaths;
 };
 
+struct AddCommandArgs {
+    DependencySpec dependency;
+    AddDependencyOptions options;
+    std::string positional;
+    bool explicitSource = false;
+};
+
+static std::string normalizePackageSpecifier(std::string rawSpecifier) {
+    if (rawSpecifier.find(':') != std::string::npos) {
+        return rawSpecifier;
+    }
+    const size_t slash = rawSpecifier.find('/');
+    if (slash == std::string::npos) {
+        return rawSpecifier;
+    }
+    return rawSpecifier.substr(0, slash) + ":" + rawSpecifier.substr(slash + 1);
+}
+
+static void splitPackageVersionSpecifier(const std::string& rawSpecifier,
+                                         std::string& outPackageId,
+                                         std::string& outVersion) {
+    outPackageId.clear();
+    outVersion.clear();
+    const size_t at = rawSpecifier.rfind('@');
+    std::string packageText = rawSpecifier;
+    if (at != std::string::npos && at > 0) {
+        packageText = rawSpecifier.substr(0, at);
+        outVersion = rawSpecifier.substr(at + 1);
+    }
+    outPackageId = normalizePackageSpecifier(packageText);
+}
+
 static void printUsage(const char* executable) {
     std::cout
         << "Usage: " << executable << " <command> [options]\n"
@@ -71,10 +103,144 @@ static void printUsage(const char* executable) {
         << "  --tag <tag> | --tag=<tag>\n"
         << "  --target <triple> | --target=<triple>\n"
         << "  --native-artifact-dir <dir> | --native-artifact-dir=<dir>\n"
+        << "Flags for add:\n"
+        << "  --path <dir> | --git <url> | --workspace | --registry <alias>\n"
+        << "  --alias <name> --package <namespace:name> --version <requirement>\n"
+        << "  --rev <rev> | --tag <tag> | --branch <branch>\n"
+        << "  --dev | --build\n"
         << "Additional flags for run:\n"
         << "  --trace --show-return --disassemble --frontend-timings --frontend-timings-json\n"
         << "  --package-path <dir> | --package-path=<dir>\n"
         << "Legacy mode is still supported: " << executable << " [flags] <file>\n";
+}
+
+static bool parseAddArgs(int argc, char** argv, int startIndex,
+                         AddCommandArgs& args, std::string& outError) {
+    outError.clear();
+    args = AddCommandArgs{};
+
+    for (int index = startIndex; index < argc; ++index) {
+        const std::string arg = argv[index];
+        auto requireValue =
+            [&](const char* optionName, std::string& destination) -> bool {
+                if (index + 1 >= argc) {
+                    outError = std::string("Missing value for ") + optionName + ".";
+                    return false;
+                }
+                destination = argv[++index];
+                return true;
+            };
+
+        if (arg == "--path") {
+            args.explicitSource = true;
+            if (!requireValue("--path", args.dependency.path)) {
+                return false;
+            }
+        } else if (arg.rfind("--path=", 0) == 0) {
+            args.explicitSource = true;
+            args.dependency.path = arg.substr(7);
+        } else if (arg == "--git") {
+            args.explicitSource = true;
+            if (!requireValue("--git", args.dependency.git)) {
+                return false;
+            }
+        } else if (arg.rfind("--git=", 0) == 0) {
+            args.explicitSource = true;
+            args.dependency.git = arg.substr(6);
+        } else if (arg == "--registry") {
+            args.explicitSource = true;
+            if (!requireValue("--registry", args.dependency.registry)) {
+                return false;
+            }
+        } else if (arg.rfind("--registry=", 0) == 0) {
+            args.explicitSource = true;
+            args.dependency.registry = arg.substr(11);
+        } else if (arg == "--workspace") {
+            args.explicitSource = true;
+            args.dependency.workspace = true;
+        } else if (arg == "--alias") {
+            args.explicitSource = true;
+            if (!requireValue("--alias", args.dependency.alias)) {
+                return false;
+            }
+        } else if (arg.rfind("--alias=", 0) == 0) {
+            args.explicitSource = true;
+            args.dependency.alias = arg.substr(8);
+        } else if (arg == "--package") {
+            args.explicitSource = true;
+            if (!requireValue("--package", args.dependency.packageId)) {
+                return false;
+            }
+            args.dependency.packageId =
+                normalizePackageSpecifier(args.dependency.packageId);
+        } else if (arg.rfind("--package=", 0) == 0) {
+            args.explicitSource = true;
+            args.dependency.packageId = normalizePackageSpecifier(arg.substr(10));
+        } else if (arg == "--version") {
+            args.explicitSource = true;
+            if (!requireValue("--version", args.dependency.version)) {
+                return false;
+            }
+        } else if (arg.rfind("--version=", 0) == 0) {
+            args.explicitSource = true;
+            args.dependency.version = arg.substr(10);
+        } else if (arg == "--rev") {
+            args.explicitSource = true;
+            if (!requireValue("--rev", args.dependency.gitRev)) {
+                return false;
+            }
+        } else if (arg.rfind("--rev=", 0) == 0) {
+            args.explicitSource = true;
+            args.dependency.gitRev = arg.substr(6);
+        } else if (arg == "--tag") {
+            args.explicitSource = true;
+            if (!requireValue("--tag", args.dependency.gitTag)) {
+                return false;
+            }
+        } else if (arg.rfind("--tag=", 0) == 0) {
+            args.explicitSource = true;
+            args.dependency.gitTag = arg.substr(6);
+        } else if (arg == "--branch") {
+            args.explicitSource = true;
+            if (!requireValue("--branch", args.dependency.gitBranch)) {
+                return false;
+            }
+        } else if (arg.rfind("--branch=", 0) == 0) {
+            args.explicitSource = true;
+            args.dependency.gitBranch = arg.substr(9);
+        } else if (arg == "--dev") {
+            if (args.options.group == "build") {
+                outError = "add accepts only one of --dev or --build.";
+                return false;
+            }
+            args.options.group = "dev";
+        } else if (arg == "--build") {
+            if (args.options.group == "dev") {
+                outError = "add accepts only one of --dev or --build.";
+                return false;
+            }
+            args.options.group = "build";
+        } else if (arg == "--help" || arg == "-h") {
+            outError = "help";
+            return false;
+        } else if (!arg.empty() && arg[0] == '-') {
+            outError = "Unknown option: " + arg;
+            return false;
+        } else if (args.positional.empty()) {
+            args.positional = arg;
+        } else {
+            outError = "add accepts at most one package specifier.";
+            return false;
+        }
+    }
+
+    if (args.explicitSource && !args.positional.empty() &&
+        args.dependency.packageId.empty()) {
+        splitPackageVersionSpecifier(args.positional, args.dependency.packageId,
+                                     args.dependency.version);
+    }
+
+    return true;
 }
 
 static bool parseRuntimeArgs(int argc, char** argv, int startIndex,
@@ -757,7 +923,18 @@ static int runInitCommand(int argc, char** argv) {
 }
 
 static int runAddCommand(int argc, char** argv) {
-    if (argc < 3) {
+    AddCommandArgs args;
+    std::string parseError;
+    if (!parseAddArgs(argc, argv, 2, args, parseError)) {
+        if (parseError == "help") {
+            printUsage(argv[0]);
+            return 0;
+        }
+        std::cerr << "Add failed: " << parseError << std::endl;
+        printUsage(argv[0]);
+        return 1;
+    }
+    if (args.positional.empty() && !args.explicitSource) {
         std::cerr << "add requires a package specifier." << std::endl;
         return 1;
     }
@@ -765,12 +942,21 @@ static int runAddCommand(int argc, char** argv) {
     const std::string projectRoot = currentManagedProjectRoot();
     DependencySpec dependency;
     std::string error;
-    if (!discoverDependencySpec(projectRoot, argv[2], dependency, error)) {
-        std::cerr << "Add failed: " << error << std::endl;
-        return 1;
+    if (args.explicitSource) {
+        dependency = args.dependency;
+        if (!completeExplicitDependencySpec(projectRoot, dependency, error)) {
+            std::cerr << "Add failed: " << error << std::endl;
+            return 1;
+        }
+    } else {
+        if (!discoverDependencySpec(projectRoot, args.positional, dependency,
+                                    error)) {
+            std::cerr << "Add failed: " << error << std::endl;
+            return 1;
+        }
     }
 
-    if (!addProjectDependency(projectRoot, dependency, error)) {
+    if (!addProjectDependency(projectRoot, dependency, args.options, error)) {
         std::cerr << "Add failed: " << error << std::endl;
         return 1;
     }
@@ -788,6 +974,9 @@ static int runAddCommand(int argc, char** argv) {
     if (!dependency.path.empty()) {
         std::cout << "Added dependency '" << dependency.alias << "' from "
                   << dependency.path << std::endl;
+    } else if (!dependency.git.empty()) {
+        std::cout << "Added dependency '" << dependency.alias << "' from "
+                  << dependency.git << std::endl;
     } else {
         std::cout << "Added dependency '" << dependency.alias << "' as "
                   << dependency.packageId;
