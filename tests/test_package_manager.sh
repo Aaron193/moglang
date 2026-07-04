@@ -4091,6 +4091,142 @@ if ! grep -Eq "offline|cached locally" /tmp/mog_git_offline_failure.txt; then
     exit 1
 fi
 
+GIT_MODULE_REPO_DIR="$TEMP_DIR/git-module-math-repo"
+GIT_MODULE_CONSUMER_DIR="$TEMP_DIR/git-module-consumer"
+GIT_MODULE_ADD_DIR="$TEMP_DIR/git-module-add"
+GIT_MODULE_CONFIG="$TEMP_DIR/git-module-config"
+mkdir -p "$GIT_MODULE_REPO_DIR/src" "$GIT_MODULE_CONSUMER_DIR" "$GIT_MODULE_ADD_DIR"
+cat > "$GIT_MODULE_REPO_DIR/mog.toml" <<'EOF_GIT_MODULE_PACKAGE'
+kind = "source"
+module = "github.com/example/math"
+version = "v0.1.0"
+entry = "src/main.mog"
+import_name = "math"
+namespace = "github.com/example"
+name = "math"
+author = "Git module test"
+description = "Go-style Git module package."
+dependencies = []
+EOF_GIT_MODULE_PACKAGE
+
+cat > "$GIT_MODULE_REPO_DIR/src/main.mog" <<'EOF_GIT_MODULE_PACKAGE_SRC'
+const VALUE i64 = 42
+
+fn Add(left i64, right i64) i64 {
+    return left + right
+}
+EOF_GIT_MODULE_PACKAGE_SRC
+
+git -C "$GIT_MODULE_REPO_DIR" init --initial-branch=main >/dev/null
+git -C "$GIT_MODULE_REPO_DIR" config user.email "mog-tests@example.com"
+git -C "$GIT_MODULE_REPO_DIR" config user.name "Mog Tests"
+git -C "$GIT_MODULE_REPO_DIR" add . >/dev/null
+git -C "$GIT_MODULE_REPO_DIR" commit -m "init module" >/dev/null
+git -C "$GIT_MODULE_REPO_DIR" tag v0.1.0
+
+git config --file "$GIT_MODULE_CONFIG" \
+    url."file://$GIT_MODULE_REPO_DIR".insteadOf \
+    "https://github.com/example/math.git"
+
+cat > "$GIT_MODULE_CONSUMER_DIR/mog.toml" <<'EOF_GIT_MODULE_CONSUMER'
+kind = "project"
+name = "git-module-consumer"
+version = "0.1.0"
+description = "git module consumer"
+
+[dependencies]
+"github.com/example/math" = { version = "v0.1.0" }
+EOF_GIT_MODULE_CONSUMER
+
+cat > "$GIT_MODULE_CONSUMER_DIR/app.mog" <<'EOF_GIT_MODULE_APP'
+const math = @import("github.com/example/math")
+print(math.Add(math.VALUE, 8))
+EOF_GIT_MODULE_APP
+
+if ! (cd "$GIT_MODULE_CONSUMER_DIR" && \
+    GIT_CONFIG_GLOBAL="$GIT_MODULE_CONFIG" "$MOG" install >/dev/null); then
+    echo "[FAIL] install should resolve Go-style Git module dependencies"
+    exit 1
+fi
+
+GIT_MODULE_OUTPUT="$(cd "$GIT_MODULE_CONSUMER_DIR" && "$MOG" run app.mog)"
+if [[ "$GIT_MODULE_OUTPUT" != *"50"* ]]; then
+    echo "[FAIL] run should execute installed Go-style Git module imports"
+    echo "$GIT_MODULE_OUTPUT"
+    exit 1
+fi
+
+if ! grep -Fq 'module = "github.com/example/math"' "$GIT_MODULE_CONSUMER_DIR/mog.lock" || \
+   ! grep -Fq 'git = "https://github.com/example/math.git"' "$GIT_MODULE_CONSUMER_DIR/mog.lock" || \
+   ! grep -Fq 'git_commit = "' "$GIT_MODULE_CONSUMER_DIR/mog.lock"; then
+    echo "[FAIL] Go-style Git module lock metadata should record module, git URL, and commit"
+    cat "$GIT_MODULE_CONSUMER_DIR/mog.lock"
+    exit 1
+fi
+
+if ! grep -Fq 'module = "github.com/example/math"' \
+    "$GIT_MODULE_CONSUMER_DIR/.mog/install/registry.toml" || \
+   ! grep -Fq 'git = "https://github.com/example/math.git"' \
+    "$GIT_MODULE_CONSUMER_DIR/.mog/install/registry.toml" || \
+   ! grep -Fq 'git_commit = "' \
+    "$GIT_MODULE_CONSUMER_DIR/.mog/install/registry.toml"; then
+    echo "[FAIL] Go-style Git module install metadata should record module, git URL, and commit"
+    cat "$GIT_MODULE_CONSUMER_DIR/.mog/install/registry.toml"
+    exit 1
+fi
+
+if [[ ! -f "$GIT_MODULE_CONSUMER_DIR/.mog/install/packages/github.com/example/math/src/main.mog" ]]; then
+    echo "[FAIL] Go-style Git module should install under the hosted module path"
+    find "$GIT_MODULE_CONSUMER_DIR/.mog/install" -maxdepth 6 -type f | sort
+    exit 1
+fi
+
+cat > "$GIT_MODULE_ADD_DIR/mog.toml" <<'EOF_GIT_MODULE_ADD_PROJECT'
+kind = "project"
+name = "git-module-add"
+version = "0.1.0"
+description = "git module add"
+EOF_GIT_MODULE_ADD_PROJECT
+
+if ! (cd "$GIT_MODULE_ADD_DIR" && "$MOG" add github.com/example/math@v0.1.0 >/dev/null); then
+    echo "[FAIL] add should accept Go-style Git module specifiers"
+    exit 1
+fi
+
+if ! grep -Fq '"github.com/example/math" = { version = "v0.1.0" }' \
+    "$GIT_MODULE_ADD_DIR/mog.toml"; then
+    echo "[FAIL] add should write Go-style Git module dependency keys"
+    cat "$GIT_MODULE_ADD_DIR/mog.toml"
+    exit 1
+fi
+
+GIT_MODULE_MISSING_DIR="$TEMP_DIR/git-module-missing"
+mkdir -p "$GIT_MODULE_MISSING_DIR"
+cat > "$GIT_MODULE_MISSING_DIR/mog.toml" <<'EOF_GIT_MODULE_MISSING_PROJECT'
+kind = "project"
+name = "git-module-missing"
+version = "0.1.0"
+description = "missing git module import"
+EOF_GIT_MODULE_MISSING_PROJECT
+
+cat > "$GIT_MODULE_MISSING_DIR/app.mog" <<'EOF_GIT_MODULE_MISSING_APP'
+const math = @import("github.com/example/math")
+print(math.VALUE)
+EOF_GIT_MODULE_MISSING_APP
+
+if (cd "$GIT_MODULE_MISSING_DIR" && "$MOG" app.mog >/tmp/mog_git_module_missing_failure.txt 2>&1); then
+    echo "[FAIL] missing Go-style Git module imports should fail before install"
+    cat /tmp/mog_git_module_missing_failure.txt
+    exit 1
+fi
+
+if ! grep -Fq "Package 'github.com/example/math' is not installed. Run 'mog install'." \
+    /tmp/mog_git_module_missing_failure.txt; then
+    echo "[FAIL] missing Go-style Git module imports should suggest mog install"
+    cat /tmp/mog_git_module_missing_failure.txt
+    exit 1
+fi
+
 POLICY_REGISTRY_DIR="$(mktemp -d)"
 cat > "$POLICY_REGISTRY_DIR/mog.toml" <<EOF_POLICY_REGISTRY
 kind = "project"

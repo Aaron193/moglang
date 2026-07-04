@@ -22,6 +22,7 @@ Add dependencies:
 ```bash
 ./build/interpreter add hello
 ./build/interpreter add acme/http@^1.2.0
+./build/interpreter add github.com/acme/math@v1.0.0
 ./build/interpreter add --path packages/examples/hello
 ./build/interpreter add --git https://example.com/acme/util.git --tag v1.0.0
 ```
@@ -95,6 +96,29 @@ Workspace-root commands write the shared `mog.lock` and
 `.mog/install/registry.toml` at the workspace root.
 
 ### Git dependencies
+
+Go-style Git module imports use the hosted repository path as the import path:
+
+```mog
+const math = @import("github.com/acme/math")
+print(math.Add(40, 2))
+```
+
+Add the module by tag:
+
+```bash
+./build/interpreter add github.com/acme/math@v1.0.0
+```
+
+Generated manifest shape:
+
+```toml
+[dependencies]
+"github.com/acme/math" = { version = "v1.0.0" }
+```
+
+`mog install` resolves the module to Git, pins the exact commit in `mog.lock`,
+and materializes it under `.mog/install/packages/github.com/acme/math`.
 
 Git dependencies require exactly one selector: `--rev`, `--tag`, or
 `--branch`.

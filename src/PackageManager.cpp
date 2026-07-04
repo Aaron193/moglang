@@ -17,6 +17,7 @@
 #include "ModuleResolver.hpp"
 #include "NativePackage.hpp"
 #include "PackageManifest.hpp"
+#include "RemoteImportResolver.hpp"
 
 namespace {
 
@@ -367,6 +368,88 @@ bool validateDependencySpec(const DependencySpec& dependency,
     }
 
     return true;
+}
+
+bool parseDependencyKey(const std::string& key, std::string& outKey,
+                        std::string& outError) {
+    if (key.size() >= 2 && key.front() == '"' && key.back() == '"') {
+        return parseQuotedString(key, outKey, outError);
+    }
+    outKey = key;
+    return true;
+}
+
+bool shouldQuoteDependencyKey(const std::string& key) {
+    if (key.empty()) {
+        return true;
+    }
+    for (char ch : key) {
+        if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_' &&
+            ch != '-') {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool normalizeRemoteDependencySpec(DependencySpec& dependency,
+                                   std::string& outError) {
+    if (dependency.module.empty()) {
+        return true;
+    }
+
+    RemoteImportSpec remote;
+    if (!resolveRemoteImport(dependency.module, remote, outError)) {
+        outError = "Invalid module dependency '" + dependency.module + "': " +
+                   outError;
+        return false;
+    }
+
+    if (dependency.alias.empty()) {
+        dependency.alias = dependency.module;
+    }
+    dependency.repoRoot = remote.repoRoot;
+    dependency.subdir = remote.subdir;
+    if (dependency.git.empty()) {
+        dependency.git = remote.gitUrl;
+    } else if (dependency.git != remote.gitUrl) {
+        outError = "Module dependency '" + dependency.module +
+                   "' resolves to git URL '" + remote.gitUrl +
+                   "', but declares git = '" + dependency.git + "'.";
+        return false;
+    }
+
+    if (dependency.gitRev.empty() && dependency.gitBranch.empty() &&
+        dependency.gitTag.empty() && !dependency.version.empty()) {
+        dependency.gitTag = dependency.version;
+    }
+    return true;
+}
+
+std::filesystem::path dependencyPackageSubdir(const DependencySpec& dependency,
+                                              const std::filesystem::path& root) {
+    if (dependency.subdir.empty()) {
+        return root;
+    }
+    return root / dependency.subdir;
+}
+
+std::filesystem::path moduleInstallPath(const std::filesystem::path& root,
+                                        std::string_view module) {
+    std::filesystem::path out = root;
+    size_t start = 0;
+    while (start <= module.size()) {
+        const size_t slash = module.find('/', start);
+        const size_t end = slash == std::string_view::npos ? module.size() : slash;
+        if (end > start) {
+            out /= std::string(module.substr(start, end - start));
+        }
+        if (slash == std::string_view::npos) {
+            break;
+        }
+        start = slash + 1;
+    }
+    return out;
 }
 
 std::string quoteTomlString(const std::string& text) {
@@ -1180,7 +1263,31 @@ bool parseDependencyInlineTable(const std::string& value,
         }
 
         const std::string rawValue = trim(body.substr(0, valueLength));
-        if (key == "path") {
+        if (key == "alias") {
+            std::string parsed;
+            if (!parseQuotedString(rawValue, parsed, outError)) {
+                return false;
+            }
+            outDependency.alias = parsed;
+        } else if (key == "module") {
+            std::string parsed;
+            if (!parseQuotedString(rawValue, parsed, outError)) {
+                return false;
+            }
+            outDependency.module = parsed;
+        } else if (key == "repo_root") {
+            std::string parsed;
+            if (!parseQuotedString(rawValue, parsed, outError)) {
+                return false;
+            }
+            outDependency.repoRoot = parsed;
+        } else if (key == "subdir") {
+            std::string parsed;
+            if (!parseQuotedString(rawValue, parsed, outError)) {
+                return false;
+            }
+            outDependency.subdir = normalizeRelativePath(parsed);
+        } else if (key == "path") {
             std::string parsed;
             if (!parseQuotedString(rawValue, parsed, outError)) {
                 return false;
@@ -1244,14 +1351,7 @@ bool parseDependencyInlineTable(const std::string& value,
         }
     }
 
-    if (outDependency.path.empty() && !outDependency.workspace &&
-        outDependency.git.empty() && outDependency.registry.empty() &&
-        outDependency.packageId.empty()) {
-        outError = "Dependency entries must define path, workspace, git, registry, or package metadata.";
-        return false;
-    }
-
-    return validateDependencySpec(outDependency, outError);
+    return true;
 }
 
 std::string readFileText(const std::filesystem::path& path) {
@@ -2276,13 +2376,15 @@ std::filesystem::path gitWorkingCachePath(const DependencySpec& dependency) {
             : (!dependency.gitTag.empty() ? "tag|" + dependency.gitTag
                                           : "branch|" + dependency.gitBranch);
     return gitCacheRoot() / "working" /
-           hashString(dependency.git + "|" + selector);
+           hashString(dependency.git + "|" + selector + "|" +
+                      dependency.module + "|" + dependency.subdir);
 }
 
 std::filesystem::path gitResolvedCachePath(const DependencySpec& dependency,
                                            std::string_view commit) {
     return gitCacheRoot() / "resolved" /
-           hashString(dependency.git + "|" + std::string(commit));
+           hashString(dependency.git + "|" + std::string(commit) + "|" +
+                      dependency.module + "|" + dependency.subdir);
 }
 
 bool runCapturedSystemCommand(const std::string& command, std::string& outText,
@@ -2895,9 +2997,13 @@ bool loadPackageEntryFromDir(const std::filesystem::path& packageDir,
     outEntry = PackageRegistryEntry{};
     outEntry.importName = manifest.importName.empty() ? manifest.packageName
                                                       : manifest.importName;
+    outEntry.module = manifest.module;
     outEntry.packageNamespace = manifest.packageNamespace;
     outEntry.packageName = manifest.packageName;
-    outEntry.packageId = makePackageId(manifest.packageNamespace, manifest.packageName);
+    outEntry.packageId = manifest.module.empty()
+                             ? makePackageId(manifest.packageNamespace,
+                                             manifest.packageName)
+                             : manifest.module;
     outEntry.version = manifest.version;
     outEntry.packageDir = canonicalOrLexical(packageDir);
     outEntry.kind = manifest.kind.empty() ? "native" : manifest.kind;
@@ -2984,6 +3090,28 @@ bool parseDependencySpecifier(const std::string& rawSpecifier,
     return !outPackageId.empty();
 }
 
+bool parseRemoteModuleSpecifier(const std::string& rawSpecifier,
+                                DependencySpec& outDependency,
+                                std::string& outError) {
+    outDependency = DependencySpec{};
+    const size_t at = rawSpecifier.rfind('@');
+    std::string moduleText = rawSpecifier;
+    if (at != std::string::npos && at > 0 && at + 1 < rawSpecifier.size()) {
+        moduleText = rawSpecifier.substr(0, at);
+        outDependency.version = rawSpecifier.substr(at + 1);
+    }
+
+    RemoteImportSpec remote;
+    if (!resolveRemoteImport(moduleText, remote, outError)) {
+        return false;
+    }
+
+    outDependency.alias = remote.importPath;
+    outDependency.module = remote.importPath;
+    return normalizeRemoteDependencySpec(outDependency, outError) &&
+           validateDependencySpec(outDependency, outError);
+}
+
 std::string defaultPublishedRegistryAlias(const ProjectManifestData& manifest) {
     if (findRegistryConfig(manifest, "default") != nullptr) {
         return "default";
@@ -3031,6 +3159,9 @@ bool writeInstallRegistryFile(const std::filesystem::path& outputPath,
     for (const auto& entry : entries) {
         out << "\n[[package]]\n";
         out << "name = " << quoteTomlString(entry.importName) << "\n";
+        if (!entry.module.empty()) {
+            out << "module = " << quoteTomlString(entry.module) << "\n";
+        }
         out << "package_id = " << quoteTomlString(entry.packageId) << "\n";
         out << "namespace = " << quoteTomlString(entry.packageNamespace) << "\n";
         out << "package_name = " << quoteTomlString(entry.packageName) << "\n";
@@ -3058,6 +3189,12 @@ bool writeInstallRegistryFile(const std::filesystem::path& outputPath,
         }
         if (!entry.registry.empty()) {
             out << "registry = " << quoteTomlString(entry.registry) << "\n";
+        }
+        if (!entry.repoRoot.empty()) {
+            out << "repo_root = " << quoteTomlString(entry.repoRoot) << "\n";
+        }
+        if (!entry.subdir.empty()) {
+            out << "subdir = " << quoteTomlString(entry.subdir) << "\n";
         }
         if (!entry.gitUrl.empty()) {
             out << "git = " << quoteTomlString(entry.gitUrl) << "\n";
@@ -3146,6 +3283,9 @@ bool writeLockfile(const std::filesystem::path& outputPath,
     for (const auto& entry : entries) {
         out << "\n[[package]]\n";
         out << "name = " << quoteTomlString(entry.importName) << "\n";
+        if (!entry.module.empty()) {
+            out << "module = " << quoteTomlString(entry.module) << "\n";
+        }
         out << "package_id = " << quoteTomlString(entry.packageId) << "\n";
         out << "namespace = " << quoteTomlString(entry.packageNamespace) << "\n";
         out << "package_name = " << quoteTomlString(entry.packageName) << "\n";
@@ -3167,6 +3307,12 @@ bool writeLockfile(const std::filesystem::path& outputPath,
         }
         if (!entry.registry.empty()) {
             out << "registry = " << quoteTomlString(entry.registry) << "\n";
+        }
+        if (!entry.repoRoot.empty()) {
+            out << "repo_root = " << quoteTomlString(entry.repoRoot) << "\n";
+        }
+        if (!entry.subdir.empty()) {
+            out << "subdir = " << quoteTomlString(entry.subdir) << "\n";
         }
         if (!entry.gitUrl.empty()) {
             out << "git = " << quoteTomlString(entry.gitUrl) << "\n";
@@ -3347,6 +3493,7 @@ struct DependencyRoot {
 };
 
 struct CacheEntryMetadata {
+    std::string module;
     std::string packageId;
     std::string version;
     std::string kind;
@@ -3355,6 +3502,8 @@ struct CacheEntryMetadata {
     std::string sourceType;
     std::string sourcePath;
     std::string registry;
+    std::string repoRoot;
+    std::string subdir;
     std::string gitUrl;
     std::string gitRev;
     std::string gitTag;
@@ -3381,6 +3530,7 @@ bool writeCacheMetadataFile(const std::filesystem::path& outputPath,
         return false;
     }
 
+    out << "module = " << quoteTomlString(entry.module) << "\n";
     out << "package_id = " << quoteTomlString(entry.packageId) << "\n";
     out << "version = " << quoteTomlString(entry.version) << "\n";
     out << "kind = " << quoteTomlString(entry.kind) << "\n";
@@ -3389,6 +3539,8 @@ bool writeCacheMetadataFile(const std::filesystem::path& outputPath,
     out << "source_type = " << quoteTomlString(entry.sourceType) << "\n";
     out << "source_path = " << quoteTomlString(entry.sourcePath) << "\n";
     out << "registry = " << quoteTomlString(entry.registry) << "\n";
+    out << "repo_root = " << quoteTomlString(entry.repoRoot) << "\n";
+    out << "subdir = " << quoteTomlString(entry.subdir) << "\n";
     out << "git = " << quoteTomlString(entry.gitUrl) << "\n";
     out << "git_rev = " << quoteTomlString(entry.gitRev) << "\n";
     out << "git_tag = " << quoteTomlString(entry.gitTag) << "\n";
@@ -3464,7 +3616,9 @@ bool loadCacheMetadataFile(const std::filesystem::path& metadataPath,
             return false;
         }
 
-        if (key == "package_id") {
+        if (key == "module") {
+            outMetadata.module = parsed;
+        } else if (key == "package_id") {
             outMetadata.packageId = parsed;
         } else if (key == "version") {
             outMetadata.version = parsed;
@@ -3480,6 +3634,10 @@ bool loadCacheMetadataFile(const std::filesystem::path& metadataPath,
             outMetadata.sourcePath = parsed;
         } else if (key == "registry") {
             outMetadata.registry = parsed;
+        } else if (key == "repo_root") {
+            outMetadata.repoRoot = parsed;
+        } else if (key == "subdir") {
+            outMetadata.subdir = parsed;
         } else if (key == "git") {
             outMetadata.gitUrl = parsed;
         } else if (key == "git_rev") {
@@ -3517,13 +3675,16 @@ bool loadCacheMetadataFile(const std::filesystem::path& metadataPath,
 
 bool cacheMetadataMatchesEntry(const CacheEntryMetadata& metadata,
                                const PackageRegistryEntry& entry) {
-    return metadata.packageId == entry.packageId &&
+    return metadata.module == entry.module &&
+           metadata.packageId == entry.packageId &&
            metadata.version == entry.version && metadata.kind == entry.kind &&
            metadata.license == entry.license &&
            metadata.mogRuntime == entry.mogRuntime &&
            metadata.sourceType == entry.sourceType &&
            metadata.sourcePath == entry.sourcePath &&
            metadata.registry == entry.registry &&
+           metadata.repoRoot == entry.repoRoot &&
+           metadata.subdir == entry.subdir &&
            metadata.gitUrl == entry.gitUrl &&
            metadata.gitRev == entry.gitRev &&
            metadata.gitTag == entry.gitTag &&
@@ -6160,13 +6321,22 @@ bool resolveDependencyNode(
                        outError;
             return false;
         }
-        if (!loadPackageEntryFromDir(gitSourceDir, outNode.entry, nullptr,
+        const std::filesystem::path packageSourceDir =
+            dependencyPackageSubdir(dependency, gitSourceDir);
+        if (!loadPackageEntryFromDir(packageSourceDir, outNode.entry, nullptr,
                                      outError)) {
             outError = "Could not load dependency '" + dependency.alias + "': " +
                        outError;
             return false;
         }
-        if (!loadPackageManifestDependencies(gitSourceDir,
+        if (!dependency.module.empty() &&
+            outNode.entry.module != dependency.module) {
+            outError = "Dependency '" + dependency.alias +
+                       "' resolved module '" + outNode.entry.module +
+                       "', but manifest requires '" + dependency.module + "'.";
+            return false;
+        }
+        if (!loadPackageManifestDependencies(packageSourceDir,
                                              outNode.manifestDependencies,
                                              outError)) {
             outError = "Could not load dependency '" + dependency.alias + "': " +
@@ -6175,7 +6345,11 @@ bool resolveDependencyNode(
         }
         outNode.packageDir = std::filesystem::path(outNode.entry.packageDir);
         outNode.entry.sourceType = "git";
-        outNode.entry.sourcePath = canonicalOrLexical(gitSourceDir);
+        outNode.entry.sourcePath = canonicalOrLexical(packageSourceDir);
+        outNode.entry.module = dependency.module.empty() ? outNode.entry.module
+                                                         : dependency.module;
+        outNode.entry.repoRoot = dependency.repoRoot;
+        outNode.entry.subdir = dependency.subdir;
         outNode.entry.gitUrl = dependency.git;
         outNode.entry.gitRev = dependency.gitRev;
         outNode.entry.gitTag = dependency.gitTag;
@@ -6204,7 +6378,7 @@ bool resolveDependencyNode(
         return false;
     }
 
-    if (!dependency.version.empty()) {
+    if (!dependency.version.empty() && dependency.module.empty()) {
         VersionRequirement requirement;
         if (!parseVersionRequirement(dependency.version, requirement, outError)) {
             outError = "Dependency '" + dependency.alias + "' has an invalid version requirement: " +
@@ -6362,6 +6536,9 @@ bool materializeCacheEntry(const PackageRegistryEntry& sourceEntry,
     } else if (sourceEntry.sourceType == "git" && !isDirectory(sourceDir)) {
         DependencySpec dependency;
         dependency.alias = sourceEntry.importName;
+        dependency.module = sourceEntry.module;
+        dependency.repoRoot = sourceEntry.repoRoot;
+        dependency.subdir = sourceEntry.subdir;
         dependency.packageId = sourceEntry.packageId;
         dependency.version = sourceEntry.version;
         dependency.git = sourceEntry.gitUrl;
@@ -6373,6 +6550,7 @@ bool materializeCacheEntry(const PackageRegistryEntry& sourceEntry,
                                        resolvedCommit, outError)) {
             return false;
         }
+        sourceDir = dependencyPackageSubdir(dependency, sourceDir);
     }
 
     if (sourceEntry.sourceType == "registry") {
@@ -6470,7 +6648,10 @@ bool materializeProjectInstall(const PackageRegistryEntry& sourceEntry,
                                std::string& outError) {
     outInstalled = sourceEntry;
 
-    const std::string digestSeed = sourceEntry.version + "|" +
+    const std::string digestSeed = sourceEntry.module + "|" +
+                                   sourceEntry.repoRoot + "|" +
+                                   sourceEntry.subdir + "|" +
+                                   sourceEntry.version + "|" +
                                    sourceEntry.license + "|" +
                                    sourceEntry.mogRuntime + "|" +
                                    sourceEntry.registry + "|" +
@@ -6491,12 +6672,17 @@ bool materializeProjectInstall(const PackageRegistryEntry& sourceEntry,
     const std::string installKey = hashString(digestSeed);
     const std::filesystem::path cacheRoot =
         preferredLocalCacheRoot(projectRoot);
-    const std::filesystem::path cacheDir =
-        cacheRoot / sourceEntry.packageNamespace / sourceEntry.packageName /
-        installKey;
+    const std::filesystem::path packageCacheRoot =
+        sourceEntry.module.empty()
+            ? cacheRoot / sourceEntry.packageNamespace / sourceEntry.packageName
+            : moduleInstallPath(cacheRoot, sourceEntry.module);
+    const std::filesystem::path cacheDir = packageCacheRoot / installKey;
     const std::filesystem::path installDir =
-        installPackagesRoot(projectRoot) / sourceEntry.packageNamespace /
-        sourceEntry.packageName;
+        sourceEntry.module.empty()
+            ? installPackagesRoot(projectRoot) / sourceEntry.packageNamespace /
+                  sourceEntry.packageName
+            : moduleInstallPath(installPackagesRoot(projectRoot),
+                                sourceEntry.module);
 
     CacheEntryMetadata metadata;
     std::string metadataError;
@@ -6948,6 +7134,7 @@ bool packageEntryMatchesResolution(const PackageRegistryEntry& expected,
                                    bool includeDependencyGroups) {
     return expected.packageId == actual.packageId &&
            expected.importName == actual.importName &&
+           expected.module == actual.module &&
            expected.packageNamespace == actual.packageNamespace &&
            expected.packageName == actual.packageName &&
            expected.version == actual.version &&
@@ -6957,6 +7144,8 @@ bool packageEntryMatchesResolution(const PackageRegistryEntry& expected,
            expected.sourceType == actual.sourceType &&
            expected.sourcePath == actual.sourcePath &&
            expected.registry == actual.registry &&
+           expected.repoRoot == actual.repoRoot &&
+           expected.subdir == actual.subdir &&
            expected.gitUrl == actual.gitUrl &&
            expected.gitRev == actual.gitRev &&
            expected.gitTag == actual.gitTag &&
@@ -6985,7 +7174,7 @@ bool packageEntryMatchesLocked(const PackageRegistryEntry& expected,
 bool dependencyMatchesLockedEntry(const DependencySpec& dependency,
                                   const PackageRegistryEntry& lockedEntry,
                                   std::string& outError) {
-    if (lockedEntry.importName != dependency.alias) {
+    if (dependency.module.empty() && lockedEntry.importName != dependency.alias) {
         outError = "mog.lock is out of date for dependency '" + dependency.alias +
                    "'. Run 'mog update' to refresh it.";
         return false;
@@ -6999,6 +7188,9 @@ bool dependencyMatchesLockedEntry(const DependencySpec& dependency,
     }
     if (!dependency.git.empty() &&
         (lockedEntry.sourceType != "git" || lockedEntry.gitUrl != dependency.git ||
+         lockedEntry.module != dependency.module ||
+         lockedEntry.repoRoot != dependency.repoRoot ||
+         lockedEntry.subdir != dependency.subdir ||
          lockedEntry.gitRev != dependency.gitRev ||
          lockedEntry.gitTag != dependency.gitTag ||
          lockedEntry.gitBranch != dependency.gitBranch)) {
@@ -7007,7 +7199,7 @@ bool dependencyMatchesLockedEntry(const DependencySpec& dependency,
         return false;
     }
 
-    if (!dependency.version.empty()) {
+    if (!dependency.version.empty() && dependency.module.empty()) {
         VersionRequirement requirement;
         if (!parseVersionRequirement(dependency.version, requirement, outError)) {
             outError = "Dependency '" + dependency.alias +
@@ -7061,6 +7253,9 @@ bool validateLockedEntriesAgainstManifest(
                     [&](const PackageRegistryEntry& entry) {
                         if (entry.sourceType != "git") {
                             return false;
+                        }
+                        if (!dependency.module.empty()) {
+                            return entry.module == dependency.module;
                         }
                         if (!dependency.packageId.empty()) {
                             return entry.packageId == dependency.packageId;
@@ -7421,9 +7616,21 @@ void writeDependencyTable(std::ofstream& out, const char* tableName,
 
     out << "\n[" << tableName << "]\n";
     for (const auto& dependency : dependencies) {
-        out << dependency.alias << " = { ";
+        const std::string dependencyKey =
+            dependency.module.empty() ? dependency.alias : dependency.module;
+        out << (shouldQuoteDependencyKey(dependencyKey)
+                    ? quoteTomlString(dependencyKey)
+                    : dependencyKey)
+            << " = { ";
         bool needsComma = false;
+        if (!dependency.module.empty() && dependency.alias != dependency.module) {
+            out << "alias = " << quoteTomlString(dependency.alias);
+            needsComma = true;
+        }
         if (!dependency.path.empty()) {
+            if (needsComma) {
+                out << ", ";
+            }
             out << "path = " << quoteTomlString(normalizeRelativePath(dependency.path));
             needsComma = true;
         }
@@ -7448,7 +7655,7 @@ void writeDependencyTable(std::ofstream& out, const char* tableName,
             out << "version = " << quoteTomlString(dependency.version);
             needsComma = true;
         }
-        if (!dependency.git.empty()) {
+        if (!dependency.git.empty() && dependency.module.empty()) {
             if (needsComma) {
                 out << ", ";
             }
@@ -7462,7 +7669,8 @@ void writeDependencyTable(std::ofstream& out, const char* tableName,
             out << "rev = " << quoteTomlString(dependency.gitRev);
             needsComma = true;
         }
-        if (!dependency.gitTag.empty()) {
+        if (!dependency.gitTag.empty() &&
+            (dependency.module.empty() || dependency.gitTag != dependency.version)) {
             if (needsComma) {
                 out << ", ";
             }
@@ -7932,12 +8140,43 @@ bool loadProjectManifestData(const std::string& projectRoot,
             continue;
         }
 
+        std::string dependencyKey;
+        if (!parseDependencyKey(key, dependencyKey, parseError)) {
+            outError = "Invalid dependency key '" + key + "': " + parseError;
+            return false;
+        }
+
         DependencySpec dependency;
-        dependency.alias = key;
+        dependency.alias = dependencyKey;
         if (!parseDependencyInlineTable(value, dependency, parseError)) {
             outError = "Invalid dependency '" + key + "': " + parseError;
             return false;
         }
+
+        RemoteImportSpec remoteKey;
+        std::string remoteError;
+        if (dependency.module.empty() &&
+            resolveRemoteImport(dependencyKey, remoteKey, remoteError)) {
+            dependency.module = remoteKey.importPath;
+            if (dependency.alias == dependencyKey) {
+                dependency.alias = dependency.module;
+            }
+        }
+        if (!normalizeRemoteDependencySpec(dependency, parseError)) {
+            outError = "Invalid dependency '" + key + "': " + parseError;
+            return false;
+        }
+        if (dependency.path.empty() && !dependency.workspace &&
+            dependency.git.empty() && dependency.registry.empty() &&
+            dependency.packageId.empty() && dependency.module.empty()) {
+            outError = "Dependency entries must define path, workspace, git, registry, module, or package metadata.";
+            return false;
+        }
+        if (!validateDependencySpec(dependency, parseError)) {
+            outError = "Invalid dependency '" + key + "': " + parseError;
+            return false;
+        }
+
         if (section == Section::DEPENDENCIES) {
             outManifest.dependencies.push_back(std::move(dependency));
         } else if (section == Section::DEV_DEPENDENCIES) {
@@ -8074,6 +8313,7 @@ bool discoverDependencySpec(const std::string& projectRoot,
 
     if (matched != nullptr) {
         outDependency.alias = matched->entry.importName;
+        outDependency.module = matched->entry.module;
         outDependency.packageId = matched->entry.packageId;
         outDependency.version = matched->entry.version;
         if (workspacePackageIds.find(matched->entry.packageId) !=
@@ -8082,6 +8322,11 @@ bool discoverDependencySpec(const std::string& projectRoot,
         } else {
             relativePathString(projectRoot, matched->packageDir, outDependency.path);
         }
+        return true;
+    }
+
+    std::string remoteError;
+    if (parseRemoteModuleSpecifier(rawSpecifier, outDependency, remoteError)) {
         return true;
     }
 
@@ -8186,6 +8431,9 @@ bool completeExplicitDependencySpec(const std::string& projectRoot,
                                     DependencySpec& dependency,
                                     std::string& outError) {
     outError.clear();
+    if (!normalizeRemoteDependencySpec(dependency, outError)) {
+        return false;
+    }
     if (!validateDependencySpec(dependency, outError)) {
         return false;
     }
@@ -8247,9 +8495,17 @@ bool completeExplicitDependencySpec(const std::string& projectRoot,
             return false;
         }
         PackageRegistryEntry entry;
-        if (!loadPackageEntryFromDir(gitSourceDir, entry, nullptr, outError)) {
+        const std::filesystem::path packageSourceDir =
+            dependencyPackageSubdir(dependency, gitSourceDir);
+        if (!loadPackageEntryFromDir(packageSourceDir, entry, nullptr, outError)) {
             outError = "Could not load git dependency '" + dependency.git +
                        "': " + outError;
+            return false;
+        }
+        if (!dependency.module.empty() && entry.module != dependency.module) {
+            outError = "Git dependency '" + dependency.git +
+                       "' resolved module '" + entry.module +
+                       "', but expected '" + dependency.module + "'.";
             return false;
         }
         fillFromEntry(entry);

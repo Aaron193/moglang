@@ -10,6 +10,7 @@
 #include "PackageManager.hpp"
 #include "PackageManifest.hpp"
 #include "PackageRegistry.hpp"
+#include "RemoteImportResolver.hpp"
 #include "VirtualMachine.hpp"
 
 struct RuntimeOptions {
@@ -55,12 +56,33 @@ static void splitPackageVersionSpecifier(const std::string& rawSpecifier,
     outPackageId = normalizePackageSpecifier(packageText);
 }
 
+static bool splitRemoteModuleVersionSpecifier(const std::string& rawSpecifier,
+                                              std::string& outModule,
+                                              std::string& outVersion) {
+    outModule.clear();
+    outVersion.clear();
+    const size_t at = rawSpecifier.rfind('@');
+    std::string moduleText = rawSpecifier;
+    if (at != std::string::npos && at > 0 && at + 1 < rawSpecifier.size()) {
+        moduleText = rawSpecifier.substr(0, at);
+        outVersion = rawSpecifier.substr(at + 1);
+    }
+
+    RemoteImportSpec remote;
+    std::string error;
+    if (!resolveRemoteImport(moduleText, remote, error)) {
+        return false;
+    }
+    outModule = remote.importPath;
+    return true;
+}
+
 static void printUsage(const char* executable) {
     std::cout
         << "Usage: " << executable << " <command> [options]\n"
         << "Commands:\n"
         << "  init [name]            Create a project mog.toml in the current directory\n"
-        << "  add <package>          Add a package dependency and install it\n"
+        << "  add <module[@tag]>     Add a package dependency and install it\n"
         << "  remove <alias>         Remove a dependency and install the updated graph\n"
         << "  install [flags]        Install dependencies using mog.lock when it is current\n"
         << "  update [flags]         Re-resolve dependencies and rewrite install metadata\n"
@@ -104,6 +126,7 @@ static void printUsage(const char* executable) {
         << "  --target <triple> | --target=<triple>\n"
         << "  --native-artifact-dir <dir> | --native-artifact-dir=<dir>\n"
         << "Flags for add:\n"
+        << "  mog add github.com/acme/math@v1.0.0\n"
         << "  --path <dir> | --git <url> | --workspace | --registry <alias>\n"
         << "  --alias <name> --package <namespace:name> --version <requirement>\n"
         << "  --rev <rev> | --tag <tag> | --branch <branch>\n"
@@ -235,9 +258,21 @@ static bool parseAddArgs(int argc, char** argv, int startIndex,
     }
 
     if (args.explicitSource && !args.positional.empty() &&
-        args.dependency.packageId.empty()) {
-        splitPackageVersionSpecifier(args.positional, args.dependency.packageId,
-                                     args.dependency.version);
+        args.dependency.packageId.empty() && args.dependency.module.empty()) {
+        std::string module;
+        std::string version;
+        if (splitRemoteModuleVersionSpecifier(args.positional, module, version)) {
+            args.dependency.module = module;
+            if (args.dependency.alias.empty()) {
+                args.dependency.alias = module;
+            }
+            if (args.dependency.version.empty()) {
+                args.dependency.version = version;
+            }
+        } else {
+            splitPackageVersionSpecifier(args.positional, args.dependency.packageId,
+                                         args.dependency.version);
+        }
     }
 
     return true;

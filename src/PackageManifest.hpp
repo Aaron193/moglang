@@ -21,6 +21,7 @@ struct NativePackageManifestConfig {
 
 struct PackageManifest {
     std::string kind = "native";
+    std::string module;
     std::string importName;
     std::string packageNamespace;
     std::string packageName;

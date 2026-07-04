@@ -19,10 +19,23 @@ repository.
 ## Import model at a glance
 
 - string literal paths such as `"./math.mog"` resolve as source modules
+- hosted module paths such as `"github.com/acme/math"` resolve through
+  installed Git module metadata
 - bare names such as `"math"` and `"window"` resolve as packages
 - package metadata already exists in `mog.toml`, `mog.lock`, and
   `package.api.mog`, with legacy `package.toml` still accepted for
   compatibility
+
+Add a Git module by tag, then install before importing it:
+
+```bash
+mog add github.com/acme/math@v1.0.0
+mog install
+```
+
+```mog
+const math = @import("github.com/acme/math")
+```
 
 ## Reference packages in this repo
 

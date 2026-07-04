@@ -9,6 +9,7 @@
 #include <unordered_set>
 
 #include "NativePackage.hpp"
+#include "ModuleResolver.hpp"
 #include "PackageManifest.hpp"
 #include "Scanner.hpp"
 #include "SyntaxRules.hpp"
@@ -399,6 +400,10 @@ bool loadLockfileEntries(const std::filesystem::path& lockfilePath,
             return true;
         }
         if (current.packageId.empty() &&
+            !current.module.empty()) {
+            current.packageId = current.module;
+        }
+        if (current.packageId.empty() &&
             !current.packageNamespace.empty() &&
             !current.packageName.empty()) {
             current.packageId =
@@ -494,6 +499,8 @@ bool loadLockfileEntries(const std::filesystem::path& lockfilePath,
 
         if (key == "name") {
             current.importName = parsed;
+        } else if (key == "module") {
+            current.module = parsed;
         } else if (key == "package_id") {
             current.packageId = parsed;
         } else if (key == "namespace") {
@@ -524,6 +531,10 @@ bool loadLockfileEntries(const std::filesystem::path& lockfilePath,
             current.sourcePath = parsed;
         } else if (key == "registry") {
             current.registry = parsed;
+        } else if (key == "repo_root") {
+            current.repoRoot = parsed;
+        } else if (key == "subdir") {
+            current.subdir = parsed;
         } else if (key == "git") {
             current.gitUrl = parsed;
         } else if (key == "git_rev") {
@@ -573,10 +584,13 @@ bool loadPackageManifestEntry(const std::filesystem::path& packageDir,
     outEntry = PackageRegistryEntry{};
     outEntry.importName = manifest.importName.empty() ? manifest.packageName
                                                       : manifest.importName;
+    outEntry.module = manifest.module;
     outEntry.packageNamespace = manifest.packageNamespace;
     outEntry.packageName = manifest.packageName;
-    outEntry.packageId =
-        makePackageId(outEntry.packageNamespace, outEntry.packageName);
+    outEntry.packageId = manifest.module.empty()
+                             ? makePackageId(outEntry.packageNamespace,
+                                             outEntry.packageName)
+                             : manifest.module;
     outEntry.version = manifest.version;
     outEntry.packageDir = canonicalOrLexical(packageDir);
     outEntry.kind = manifest.kind.empty() ? "native" : manifest.kind;
@@ -1296,7 +1310,15 @@ bool resolvePackageRegistryEntry(
     outEntry = PackageRegistryEntry{};
     outError.clear();
 
-    if (rawSpecifier.find(':') != std::string_view::npos) {
+    const ImportSpecifierKind specifierKind =
+        classifyImportSpecifier(rawSpecifier);
+    const bool isRemoteModule =
+        specifierKind == ImportSpecifierKind::RemoteModule;
+    const bool isInstalledAlias =
+        specifierKind == ImportSpecifierKind::InstalledAlias;
+
+    if (!isRemoteModule && !isInstalledAlias &&
+        rawSpecifier.find(':') != std::string_view::npos) {
         outError = "Package imports must use bare names like 'window', not '" +
                    std::string(rawSpecifier) + "'.";
         return false;
@@ -1308,7 +1330,13 @@ bool resolvePackageRegistryEntry(
         std::string registryError;
         if (loadProjectPackageRegistry(projectRoot, entries, registryError)) {
             for (const auto& entry : entries) {
-                if (entry.importName == rawSpecifier) {
+                if (isRemoteModule &&
+                    (entry.module == rawSpecifier ||
+                     entry.packageId == rawSpecifier)) {
+                    outEntry = entry;
+                    return true;
+                }
+                if (isInstalledAlias && entry.importName == rawSpecifier) {
                     outEntry = entry;
                     return true;
                 }
@@ -1320,10 +1348,19 @@ bool resolvePackageRegistryEntry(
         }
     }
 
-    for (const auto& root : normalizePackageSearchPaths(packageSearchPaths, importerPath)) {
-        if (scanPackageRootForEntry(root, rawSpecifier, outEntry)) {
-            return true;
+    if (isInstalledAlias) {
+        for (const auto& root :
+             normalizePackageSearchPaths(packageSearchPaths, importerPath)) {
+            if (scanPackageRootForEntry(root, rawSpecifier, outEntry)) {
+                return true;
+            }
         }
+    }
+
+    if (isRemoteModule) {
+        outError = "Package '" + std::string(rawSpecifier) +
+                   "' is not installed. Run 'mog install'.";
+        return false;
     }
 
     outError = "Cannot find package '" + std::string(rawSpecifier) + "'.";

@@ -12,6 +12,7 @@ struct NativePackageDescriptor;
 
 struct PackageRegistryEntry {
     std::string importName;
+    std::string module;
     std::string packageId;
     std::string packageNamespace;
     std::string packageName;
@@ -29,6 +30,8 @@ struct PackageRegistryEntry {
     std::string sourceType;
     std::string sourcePath;
     std::string registry;
+    std::string repoRoot;
+    std::string subdir;
     std::string gitUrl;
     std::string gitRev;
     std::string gitTag;

@@ -442,7 +442,12 @@ bool resolveImportTarget(const std::string& importerPath,
     outError.clear();
     outTarget.rawSpecifier = rawImportPath;
 
-    if (looksLikeSourceModuleSpecifier(rawImportPath)) {
+    const ImportSpecifierKind specifierKind =
+        classifyImportSpecifier(rawImportPath);
+
+    if (specifierKind == ImportSpecifierKind::LocalSource ||
+        (specifierKind != ImportSpecifierKind::RemoteModule &&
+         looksLikeSourceModuleSpecifier(rawImportPath))) {
         if (!hasSourceModuleExtension(rawImportPath)) {
             outError = "Source module imports must use the " +
                        std::string(kSourceModuleExtension) + " extension: '" +
@@ -463,13 +468,15 @@ bool resolveImportTarget(const std::string& importerPath,
         return true;
     }
 
-    if (rawImportPath.find(':') != std::string::npos) {
+    if (specifierKind != ImportSpecifierKind::RemoteModule &&
+        rawImportPath.find(':') != std::string::npos) {
         outError = "Package imports must use bare names like 'window', not '" +
                    rawImportPath + "'.";
         return false;
     }
 
-    if (!isValidPackageIdPart(rawImportPath)) {
+    if (specifierKind != ImportSpecifierKind::RemoteModule &&
+        !isValidPackageIdPart(rawImportPath)) {
         outError = "Cannot find module or package '" + rawImportPath + "'.";
         return false;
     }

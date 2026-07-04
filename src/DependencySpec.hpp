@@ -4,6 +4,9 @@
 
 struct DependencySpec {
     std::string alias;
+    std::string module;
+    std::string repoRoot;
+    std::string subdir;
     std::string packageId;
     std::string path;
     std::string version;

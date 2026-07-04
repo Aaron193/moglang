@@ -181,6 +181,61 @@ std::string normalizeRelativePath(std::string pathText) {
     return pathText;
 }
 
+std::vector<std::string> splitPath(std::string_view text) {
+    std::vector<std::string> parts;
+    size_t start = 0;
+    while (start <= text.size()) {
+        const size_t slash = text.find('/', start);
+        const size_t end = slash == std::string_view::npos ? text.size() : slash;
+        parts.emplace_back(text.substr(start, end - start));
+        if (slash == std::string_view::npos) {
+            break;
+        }
+        start = slash + 1;
+    }
+    return parts;
+}
+
+std::string moduleLeafName(std::string_view module) {
+    const std::vector<std::string> parts = splitPath(module);
+    for (auto it = parts.rbegin(); it != parts.rend(); ++it) {
+        if (!it->empty()) {
+            std::string leaf = *it;
+            if (leaf.size() > 4 && leaf.substr(leaf.size() - 4) == ".git") {
+                leaf.resize(leaf.size() - 4);
+            }
+            return leaf;
+        }
+    }
+    return "";
+}
+
+std::string moduleCompatibilityNamespace(std::string_view module) {
+    const std::vector<std::string> parts = splitPath(module);
+    if (!parts.empty() && isValidPackageIdPart(parts.front())) {
+        return parts.front();
+    }
+    return "module";
+}
+
+std::string moduleCompatibilityName(std::string_view module) {
+    std::string leaf = moduleLeafName(module);
+    std::string name;
+    for (char ch : leaf) {
+        if (std::islower(static_cast<unsigned char>(ch)) ||
+            std::isdigit(static_cast<unsigned char>(ch)) || ch == '_' ||
+            ch == '-') {
+            name.push_back(ch);
+        } else if (std::isupper(static_cast<unsigned char>(ch))) {
+            name.push_back(static_cast<char>(
+                std::tolower(static_cast<unsigned char>(ch))));
+        } else if (ch == '.') {
+            name.push_back('-');
+        }
+    }
+    return isValidPackageIdPart(name) ? name : "package";
+}
+
 bool parseDependencyInlineTable(const std::string& value,
                                 DependencySpec& outDependency,
                                 std::string& outError) {
@@ -567,6 +622,22 @@ bool validatePackageIdentity(const PackageManifest& manifest,
 bool validatePackageDirectorySuffix(const std::filesystem::path& dirPath,
                                     const PackageManifest& manifest,
                                     std::string& outError) {
+    if (!manifest.module.empty()) {
+        const std::vector<std::string> moduleParts = splitPath(manifest.module);
+        std::vector<std::string> packagedModuleParts{"packages"};
+        packagedModuleParts.insert(packagedModuleParts.end(), moduleParts.begin(),
+                                   moduleParts.end());
+        std::vector<std::string> installedModuleParts{".mog", "install",
+                                                      "packages"};
+        installedModuleParts.insert(installedModuleParts.end(), moduleParts.begin(),
+                                    moduleParts.end());
+        if (pathEndsWith(dirPath, moduleParts) ||
+            pathEndsWith(dirPath, packagedModuleParts) ||
+            pathEndsWith(dirPath, installedModuleParts)) {
+            return true;
+        }
+    }
+
     if (!pathEndsWith(dirPath, {manifest.packageNamespace, manifest.packageName}) &&
         !pathEndsWith(dirPath, {"packages", manifest.packageNamespace,
                                 manifest.packageName}) &&
@@ -770,6 +841,11 @@ bool loadPackageManifest(const std::string& packageDir,
                 outError = "Invalid manifest kind: " + parseError;
                 return false;
             }
+        } else if (key == "module") {
+            if (!parseQuotedString(value, outManifest.module, parseError)) {
+                outError = "Invalid manifest module: " + parseError;
+                return false;
+            }
         } else if (key == "import_name") {
             if (!parseQuotedString(value, outManifest.importName, parseError)) {
                 outError = "Invalid manifest import_name: " + parseError;
@@ -869,6 +945,15 @@ bool loadPackageManifest(const std::string& packageDir,
         }
     }
 
+    if (!outManifest.module.empty()) {
+        if (outManifest.packageNamespace.empty()) {
+            outManifest.packageNamespace =
+                moduleCompatibilityNamespace(outManifest.module);
+        }
+        if (outManifest.packageName.empty()) {
+            outManifest.packageName = moduleCompatibilityName(outManifest.module);
+        }
+    }
     if (outManifest.importName.empty()) {
         outManifest.importName = outManifest.packageName;
     }
@@ -887,10 +972,14 @@ bool loadPackageManifest(const std::string& packageDir,
         return false;
     }
 
-    if (outManifest.packageNamespace.empty() || outManifest.packageName.empty() ||
-        outManifest.version.empty() || outManifest.description.empty()) {
-        outError =
-            "Manifest must define namespace, name, version, and description.";
+    if (outManifest.module.empty() &&
+        (outManifest.packageNamespace.empty() || outManifest.packageName.empty() ||
+         outManifest.version.empty() || outManifest.description.empty())) {
+        outError = "Manifest must define namespace, name, version, and description.";
+        return false;
+    }
+    if (!outManifest.module.empty() && outManifest.version.empty()) {
+        outError = "Manifest must define version.";
         return false;
     }
 
