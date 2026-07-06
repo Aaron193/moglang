@@ -9,3 +9,6 @@ error.log
 .cache
 .internal
 .codex
+
+examples/github_math/.mog/
+examples/github_math/mog.lock

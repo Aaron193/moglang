@@ -33,6 +33,16 @@ Run the Flappy Bird rectangle-rendered demo:
 ./build/interpreter examples/flappy_bird.mog
 ```
 
+Run the GitHub package import example:
+
+```bash
+./scripts/run_github_math_example.sh
+```
+
+Use `./scripts/run_github_math_example.sh --in-place` to leave the generated
+`examples/github_math/mog.lock` and `examples/github_math/.mog/install`
+directory available for inspection.
+
 `window_open.mog` opens a visible window, presents a frame, and closes after a
 short delay unless the user closes it first.
 
