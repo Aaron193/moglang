@@ -1346,7 +1346,10 @@ bool testSemanticTokens() {
     const std::string importSource =
                 "const { Answer, Get } = @import(\"./modules/frontend_identity_module.mog\")\n"
         "const value i32 = Get()\n"
-        "print(Answer)\n";
+        "print(Answer)\n"
+        "const math = @import(\"./modules/math.mog\")\n"
+        "print(math.PI)\n"
+        "print(math.Add(1, 2))\n";
     options.sourcePath = "tests/sample_import_frontend_identity.mog";
     ToolingDocumentAnalysis importAnalysis =
         analyzeDocumentForTooling(importSource, options);
@@ -1382,6 +1385,25 @@ bool testSemanticTokens() {
     if (!require(importedAnswerUse != nullptr &&
                      tokenHasModifier(*importedAnswerUse, "readonly"),
                  "imported constant uses should stay readonly variables")) {
+        return false;
+    }
+    if (!require(findSemanticToken(importTokens, 4, 6, "variable") != nullptr,
+                 "module qualifiers should stay classified as variables")) {
+        return false;
+    }
+    const auto* importedMemberConstant =
+        findSemanticToken(importTokens, 4, 11, "property");
+    if (!require(importedMemberConstant != nullptr &&
+                     tokenHasModifier(*importedMemberConstant, "readonly"),
+                 "imported module constants should emit readonly property tokens")) {
+        return false;
+    }
+    if (!require(findSemanticToken(importTokens, 4, 11, "variable") == nullptr,
+                 "imported module constants should not share the qualifier variable token kind")) {
+        return false;
+    }
+    if (!require(findSemanticToken(importTokens, 5, 11, "function") != nullptr,
+                 "imported module function members should keep function tokens")) {
         return false;
     }
 

@@ -5628,13 +5628,23 @@ class SemanticTokenCollector {
                 if (const auto importedDeclaration = importedDeclarationSite(
                         *importedModule, tokenText(memberExpr.member));
                     importedDeclaration.has_value()) {
-                    return semanticInfoForDeclaration(*importedDeclaration);
+                    SemanticTokenInfo info =
+                        semanticInfoForDeclaration(*importedDeclaration);
+                    if (info.kind == "variable") {
+                        info.kind = "property";
+                    }
+                    return info;
                 }
 
                 const auto valueIt =
                     importedModule->valueExports.find(tokenText(memberExpr.member));
                 if (valueIt != importedModule->valueExports.end()) {
-                    return semanticTokenInfoForType(valueIt->second.type);
+                    SemanticTokenInfo info =
+                        semanticTokenInfoForType(valueIt->second.type);
+                    if (info.kind == "variable") {
+                        info.kind = "property";
+                    }
+                    return info;
                 }
                 const auto typeIt =
                     importedModule->typeExports.find(tokenText(memberExpr.member));

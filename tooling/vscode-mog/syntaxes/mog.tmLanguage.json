@@ -123,11 +123,11 @@
     },
     {
       "name": "entity.name.function.method.mog",
-      "match": "(?<=\\.)[a-z_][A-Za-z0-9_]*\\b(?=\\s*\\()"
+      "match": "(?<=\\.)[A-Za-z_][A-Za-z0-9_]*\\b(?=\\s*\\()"
     },
     {
       "name": "variable.other.property.mog",
-      "match": "(?<=\\.)[a-z_][A-Za-z0-9_]*\\b"
+      "match": "(?<=\\.)[A-Za-z_][A-Za-z0-9_]*\\b"
     },
     {
       "name": "entity.name.function.mog",

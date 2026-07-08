@@ -188,8 +188,17 @@ requireCondition(
   "lowercase member accesses should still be colored as properties"
 );
 requireCondition(
-  !propertyMatches.includes("PIPE_WIDTH") && !propertyMatches.includes("BIRD_X"),
-  "uppercase names after '.' should not be treated as properties"
+  propertyMatches.includes("PIPE_WIDTH") && propertyMatches.includes("BIRD_X"),
+  "uppercase names after '.' should be treated as properties"
+);
+
+const moduleMemberLine = "print(math.Add(math.VALUE, 8))";
+const modulePropertyMatches = [...moduleMemberLine.matchAll(propertyRegex)].map(
+  (match) => match[0]
+);
+requireCondition(
+  modulePropertyMatches.includes("VALUE"),
+  "uppercase imported module members after '.' should be treated as properties"
 );
 
 const castLine = "    const birdLeft f64 = C.BIRD_X as f64";
