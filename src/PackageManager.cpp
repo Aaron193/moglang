@@ -6355,6 +6355,54 @@ bool resolveDependencyNode(
         outNode.entry.gitTag = dependency.gitTag;
         outNode.entry.gitBranch = dependency.gitBranch;
         outNode.entry.gitCommit = gitCommit;
+
+        if (outNode.entry.kind == "native") {
+            const std::string desiredTarget = effectiveInstallTarget(options);
+            if (options != nullptr && options->noNativeBuild) {
+                outError = "Git native package '" + outNode.entry.packageId +
+                           "' requires a source build for target '" +
+                           desiredTarget +
+                           "', but --no-native-build forbids it.";
+                return false;
+            }
+
+            PackageManifest nativeManifest;
+            if (!loadPackageManifest(packageSourceDir.string(), nativeManifest,
+                                     outError)) {
+                outError = "Could not load dependency '" + dependency.alias +
+                           "': " + outError;
+                return false;
+            }
+            if (std::find(nativeManifest.native.targets.begin(),
+                          nativeManifest.native.targets.end(),
+                          desiredTarget) == nativeManifest.native.targets.end()) {
+                outError = "Git native package '" + outNode.entry.packageId +
+                           "' does not support target '" + desiredTarget +
+                           "'.";
+                return false;
+            }
+
+            PackageRegistryEntry sourceEntryForToolchain = outNode.entry;
+            sourceEntryForToolchain.selectedTarget = desiredTarget;
+            NativeToolchainSelection toolchainSelection;
+            if (!resolveNativeToolchainSelection(projectRoot, nullptr,
+                                                 sourceEntryForToolchain, options,
+                                                 toolchainSelection, outError)) {
+                return false;
+            }
+            if (desiredTarget != detectHostTarget() &&
+                toolchainSelection.cmakeToolchainFile.empty()) {
+                outError = "Git native package '" + outNode.entry.packageId +
+                           "' requires a configured CMake toolchain for non-host target '" +
+                           desiredTarget + "'." +
+                           formatNativeToolchainRequirement(desiredTarget);
+                return false;
+            }
+
+            outNode.entry.selectedTarget = desiredTarget;
+            outNode.entry.buildFromSource = true;
+            outNode.entry.libraryPath.clear();
+        }
     } else if (!dependency.registry.empty()) {
         outError = "Dependency '" + dependency.alias +
                    "' uses named registries, which are recognized but not implemented until Phase 2.";
@@ -6472,7 +6520,8 @@ bool validatePackageEntry(const PackageRegistryEntry& entry,
         const std::string validationRoot =
             inferWorkspaceRoot(packageDir, entry, projectRoot);
         return validatePackageDirectory(packageDir.string(), validationRoot,
-                                        outError);
+                                        outError, entry.sourceType == "git"
+                                                      ? entry.module : "");
     }
 
     if (entry.entryPath.empty() || !fileExists(entry.entryPath)) {

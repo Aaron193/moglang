@@ -120,6 +120,12 @@ Generated manifest shape:
 `mog install` resolves the module to Git, pins the exact commit in `mog.lock`,
 and materializes it under `.mog/install/packages/github.com/acme/math`.
 
+Git native packages are built from source through the CMake-native package contract and
+are pinned by commit in `mog.lock`. They must include `package.cpp` or
+`CMakeLists.txt`, `package.api.mog`, and the public `NativePackageAPI.hpp` ABI
+header. Git dependencies do not consume prebuilt native binaries; publish
+target-specific prebuilt artifacts through a registry instead.
+
 Git dependencies require exactly one selector: `--rev`, `--tag`, or
 `--branch`.
 

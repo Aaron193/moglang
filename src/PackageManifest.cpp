@@ -621,9 +621,13 @@ bool validatePackageIdentity(const PackageManifest& manifest,
 
 bool validatePackageDirectorySuffix(const std::filesystem::path& dirPath,
                                     const PackageManifest& manifest,
+                                    std::string_view moduleOverride,
                                     std::string& outError) {
-    if (!manifest.module.empty()) {
-        const std::vector<std::string> moduleParts = splitPath(manifest.module);
+    const std::string module = manifest.module.empty()
+                                   ? std::string(moduleOverride)
+                                   : manifest.module;
+    if (!module.empty()) {
+        const std::vector<std::string> moduleParts = splitPath(module);
         std::vector<std::string> packagedModuleParts{"packages"};
         packagedModuleParts.insert(packagedModuleParts.end(), moduleParts.begin(),
                                    moduleParts.end());
@@ -1082,7 +1086,8 @@ bool validatePackageManifestForDistribution(const PackageManifest& manifest,
 
 bool validatePackageDirectory(const std::string& packageDir,
                               const std::string& repoRoot,
-                              std::string& outError) {
+                              std::string& outError,
+                              const std::string& moduleOverride) {
     outError.clear();
 
     std::error_code ec;
@@ -1102,7 +1107,8 @@ bool validatePackageDirectory(const std::string& packageDir,
     }
     const std::filesystem::path repoRootPath(repoRoot);
     if (!validatePackageIdentity(manifest, outError) ||
-        !validatePackageDirectorySuffix(dirPath, manifest, outError) ||
+        !validatePackageDirectorySuffix(dirPath, manifest, moduleOverride,
+                                        outError) ||
         !validateReservedNamespacePath(dirPath, repoRootPath, manifest,
                                       outError)) {
         return false;

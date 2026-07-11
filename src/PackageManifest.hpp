@@ -61,4 +61,5 @@ bool validatePackageManifestForDistribution(const PackageManifest& manifest,
 
 bool validatePackageDirectory(const std::string& packageDir,
                               const std::string& repoRoot,
-                              std::string& outError);
+                              std::string& outError,
+                              const std::string& moduleOverride = "");

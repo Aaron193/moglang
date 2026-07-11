@@ -4227,6 +4227,84 @@ if ! grep -Fq "Package 'github.com/example/math' is not installed. Run 'mog inst
     exit 1
 fi
 
+GIT_NATIVE_MODULE_REPO_DIR="$TEMP_DIR/git-native-module-repo"
+GIT_NATIVE_MODULE_CONSUMER_DIR="$TEMP_DIR/git-native-module-consumer"
+GIT_NATIVE_MODULE_CONFIG="$TEMP_DIR/git-native-module-config"
+mkdir -p "$GIT_NATIVE_MODULE_REPO_DIR" "$GIT_NATIVE_MODULE_CONSUMER_DIR"
+
+cp "$PROJECT_ROOT/packages/examples/math/package.cpp" \
+    "$GIT_NATIVE_MODULE_REPO_DIR/package.cpp"
+cp "$PROJECT_ROOT/packages/examples/math/package.api.mog" \
+    "$GIT_NATIVE_MODULE_REPO_DIR/package.api.mog"
+sed -i 's/^package math$/package native_math/' "$GIT_NATIVE_MODULE_REPO_DIR/package.api.mog"
+cp "$PROJECT_ROOT/src/NativePackageAPI.hpp" \
+    "$GIT_NATIVE_MODULE_REPO_DIR/NativePackageAPI.hpp"
+sed -i 's/"examples"/"github"/; s/"math"/"native-math"/' \
+    "$GIT_NATIVE_MODULE_REPO_DIR/package.cpp"
+cat > "$GIT_NATIVE_MODULE_REPO_DIR/mog.toml" <<'EOF_GIT_NATIVE_MODULE_PACKAGE'
+kind = "native"
+module = "github.com/example/native-math"
+import_name = "native_math"
+namespace = "github"
+name = "native-math"
+version = "v0.1.0"
+license = "MIT"
+abi_version = 3
+mog_runtime = "^0.1.0"
+description = "Git-native package test."
+dependencies = []
+
+[native]
+build = "cmake"
+targets = ["linux-x86_64-gnu", "linux-arm64-gnu", "macos-arm64", "macos-x86_64"]
+EOF_GIT_NATIVE_MODULE_PACKAGE
+
+git -C "$GIT_NATIVE_MODULE_REPO_DIR" init --initial-branch=main >/dev/null
+git -C "$GIT_NATIVE_MODULE_REPO_DIR" config user.email "mog-tests@example.com"
+git -C "$GIT_NATIVE_MODULE_REPO_DIR" config user.name "Mog Tests"
+git -C "$GIT_NATIVE_MODULE_REPO_DIR" add . >/dev/null
+git -C "$GIT_NATIVE_MODULE_REPO_DIR" commit -m "init native module" >/dev/null
+git -C "$GIT_NATIVE_MODULE_REPO_DIR" tag v0.1.0
+
+git config --file "$GIT_NATIVE_MODULE_CONFIG" \
+    url."file://$GIT_NATIVE_MODULE_REPO_DIR".insteadOf \
+    "https://github.com/example/native-math.git"
+
+cat > "$GIT_NATIVE_MODULE_CONSUMER_DIR/mog.toml" <<'EOF_GIT_NATIVE_MODULE_CONSUMER'
+kind = "project"
+name = "git-native-module-consumer"
+version = "0.1.0"
+description = "Git-native module consumer"
+
+[dependencies]
+"github.com/example/native-math" = { version = "v0.1.0" }
+EOF_GIT_NATIVE_MODULE_CONSUMER
+
+cat > "$GIT_NATIVE_MODULE_CONSUMER_DIR/app.mog" <<'EOF_GIT_NATIVE_MODULE_APP'
+const native_math = @import("github.com/example/native-math")
+print(native_math.MEANING_OF_LIFE)
+EOF_GIT_NATIVE_MODULE_APP
+
+if ! (cd "$GIT_NATIVE_MODULE_CONSUMER_DIR" && \
+    GIT_CONFIG_GLOBAL="$GIT_NATIVE_MODULE_CONFIG" "$MOG" install >/dev/null); then
+    echo "[FAIL] install should source-build Go-style Git native module dependencies"
+    exit 1
+fi
+
+GIT_NATIVE_MODULE_OUTPUT="$(cd "$GIT_NATIVE_MODULE_CONSUMER_DIR" && "$MOG" run app.mog)"
+if [[ "$GIT_NATIVE_MODULE_OUTPUT" != *"42"* ]]; then
+    echo "[FAIL] run should load a source-built Go-style Git native module"
+    echo "$GIT_NATIVE_MODULE_OUTPUT"
+    exit 1
+fi
+
+if ! grep -Fq 'build_from_source = true' "$GIT_NATIVE_MODULE_CONSUMER_DIR/mog.lock" || \
+   [[ ! -f "$GIT_NATIVE_MODULE_CONSUMER_DIR/.mog/install/packages/github.com/example/native-math/package.so" && \
+      ! -f "$GIT_NATIVE_MODULE_CONSUMER_DIR/.mog/install/packages/github.com/example/native-math/package.dylib" ]]; then
+    echo "[FAIL] Go-style Git native module install should record and materialize a source build"
+    exit 1
+fi
+
 POLICY_REGISTRY_DIR="$(mktemp -d)"
 cat > "$POLICY_REGISTRY_DIR/mog.toml" <<EOF_POLICY_REGISTRY
 kind = "project"
