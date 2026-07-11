@@ -4,7 +4,9 @@ cmake_minimum_required(VERSION 3.10)
 # Set VCPKG_ROOT to the path of your vcpkg installation
 # set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
 
-project(interpreter VERSION 1.0)
+# Override this from a release build, for example: -DMOG_VERSION=0.1.0
+set(MOG_VERSION "0.1.0" CACHE STRING "Version of the Mog distribution")
+project(mog VERSION ${MOG_VERSION})
 
 find_package(OpenSSL REQUIRED)
 
@@ -53,6 +55,14 @@ add_executable(interpreter
 )
 target_link_libraries(interpreter PRIVATE interpreter_core)
 target_include_directories(interpreter PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+
+# Keep `interpreter` for existing developer scripts while publishing the
+# user-facing CLI under the language name.
+add_executable(mog
+    src/main.cpp
+)
+target_link_libraries(mog PRIVATE interpreter_core)
+target_include_directories(mog PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 add_executable(ast_parser_smoke
     tests/ast_parser_smoke.cpp
@@ -268,6 +278,7 @@ endif()
 set(PROJECT_COMPILE_TARGETS
     interpreter_core
     interpreter
+    mog
     ast_parser_smoke
     ast_emitter_regression
     ast_frontend_regression
@@ -297,6 +308,7 @@ endforeach()
 
 set(PROJECT_LINK_TARGETS
     interpreter
+    mog
     ast_parser_smoke
     ast_emitter_regression
     ast_frontend_regression
@@ -328,6 +340,25 @@ if(ENABLE_LTO)
                  INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
     set_property(TARGET interpreter PROPERTY
                  INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+    set_property(TARGET mog PROPERTY
+                 INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
     set_property(TARGET mog-lsp PROPERTY
                  INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
 endif()
+
+# Distribution layout: `cmake --install` puts both user-facing executables on
+# PATH. CPack then turns the install tree into a release archive.
+include(GNUInstallDirs)
+install(TARGETS mog mog-lsp
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(FILES LICENSE README.md
+    DESTINATION "${CMAKE_INSTALL_DOCDIR}")
+
+set(CPACK_PACKAGE_NAME "mog")
+set(CPACK_PACKAGE_VENDOR "Mog Language")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Mog programming language and language server")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+set(CPACK_GENERATOR "TGZ;ZIP")
+set(CPACK_PACKAGE_FILE_NAME "mog-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+include(CPack)

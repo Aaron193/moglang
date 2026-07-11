@@ -23,6 +23,21 @@ function executableCandidates(workspaceFolder, configuredPath) {
   ];
 }
 
+function installedServerPath() {
+  const suffix = process.platform === "win32" ? ".exe" : "";
+  const executable = `mog-lsp${suffix}`;
+  const pathEntries = (process.env.PATH || "").split(path.delimiter);
+
+  for (const directory of pathEntries) {
+    const candidate = path.join(directory, executable);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 function findServerPath() {
   const workspaceFolder = vscode.workspace.workspaceFolders
     ? vscode.workspace.workspaceFolders[0]
@@ -37,14 +52,14 @@ function findServerPath() {
     }
   }
 
-  return null;
+  return installedServerPath();
 }
 
 function activate(context) {
   const serverPath = findServerPath();
   if (!serverPath) {
     vscode.window.showWarningMessage(
-      "Mog language support could not find `mog-lsp`. Build the project first or set `mog.serverPath`."
+      "Mog language support could not find `mog-lsp`. Install Mog so it is on PATH, or set `mog.serverPath`."
     );
     return;
   }

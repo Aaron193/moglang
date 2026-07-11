@@ -204,6 +204,7 @@ Or start REPL:
 ./build/interpreter
 ```
 
+
 ## Examples
 
 Manual runnable demos live under `examples/`. These are intended for developer
@@ -608,3 +609,15 @@ Validate a package directory against its manifest and compiled shared library:
 
 The validator checks package ID syntax, reserved `mog` usage, manifest/ABI
 compatibility, registration metadata, and exported native signature parsing.
+
+## Installation and editor support
+
+A release installs two executables: `mog` runs source files and `mog-lsp` provides the Language Server Protocol service. Build a distributable archive with:
+
+```bash
+cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
+cmake --build build/release --parallel
+cpack --config build/release/CPackConfig.cmake -B dist
+```
+
+After extracting the archive, add its `bin` directory to `PATH`; users can then run `mog app.mog`. The VS Code extension under `tooling/vscode-mog` supplies syntax highlighting, snippets, and LSP diagnostics, formatting, navigation, references, and rename. It discovers `mog-lsp` on `PATH`. Package it with `npx /vsce package` from that directory and install the generated `.vsix`. Before Marketplace publishing, replace the `publisher` value (`local`) in its manifest with your Marketplace publisher ID.

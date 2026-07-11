@@ -54,7 +54,7 @@
         "mog.serverPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the mog-lsp executable. Defaults to build outputs in the current workspace."
+          "description": "Path to the mog-lsp executable. Defaults to build outputs in the current workspace, then mog-lsp on PATH."
         }
       }
     }
