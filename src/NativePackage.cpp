@@ -9,8 +9,7 @@
 #include <unordered_set>
 #include <utility>
 
-#include <dlfcn.h>
-
+#include "DynamicLibrary.hpp"
 #include "ModuleResolver.hpp"
 #include "PackageRegistry.hpp"
 #include "TypeInfo.hpp"
@@ -20,7 +19,9 @@ namespace {
 constexpr std::string_view kNativeImportPrefix = "native:";
 constexpr const char* kRegisterPackageSymbol = "exprRegisterPackage";
 
-#if defined(__APPLE__)
+#if defined(_WIN32)
+constexpr const char* kPackageLibraryFileName = "package.dll";
+#elif defined(__APPLE__)
 constexpr const char* kPackageLibraryFileName = "package.dylib";
 #else
 constexpr const char* kPackageLibraryFileName = "package.so";
@@ -553,30 +554,23 @@ bool loadNativePackageDescriptor(const std::string& libraryPath,
         *outLibraryHandle = nullptr;
     }
 
-    dlerror();
-    void* handle = dlopen(libraryPath.c_str(), RTLD_NOW | RTLD_LOCAL);
+    void* handle = openDynamicLibrary(libraryPath);
     if (!handle) {
-        const char* dlError = dlerror();
         outError = "Failed to load native package '" + libraryPath + "'";
-        if (dlError != nullptr) {
-            outError += ": ";
-            outError += dlError;
-        }
+        outError += ": " + dynamicLibraryError();
         outError += ".";
         return false;
     }
 
     auto closeHandle = [&]() {
         if (handle != nullptr) {
-            dlclose(handle);
+            closeDynamicLibrary(handle);
             handle = nullptr;
         }
     };
 
-    dlerror();
-    void* symbol = dlsym(handle, kRegisterPackageSymbol);
-    const char* symbolError = dlerror();
-    if (symbolError != nullptr || symbol == nullptr) {
+    void* symbol = findDynamicLibrarySymbol(handle, kRegisterPackageSymbol);
+    if (symbol == nullptr) {
         outError = "Native package '" + libraryPath +
                    "' is missing required symbol '" +
                    std::string(kRegisterPackageSymbol) + "'.";

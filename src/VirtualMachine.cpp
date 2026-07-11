@@ -16,8 +16,7 @@
 #include <utility>
 #include <vector>
 
-#include <dlfcn.h>
-
+#include "DynamicLibrary.hpp"
 #include "NativePackage.hpp"
 #include "StdLib.hpp"
 
@@ -4378,7 +4377,7 @@ VirtualMachine::~VirtualMachine() {
 void VirtualMachine::unloadNativeLibraries() {
     for (void* handle : m_loadedNativeLibraryHandles) {
         if (handle != nullptr) {
-            dlclose(handle);
+            closeDynamicLibrary(handle);
         }
     }
     m_loadedNativeLibraryHandles.clear();
