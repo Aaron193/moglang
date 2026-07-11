@@ -597,6 +597,12 @@ std::string findLibraryPath(const std::filesystem::path& packageDir,
         return joinPath(directLibrary);
     }
 
+    const std::filesystem::path packageBuildLibrary =
+        packageDir / "build" / kPackageLibraryFileName;
+    if (std::filesystem::exists(packageBuildLibrary)) {
+        return joinPath(packageBuildLibrary);
+    }
+
     const std::filesystem::path builtLibrary =
         repoRoot / "build" / "packages" / manifest.packageNamespace /
         manifest.packageName / kPackageLibraryFileName;
@@ -638,6 +644,13 @@ bool validatePackageDirectorySuffix(const std::filesystem::path& dirPath,
         if (pathEndsWith(dirPath, moduleParts) ||
             pathEndsWith(dirPath, packagedModuleParts) ||
             pathEndsWith(dirPath, installedModuleParts)) {
+            return true;
+        }
+        if (dirPath.filename() == moduleParts.back() &&
+            std::filesystem::exists(dirPath / ".git")) {
+            return true;
+        }
+        if (!moduleOverride.empty() && module == moduleOverride) {
             return true;
         }
     }

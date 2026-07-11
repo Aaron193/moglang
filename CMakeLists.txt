@@ -138,7 +138,6 @@ set_target_properties(examples_counter_package PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/counter"
 )
 
-add_subdirectory(packages/mog/window)
 
 if(ENABLE_VM_TRACE)
     target_compile_definitions(interpreter_core PRIVATE VM_TRACE)

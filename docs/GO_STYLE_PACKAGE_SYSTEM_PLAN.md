@@ -42,7 +42,7 @@ The missing Go-style behavior is import-path-driven resolution.
 
 Currently:
 
-- Package imports are bare names such as `@import("window")`.
+- Package imports may use canonical Git module paths such as `@import("github.com/moglang/window")`; installed aliases such as `window` remain available for ergonomic projects.
 - `resolvePackageRegistryEntry` rejects names containing `:`.
 - Imports do not derive a repository URL.
 - Published package specs still require a configured registry.
@@ -553,7 +553,7 @@ Do not remove the existing registry system immediately.
 
 Keep these working:
 
-- `@import("window")`
+- `@import("github.com/moglang/window")`
 - `--package-path`
 - local `packages/` discovery
 - `[registries.*]`

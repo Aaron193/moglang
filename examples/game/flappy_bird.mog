@@ -1,4 +1,4 @@
-const window = @import("window")
+const window = @import("github.com/moglang/window")
 const { WINDOW_WIDTH, WINDOW_HEIGHT, FIXED_DT } =
     @import("./flappy/constants.mog")
 const { GameState, ResetGame } = @import("./flappy/state.mog")

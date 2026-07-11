@@ -276,9 +276,8 @@ Native package example:
 
 ```toml
 kind = "native"
+module = "github.com/moglang/window"
 import_name = "window"
-namespace = "mog"
-name = "window"
 version = "0.1.0"
 license = "MIT"
 abi_version = 3
@@ -342,7 +341,9 @@ Signed publish:
 For native packages, publish the current host prebuilt artifact:
 
 ```bash
-./build/interpreter publish ./packages/mog/window
+git clone https://github.com/moglang/window.git
+cd window
+../mog/build/interpreter publish .
 ```
 
 Publish a prepared prebuilt artifact for another target:
@@ -351,7 +352,7 @@ Publish a prepared prebuilt artifact for another target:
 ./build/interpreter publish \
   --target linux-arm64-gnu \
   --native-artifact-dir ./dist/window-linux-arm64 \
-  ./packages/mog/window
+  .
 ```
 
 Publishing is idempotent when an existing `package_id@version` has identical
@@ -537,18 +538,7 @@ For non-host native source builds, Mog looks for toolchains in this order:
 4. `.mog/toolchains/<target>.cmake`
 5. `toolchains/<target>.cmake`
 
-The official `mog:window` package is distributed through the package system,
-not embedded into the interpreter binary. The helper script supports local and
-CI publish workflows:
-
-```bash
-./scripts/publish_official_window.sh --registry-path ./dist/registry
-./scripts/publish_official_window.sh \
-  --registry release \
-  --workspace ./dist/publish-workspace \
-  --bundle-root ./dist/publish-bundles \
-  --signing-key ./keys/release.toml
-```
+The official window package is maintained in the standalone [github.com/moglang/window](https://github.com/moglang/window) source repository. The runtime resolves it through an installed, signed registry artifact for ordinary users; Git module dependencies build that repository from source for contributors.
 
 ## Tooling Integration
 

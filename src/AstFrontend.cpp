@@ -464,7 +464,9 @@ bool buildImportedModuleInterface(const ImportTarget& importTarget,
         PackageApiMetadata apiMetadata;
         std::string apiError;
         if (importTarget.apiPath.empty() ||
-            !loadPackageApiMetadata(importTarget.apiPath, importTarget.packageId,
+            !loadPackageApiMetadata(importTarget.apiPath,
+                                    makePackageId(importTarget.packageNamespace,
+                                                  importTarget.packageName),
                                     importTarget.packageImportName, apiMetadata,
                                     apiError)) {
             outDiagnostics.push_back(TypeError{

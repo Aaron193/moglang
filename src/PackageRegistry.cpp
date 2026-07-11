@@ -1397,7 +1397,7 @@ bool resolveHandlePackageId(const std::string& importerPath,
         return false;
     }
 
-    outPackageId = entry.packageId;
+    outPackageId = makePackageId(entry.packageNamespace, entry.packageName);
     outPackageNamespace = entry.packageNamespace;
     outPackageName = entry.packageName;
     return true;

@@ -1,4 +1,4 @@
-const window = @import("window")
+const window = @import("github.com/moglang/window")
 const C = @import("./constants.mog")
 const { GameState, Pipe } = @import("./state.mog")
 

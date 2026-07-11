@@ -96,16 +96,6 @@ if [[ "$ALT_TARGET" == "$HOST_TARGET" ]]; then
     ALT_TARGET="macos-arm64"
 fi
 
-WINDOW_PACKAGE_SO="$PROJECT_ROOT/build/packages/mog/window/package.so"
-WINDOW_PACKAGE_DYLIB="$PROJECT_ROOT/build/packages/mog/window/package.dylib"
-WINDOW_PACKAGE_LIBRARY=""
-WINDOW_PUBLISH_SCRIPT="$PROJECT_ROOT/scripts/publish_official_window.sh"
-if [[ -f "$WINDOW_PACKAGE_SO" ]]; then
-    WINDOW_PACKAGE_LIBRARY="$WINDOW_PACKAGE_SO"
-elif [[ -f "$WINDOW_PACKAGE_DYLIB" ]]; then
-    WINDOW_PACKAGE_LIBRARY="$WINDOW_PACKAGE_DYLIB"
-fi
-
 write_registry_index() {
     local registry_dir="$1"
     local mode="${2:-correct}"
@@ -1508,110 +1498,6 @@ if ! grep -Fq "different published contents" /tmp/mog_native_publish_conflict.tx
     echo "[FAIL] publish should explain native re-publish conflicts"
     cat /tmp/mog_native_publish_conflict.txt
     exit 1
-fi
-
-if [[ ! -x "$WINDOW_PUBLISH_SCRIPT" ]]; then
-    echo "[FAIL] official window publish script should be executable"
-    exit 1
-fi
-
-if [[ -n "$WINDOW_PACKAGE_LIBRARY" ]]; then
-    mv "$WINDOW_PACKAGE_LIBRARY" "$WINDOW_PACKAGE_LIBRARY.bak"
-    if "$WINDOW_PUBLISH_SCRIPT" --registry-path "$REGISTRY_DIR" \
-        >/tmp/mog_window_publish_missing_artifact.txt 2>&1; then
-        echo "[FAIL] official window publish script should reject a missing build artifact"
-        cat /tmp/mog_window_publish_missing_artifact.txt
-        mv "$WINDOW_PACKAGE_LIBRARY.bak" "$WINDOW_PACKAGE_LIBRARY"
-        exit 1
-    fi
-    mv "$WINDOW_PACKAGE_LIBRARY.bak" "$WINDOW_PACKAGE_LIBRARY"
-
-    if ! grep -Fq "Built mog:window library not found" \
-        /tmp/mog_window_publish_missing_artifact.txt; then
-        echo "[FAIL] official window publish script should explain missing build artifacts"
-        cat /tmp/mog_window_publish_missing_artifact.txt
-        exit 1
-    fi
-
-    if ! "$WINDOW_PUBLISH_SCRIPT" --registry-path "$REGISTRY_DIR" >/dev/null; then
-        echo "[FAIL] publish script should accept the official mog:window package"
-        exit 1
-    fi
-
-    if ! MOG_PUBLISH_REGISTRY_PATH="$REGISTRY_DIR" \
-        "$WINDOW_PUBLISH_SCRIPT" >/dev/null; then
-        echo "[FAIL] publish script should support CI-style registry-path configuration via environment"
-        exit 1
-    fi
-
-    WINDOW_BUNDLE_ROOT="$(mktemp -d)"
-    mkdir -p "$WINDOW_BUNDLE_ROOT/host" "$WINDOW_BUNDLE_ROOT/alt"
-    cp "$PROJECT_ROOT/packages/mog/window/mog.toml" \
-       "$PROJECT_ROOT/packages/mog/window/package.api.mog" \
-       "$WINDOW_BUNDLE_ROOT/host/"
-    cp "$PROJECT_ROOT/packages/mog/window/mog.toml" \
-       "$PROJECT_ROOT/packages/mog/window/package.api.mog" \
-       "$WINDOW_BUNDLE_ROOT/alt/"
-    cp "$WINDOW_PACKAGE_LIBRARY" "$WINDOW_BUNDLE_ROOT/host/$(basename "$WINDOW_PACKAGE_LIBRARY")"
-    cp "$WINDOW_PACKAGE_LIBRARY" "$WINDOW_BUNDLE_ROOT/alt/$(basename "$WINDOW_PACKAGE_LIBRARY")"
-    printf '%s\n' "$HOST_TARGET" > "$WINDOW_BUNDLE_ROOT/host/publish-target.txt"
-    printf '%s\n' "$ALT_TARGET" > "$WINDOW_BUNDLE_ROOT/alt/publish-target.txt"
-
-    if ! "$WINDOW_PUBLISH_SCRIPT" --registry-path "$REGISTRY_DIR" \
-        --bundle-root "$WINDOW_BUNDLE_ROOT" >/dev/null; then
-        echo "[FAIL] publish script should accept prepared bundle roots"
-        exit 1
-    fi
-
-    if ! grep -Fq "\"$ALT_TARGET\"" "$REGISTRY_DIR/index.toml" || \
-       ! grep -Fq "packages/mog/window/0.1.0/$ALT_TARGET" "$REGISTRY_DIR/index.toml"; then
-        echo "[FAIL] publish script bundle mode should add additional target artifacts"
-        cat "$REGISTRY_DIR/index.toml"
-        exit 1
-    fi
-
-    WINDOW_PUBLISH_DIR="$(mktemp -d)"
-    mkdir -p "$WINDOW_PUBLISH_DIR/app"
-    cat > "$WINDOW_PUBLISH_DIR/app/mog.toml" <<EOF_WINDOW_CONSUMER
-kind = "project"
-name = "window-consumer"
-version = "0.1.0"
-description = "window consumer"
-
-[registries.default]
-index = "$REGISTRY_DIR"
-
-[dependencies]
-window = { package = "mog:window", version = "0.1.0" }
-EOF_WINDOW_CONSUMER
-    cp "$PROJECT_ROOT/tests/sample_mog_window.mog" \
-       "$WINDOW_PUBLISH_DIR/app/app.mog"
-
-    if ! (cd "$WINDOW_PUBLISH_DIR/app" && "$MOG" install >/dev/null); then
-        echo "[FAIL] install should resolve a published mog:window package"
-        exit 1
-    fi
-
-    WINDOW_RUN_OUTPUT="$(SDL_VIDEODRIVER=dummy "$MOG" run "$WINDOW_PUBLISH_DIR/app/app.mog")"
-    if [[ "$WINDOW_RUN_OUTPUT" != *"true"* || \
-          "$WINDOW_RUN_OUTPUT" != *"false"* ]]; then
-        echo "[FAIL] run should execute a published mog:window package"
-        echo "$WINDOW_RUN_OUTPUT"
-        exit 1
-    fi
-else
-    if "$WINDOW_PUBLISH_SCRIPT" --registry-path "$REGISTRY_DIR" \
-        >/tmp/mog_window_publish_missing_artifact.txt 2>&1; then
-        echo "[FAIL] official window publish script should fail when mog:window is not built"
-        exit 1
-    fi
-
-    if ! grep -Fq "Built mog:window library not found" \
-        /tmp/mog_window_publish_missing_artifact.txt; then
-        echo "[FAIL] official window publish script should explain missing build artifacts"
-        cat /tmp/mog_window_publish_missing_artifact.txt
-        exit 1
-    fi
 fi
 
 cat > "$NATIVE_CONSUMER_DIR/mog.toml" <<EOF_NATIVE_CONSUMER

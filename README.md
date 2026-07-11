@@ -458,7 +458,7 @@ package ID internally. The first official package is exposed to users as
 Headless smoke usage for tests:
 
 ```expr
-const window = @import("window")
+const window = @import("github.com/moglang/window")
 
 const win window.Window =
     window.create("Demo", 800i64, 600i64)
@@ -520,7 +520,7 @@ description = "demo project"
 
 [policy]
 allowed_registries = ["default"]
-allowed_native_namespaces = ["mog"]
+allowed_native_namespaces = ["github"]
 require_locked_in_ci = true
 require_signed_artifacts = true
 
@@ -537,7 +537,7 @@ build_args = ["--verbose"]
 env = { "PKG_CONFIG_PATH" = "/opt/sdk/lib/pkgconfig" }
 
 [dependencies]
-window = { package = "mog:window", version = "0.1.0" }
+window = { package = "github:window", version = "^0.1.0", registry = "official" }
 ```
 
 For native source-build fallback, Mog uses `--cmake-toolchain` first. If that
@@ -579,8 +579,10 @@ Registry publishing can sign `registry.v4` indexes and detached artifact
 signatures with a `registry-key.v1` file:
 
 ```bash
-./build/interpreter publish --signing-key ./keys/release.toml ./packages/mog/window
-./build/interpreter publish --target linux-arm64-gnu --native-artifact-dir ./dist/window-bundle ./packages/mog/window
+git clone https://github.com/moglang/window.git
+cd window
+../mog/build/interpreter publish --signing-key ../keys/release.toml .
+../mog/build/interpreter publish --target linux-arm64-gnu --native-artifact-dir ./dist/window-bundle .
 ```
 
 When signed registry artifacts are installed, Mog pins `artifact_signature`
@@ -595,15 +597,7 @@ Lockfile-based vulnerability checks are also available:
 ./build/interpreter audit --offline
 ```
 
-The official `mog:window` publish helper can run locally with flags or in CI
-with environment variables:
-
-```bash
-./scripts/publish_official_window.sh --registry-path ./dist/registry
-MOG_PUBLISH_REGISTRY_PATH=./dist/registry ./scripts/publish_official_window.sh
-./scripts/publish_official_window.sh --registry-path ./dist/registry --signing-key ./keys/release.toml
-./scripts/publish_official_window.sh --registry release --workspace ./dist/publish-workspace --bundle-root ./dist/publish-bundles --signing-key ./keys/release.toml
-```
+The official window package lives in [github.com/moglang/window](https://github.com/moglang/window). Its release workflow builds and signs target-specific registry artifacts; the language runtime neither builds nor publishes it.
 
 Validate a package directory against its manifest and compiled shared library:
 

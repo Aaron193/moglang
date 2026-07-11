@@ -5733,7 +5733,9 @@ bool stagePublishedNativePrebuiltArtifactFromDirectory(
     }
 
     PackageApiMetadata apiMetadata;
-    if (!loadPackageApiMetadata(apiPath.string(), packageEntry.packageId,
+    if (!loadPackageApiMetadata(apiPath.string(),
+                                makePackageId(packageEntry.packageNamespace,
+                                              packageEntry.packageName),
                                 packageEntry.importName, apiMetadata,
                                 outError)) {
         outError = "Native publish artifact directory '" +
@@ -6458,6 +6460,11 @@ bool validatePackageEntry(const PackageRegistryEntry& entry,
 
     const std::filesystem::path packageDir(entry.packageDir);
     if (entry.kind == "native") {
+        if (entry.sourceType == "git" && entry.buildFromSource &&
+            (entry.libraryPath.empty() ||
+             !fileExists(std::filesystem::path(entry.libraryPath)))) {
+            return true;
+        }
         if (entry.sourceType == "registry") {
             PackageManifest manifest;
             if (!loadPackageManifest(packageDir.string(), manifest, outError)) {
@@ -6481,7 +6488,8 @@ bool validatePackageEntry(const PackageRegistryEntry& entry,
             }
 
             PackageApiMetadata apiMetadata;
-            if (!loadPackageApiMetadata(entry.apiPath, entry.packageId,
+            if (!loadPackageApiMetadata(entry.apiPath,
+                                        makePackageId(entry.packageNamespace, entry.packageName),
                                         entry.importName, apiMetadata, outError)) {
                 return false;
             }
@@ -6532,7 +6540,9 @@ bool validatePackageEntry(const PackageRegistryEntry& entry,
 
     if (!entry.apiPath.empty()) {
         PackageApiMetadata apiMetadata;
-        if (!loadPackageApiMetadata(entry.apiPath, entry.packageId, entry.importName,
+        if (!loadPackageApiMetadata(entry.apiPath,
+                                    makePackageId(entry.packageNamespace, entry.packageName),
+                                    entry.importName,
                                     apiMetadata, outError)) {
             return false;
         }
@@ -6735,10 +6745,15 @@ bool materializeProjectInstall(const PackageRegistryEntry& sourceEntry,
 
     CacheEntryMetadata metadata;
     std::string metadataError;
-    const bool hasReusableCache =
+    bool hasReusableCache =
         isDirectory(cacheDir) && fileExists(cacheMetadataPath(cacheDir)) &&
         loadCacheMetadataFile(cacheMetadataPath(cacheDir), metadata, metadataError) &&
         cacheMetadataMatchesEntry(metadata, sourceEntry);
+    if (hasReusableCache && sourceEntry.kind == "native" &&
+        sourceEntry.buildFromSource &&
+        !fileExists(cacheDir / kPackageLibraryFileName)) {
+        hasReusableCache = false;
+    }
 
     if (!hasReusableCache) {
         if (options.offline && sourceEntry.sourceType == "registry") {

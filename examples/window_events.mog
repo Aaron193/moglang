@@ -1,4 +1,4 @@
-const window = @import("window")
+const window = @import("github.com/moglang/window")
 
 const win window.Window =
     window.create("window event demo", 800i64, 600i64)
