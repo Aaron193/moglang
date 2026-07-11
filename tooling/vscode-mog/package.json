@@ -1,9 +1,9 @@
 {
   "name": "vscode-mog",
-  "displayName": "Mog Language Support",
+  "displayName": "Moglang Developer Tools",
   "description": "Syntax highlighting and diagnostics for Mog.",
-  "version": "0.0.1",
-  "publisher": "local",
+  "version": "0.1.0",
+  "publisher": "moglang",
   "engines": {
     "vscode": "^1.85.0"
   },

@@ -1,5 +1,7 @@
 libs/
 build/
+dist/
+tooling/vscode-mog/*.vsix
 node_modules/
 apps/site/dist/
 apps/site/.astro/
