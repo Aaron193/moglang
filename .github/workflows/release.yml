@@ -1,0 +1,93 @@
+name: Release Mog
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and attach to a GitHub release
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release-context:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.value }}
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - id: tag
+        shell: bash
+        run: echo "value=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+      - id: version
+        shell: bash
+        run: echo "value=${{ inputs.tag || github.ref_name }}" | sed 's/^v//' >> "$GITHUB_OUTPUT"
+
+  package:
+    needs: release-context
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            runner: ubuntu-latest
+            shell: bash
+          - name: macos-arm64
+            runner: macos-latest
+            shell: bash
+          - name: windows-x64
+            runner: windows-latest
+            shell: msys2 {0}
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-context.outputs.tag }}
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install openssl@3
+      - name: Set up MSYS2
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-ninja
+      - name: Configure
+        run: >-
+          cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
+          -DMOG_VERSION=${{ needs.release-context.outputs.version }}
+      - name: Build
+        run: cmake --build build/release --parallel
+      - name: Package
+        run: cpack --config build/release/CPackConfig.cmake -B dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mog-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: [release-context, package]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-context.outputs.tag }}
+          files: dist/*
