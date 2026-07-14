@@ -641,11 +641,12 @@ struct SetObject : GcObject {
 };
 
 struct IteratorObject : GcObject {
-    enum Kind { ARRAY_ITER, DICT_ITER, SET_ITER } kind = ARRAY_ITER;
+    enum Kind { ARRAY_ITER, DICT_ITER, SET_ITER, STRING_ITER } kind = ARRAY_ITER;
 
     ArrayObject* array = nullptr;
     DictObject* dict = nullptr;
     SetObject* set = nullptr;
+    std::string string;
     std::vector<Value> dictKeys;
     size_t index = 0;
 

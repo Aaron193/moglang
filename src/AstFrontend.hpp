@@ -46,6 +46,8 @@ struct AstFrontendOptions {
     std::string sourcePath;
     std::vector<std::string> packageSearchPaths;
     AstFrontendModuleGraphCache* moduleGraphCache = nullptr;
+    // Source package entry modules may expose conventional lower-case API names.
+    bool allowLowercasePackageExports = false;
 };
 
 enum class AstFrontendBuildStatus {
@@ -82,6 +84,7 @@ struct AstFrontendResult {
     size_t terminalLine = 1;
     SourcePosition terminalPosition = makeSourcePosition(0, 1, 1);
     Timings timings;
+    bool allowLowercasePackageExports = false;
 };
 
 AstFrontendBuildStatus buildAstFrontend(std::string_view source,

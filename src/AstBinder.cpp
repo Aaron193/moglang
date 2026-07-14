@@ -75,7 +75,7 @@ class AstBinderImpl {
         }
 
         const std::string name = tokenText(typeExpr.token);
-        return m_classNames.find(name) == m_classNames.end() &&
+        return name != "any" && m_classNames.find(name) == m_classNames.end() &&
                m_typeAliases.find(name) == m_typeAliases.end();
     }
 
@@ -527,6 +527,14 @@ class AstBinderImpl {
             std::holds_alternative<AstImportExpr>(stmt.initializer->value)) {
             binding.kind = AstBindingKind::ImportedModule;
             binding.importExprNodeId = stmt.initializer->node.id;
+            auto imported = m_result.importedModules.find(stmt.initializer->node.id);
+            if (imported != m_result.importedModules.end()) {
+                for (const auto& [name, symbol] : imported->second.typeExports) {
+                    if (symbol.type && symbol.type->kind == TypeKind::CLASS) {
+                        mergeImportedClassMetadata(imported->second, symbol.type->className);
+                    }
+                }
+            }
         }
 
         defineBinding(tokenText(stmt.name), binding);

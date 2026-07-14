@@ -93,6 +93,7 @@ class Compiler {
     AstFrontendResult::Timings m_lastFrontendTimings;
     AstFrontendModuleGraphCache m_frontendModuleGraph;
     CompilerEmitterMode m_emitterMode = CompilerEmitterMode::Auto;
+    bool m_allowLowercasePackageExports = false;
     bool m_hadError = false;
     bool m_panicMode = false;
 

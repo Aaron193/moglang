@@ -39,6 +39,9 @@ TypeRef frontendTokenToType(const Token& token,
             return TypeInfo::makeNull();
         case TokenType::IDENTIFIER: {
             const std::string name = tokenLexeme(token);
+            if (name == "any") {
+                return TypeInfo::makeAny();
+            }
             auto aliasIt = context.typeAliases.find(name);
             if (aliasIt != context.typeAliases.end()) {
                 return aliasIt->second;

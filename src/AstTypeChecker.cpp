@@ -482,7 +482,7 @@ class AstTypeCheckerImpl {
         }
 
         const std::string name = tokenText(typeExpr.token);
-        return m_classNames.find(name) == m_classNames.end() &&
+        return name != "any" && m_classNames.find(name) == m_classNames.end() &&
                m_typeAliases.find(name) == m_typeAliases.end();
     }
 
@@ -2176,6 +2176,8 @@ class AstTypeCheckerImpl {
                         inferredLoopType = iterable.type->elementType
                                                ? iterable.type->elementType
                                                : TypeInfo::makeAny();
+                    } else if (iterable.type && iterable.type->kind == TypeKind::STR) {
+                        inferredLoopType = TypeInfo::makeStr();
                     } else if (!(iterable.type && iterable.type->isAny())) {
                         addError(value.iterable->node,
                                  "Type error: foreach expects Array<T> or "

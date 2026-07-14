@@ -12,8 +12,13 @@ inline bool isHandleTypeNameText(std::string_view name) {
     return name == "handle";
 }
 
-inline bool isPublicSymbolName(std::string_view name) {
-    return !name.empty() && name.front() >= 'A' && name.front() <= 'Z';
+inline bool isPublicSymbolName(std::string_view name,
+                               bool allowLowercasePackageExports = false) {
+    if (name.empty() || name.front() == '_') {
+        return false;
+    }
+    return allowLowercasePackageExports ||
+           (name.front() >= 'A' && name.front() <= 'Z');
 }
 
 inline int parseOperatorAnnotationToken(std::string_view op) {

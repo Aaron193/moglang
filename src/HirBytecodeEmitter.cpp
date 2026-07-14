@@ -574,7 +574,8 @@ void HirBytecodeEmitter::emitFunctionDecl(const HirFunctionDecl& functionDecl) {
 
     if (m_compiler.currentContext().scopeDepth == 0 &&
         isPublicSymbolName(std::string_view(functionDecl.name.start(),
-                                            functionDecl.name.length()))) {
+                                            functionDecl.name.length()),
+                           m_compiler.m_allowLowercasePackageExports)) {
         emitExportName(functionDecl.name, line);
     }
 }
@@ -626,7 +627,8 @@ void HirBytecodeEmitter::emitClassDecl(const HirClassDecl& classDecl) {
     emitByte(OpCode::POP, line);
 
     if (isPublicSymbolName(std::string_view(classDecl.name.start(),
-                                            classDecl.name.length()))) {
+                                            classDecl.name.length()),
+                           m_compiler.m_allowLowercasePackageExports)) {
         emitExportName(classDecl.name, line);
     }
 
@@ -676,7 +678,8 @@ void HirBytecodeEmitter::emitVarDecl(const HirVarDeclStmt& stmt,
 
     if (allowExport && m_compiler.currentContext().scopeDepth == 0 &&
         isPublicSymbolName(
-            std::string_view(stmt.name.start(), stmt.name.length()))) {
+            std::string_view(stmt.name.start(), stmt.name.length()),
+            m_compiler.m_allowLowercasePackageExports)) {
         emitExportName(stmt.name, line);
     }
 }

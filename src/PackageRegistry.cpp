@@ -909,6 +909,14 @@ class PackageApiParser {
         const std::string name = tokenText(nameToken);
         advance();
 
+        if (name == "any") {
+            parsed.type = TypeInfo::makeAny();
+            parsed.text = name;
+            parsed.span = nameToken.span();
+            applyOptionalSuffix();
+            return parsed;
+        }
+
         if (isCollectionTypeNameText(name)) {
             if (!consume(TokenType::LESS, "'<'", outError)) {
                 return {};
@@ -1006,6 +1014,26 @@ class PackageApiParser {
             combineSourceSpans(opaqueToken.span(), nameToken.span()),
             nameToken.span(),
         };
+        return true;
+    }
+
+    bool parseSourceType(PackageApiMetadata& outMetadata, const std::string& doc,
+                         std::string& outError) {
+        Token typeToken = m_current;
+        advance();
+        if (!check(TokenType::IDENTIFIER)) {
+            outError = "Expected type name.";
+            return false;
+        }
+        Token nameToken = m_current;
+        const std::string name = tokenText(nameToken);
+        advance();
+        if (!consume(TokenType::STRUCT, "'struct'", outError)) return false;
+        TypeRef type = TypeInfo::makeClass(name);
+        m_opaqueTypes[name] = type;
+        outMetadata.typeExports[name] = PackageApiOpaqueType{
+            type, doc, "", combineSourceSpans(typeToken.span(), m_previous.span()),
+            nameToken.span()};
         return true;
     }
 
@@ -1127,6 +1155,13 @@ class PackageApiParser {
         if (checkIdentifier("opaque")) {
             return parseOpaqueType(outMetadata, doc, nativeHandleTypeName,
                                    outError);
+        }
+        if (check(TokenType::TYPE)) {
+            if (!nativeHandleTypeName.empty()) {
+                outError = "@native_handle can only annotate opaque type declarations.";
+                return false;
+            }
+            return parseSourceType(outMetadata, doc, outError);
         }
         if (check(TokenType::CONST)) {
             if (!nativeHandleTypeName.empty()) {

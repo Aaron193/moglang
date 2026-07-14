@@ -77,7 +77,8 @@ run_expect_failure \
     failed=1
 
 TEMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TEMP_DIR"' EXIT
+LOOKALIKE_DIR="$PROJECT_ROOT/packages-namespace-lookalike-$$"
+trap 'rm -rf "$TEMP_DIR" "$LOOKALIKE_DIR"' EXIT
 mkdir -p "$TEMP_DIR/mog/fake"
 cat <<'EOF_MANIFEST' > "$TEMP_DIR/mog/fake/package.toml"
 namespace = "mog"
@@ -268,6 +269,26 @@ run_expect_failure \
     "Namespace 'mog' is reserved for runtime-maintained packages." \
     "$INTERPRETER" --validate-package "$TEMP_DIR/mog/fake-source" ||
     failed=1
+
+mkdir -p "$TEMP_DIR/std/fake/src"
+printf '%s\n' 'kind = "source"' 'module = "std/fake"' 'import_name = "fake"' 'namespace = "thirdparty"' 'name = "fake"' 'version = "0.1.0"' 'license = "MIT"' 'description = "invalid standard module"' 'entry = "src/main.mog"' 'dependencies = []' > "$TEMP_DIR/std/fake/mog.toml"
+printf '%s\n' 'package fake' 'fn Name() str' > "$TEMP_DIR/std/fake/package.api.mog"
+printf '%s\n' 'fn Name() str { return "fake" }' > "$TEMP_DIR/std/fake/src/main.mog"
+run_expect_failure \
+    "reject external std module" \
+    "Module namespace 'std/...' is reserved for language-owned modules." \
+    "$INTERPRETER" --validate-package "$TEMP_DIR/std/fake" ||
+    failed=1
+mkdir -p "$LOOKALIKE_DIR/packages/std/fake/src"
+printf '%s\n' 'kind = "source"' 'module = "std/fake"' 'import_name = "fake"' 'namespace = "thirdparty"' 'name = "fake"' 'version = "0.1.0"' 'license = "MIT"' 'description = "lookalike standard module"' 'entry = "src/main.mog"' 'dependencies = []' > "$LOOKALIKE_DIR/packages/std/fake/mog.toml"
+printf '%s\n' 'package fake' 'fn Name() str' > "$LOOKALIKE_DIR/packages/std/fake/package.api.mog"
+printf '%s\n' 'fn Name() str { return "fake" }' > "$LOOKALIKE_DIR/packages/std/fake/src/main.mog"
+run_expect_failure \
+    "reject std module under lookalike package root" \
+    "Module namespace 'std/...' is reserved for language-owned modules." \
+    "$INTERPRETER" --validate-package "$LOOKALIKE_DIR/packages/std/fake" ||
+    failed=1
+
 
 if [[ $failed -ne 0 ]]; then
     exit 1

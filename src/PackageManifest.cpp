@@ -673,18 +673,51 @@ bool validateReservedNamespacePath(const std::filesystem::path& dirPath,
                                    const std::filesystem::path& repoRootPath,
                                    const PackageManifest& manifest,
                                    std::string& outError) {
+    const auto isInside = [](const std::filesystem::path& child,
+                             const std::filesystem::path& parent) {
+        std::error_code error;
+        const std::filesystem::path canonicalChild =
+            std::filesystem::weakly_canonical(child, error);
+        if (error) {
+            return false;
+        }
+        const std::filesystem::path canonicalParent =
+            std::filesystem::weakly_canonical(parent, error);
+        if (error) {
+            return false;
+        }
+
+        const std::filesystem::path relative =
+            canonicalChild.lexically_relative(canonicalParent);
+        if (relative.empty() || relative.is_absolute()) {
+            return false;
+        }
+        return std::none_of(relative.begin(), relative.end(),
+                            [](const std::filesystem::path& component) {
+                                return component == "..";
+                            });
+    };
+
+    if (manifest.module == "std" || manifest.module.rfind("std/", 0) == 0) {
+        const bool isLanguageOwnedPath =
+            pathEndsWith(dirPath, {"packages", "std", manifest.packageName}) &&
+            isInside(dirPath, repoRootPath / "packages");
+        if (!isLanguageOwnedPath) {
+            outError = "Module namespace 'std/...' is reserved for language-owned modules.";
+            return false;
+        }
+    }
     if (manifest.packageNamespace != "mog") {
         return true;
     }
 
     const bool isOfficialSourcePath =
         pathEndsWith(dirPath, {"packages", "mog", manifest.packageName}) &&
-        dirPath.string().rfind(joinPath(repoRootPath / "packages"), 0) == 0;
+        isInside(dirPath, repoRootPath / "packages");
     const bool isOfficialBuildPath =
         pathEndsWith(dirPath, {"build", "packages", "mog",
                                manifest.packageName}) &&
-        dirPath.string().rfind(joinPath(repoRootPath / "build" / "packages"), 0) ==
-            0;
+        isInside(dirPath, repoRootPath / "build" / "packages");
     const bool isInstalledPath =
         pathEndsWith(dirPath, {".mog", "install", "packages", "mog",
                                manifest.packageName});

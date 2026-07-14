@@ -56,6 +56,48 @@ static bool isNumberPair(const Value& lhs, const Value& rhs) {
     return lhs.isAnyNumeric() && rhs.isAnyNumeric();
 }
 
+
+// Returns the byte width of the valid UTF-8 scalar starting at `start`.
+static bool utf8ScalarWidthAt(const std::string& text, size_t start,
+                              size_t& outWidth) {
+    if (start >= text.size()) return false;
+
+    const auto byteAt = [&text](size_t index) {
+        return static_cast<unsigned char>(text[index]);
+    };
+    const unsigned char first = byteAt(start);
+    if (first < 0x80) {
+        outWidth = 1;
+        return true;
+    }
+
+    size_t width = 0;
+    if (first >= 0xC2 && first <= 0xDF) {
+        width = 2;
+    } else if (first >= 0xE0 && first <= 0xEF) {
+        width = 3;
+    } else if (first >= 0xF0 && first <= 0xF4) {
+        width = 4;
+    } else {
+        return false;
+    }
+
+    if (width > text.size() - start) return false;
+    for (size_t index = 1; index < width; ++index) {
+        if ((byteAt(start + index) & 0xC0) != 0x80) return false;
+    }
+
+    const unsigned char second = byteAt(start + 1);
+    if ((first == 0xE0 && second < 0xA0) ||
+        (first == 0xED && second > 0x9F) ||
+        (first == 0xF0 && second < 0x90) ||
+        (first == 0xF4 && second > 0x8F)) {
+        return false;
+    }
+
+    outWidth = width;
+    return true;
+}
 static bool valueToSignedInt(const Value& value, int64_t& out) {
     if (value.isSignedInt()) {
         out = value.asSignedInt();
@@ -334,6 +376,9 @@ enum class BuiltinNativeKind : uint8_t {
     FLOOR,
     CEIL,
     POW,
+    CHAR_CODE_AT,
+    CHAR_FROM_CODE,
+    SLICE,
     ERROR,
     ARRAY,
     DICT,
@@ -489,6 +534,12 @@ static const char* builtinKindName(BuiltinNativeKind kind) {
             return "ceil";
         case BuiltinNativeKind::POW:
             return "pow";
+        case BuiltinNativeKind::CHAR_CODE_AT:
+            return "charCodeAt";
+        case BuiltinNativeKind::CHAR_FROM_CODE:
+            return "charFromCode";
+        case BuiltinNativeKind::SLICE:
+            return "slice";
         case BuiltinNativeKind::ERROR:
             return "error";
         case BuiltinNativeKind::ARRAY:
@@ -519,6 +570,11 @@ static const void* builtinNativeTag(const std::string& name) {
     static constexpr BuiltinNativeKind kFloor = BuiltinNativeKind::FLOOR;
     static constexpr BuiltinNativeKind kCeil = BuiltinNativeKind::CEIL;
     static constexpr BuiltinNativeKind kPow = BuiltinNativeKind::POW;
+    static constexpr BuiltinNativeKind kCharCodeAt =
+        BuiltinNativeKind::CHAR_CODE_AT;
+    static constexpr BuiltinNativeKind kCharFromCode =
+        BuiltinNativeKind::CHAR_FROM_CODE;
+    static constexpr BuiltinNativeKind kSlice = BuiltinNativeKind::SLICE;
     static constexpr BuiltinNativeKind kError = BuiltinNativeKind::ERROR;
     static constexpr BuiltinNativeKind kArray = BuiltinNativeKind::ARRAY;
     static constexpr BuiltinNativeKind kDict = BuiltinNativeKind::DICT;
@@ -538,6 +594,9 @@ static const void* builtinNativeTag(const std::string& name) {
     if (name == "floor") return &kFloor;
     if (name == "ceil") return &kCeil;
     if (name == "pow") return &kPow;
+    if (name == "charCodeAt") return &kCharCodeAt;
+    if (name == "charFromCode") return &kCharFromCode;
+    if (name == "slice") return &kSlice;
     if (name == "error") return &kError;
     if (name == "Array") return &kArray;
     if (name == "Dict") return &kDict;
@@ -1348,6 +1407,59 @@ Status invokeBuiltinNative(VirtualMachine& vm, const NativeFunctionObject& nativ
             }
 
             result = Value(std::pow(base, exponent));
+            break;
+        }
+        case BuiltinNativeKind::CHAR_CODE_AT: {
+            const Value& text = argAt(0);
+            const Value& index = argAt(1);
+            if (!text.isString() || !index.isSignedInt()) {
+                return vm.runtimeError(
+                    "Native function 'charCodeAt' expects a string and i64 index.");
+            }
+
+            const int64_t position = index.asSignedInt();
+            if (position < 0 ||
+                static_cast<size_t>(position) >= text.asString().size()) {
+                return vm.runtimeError(
+                    "Native function 'charCodeAt' index is out of bounds.");
+            }
+
+            result = Value(static_cast<int64_t>(static_cast<unsigned char>(
+                text.asString()[static_cast<size_t>(position)])));
+            break;
+        }
+        case BuiltinNativeKind::CHAR_FROM_CODE: {
+            const Value& code = argAt(0);
+            if (!code.isSignedInt() || code.asSignedInt() < 0 ||
+                code.asSignedInt() > 255) {
+                return vm.runtimeError(
+                    "Native function 'charFromCode' expects an i64 byte value from 0 to 255.");
+            }
+
+            result = vm.makeStringValue(
+                std::string(1, static_cast<char>(code.asSignedInt())));
+            break;
+        }
+        case BuiltinNativeKind::SLICE: {
+            const Value& text = argAt(0);
+            const Value& start = argAt(1);
+            const Value& end = argAt(2);
+            if (!text.isString() || !start.isSignedInt() || !end.isSignedInt()) {
+                return vm.runtimeError(
+                    "Native function 'slice' expects a string and i64 bounds.");
+            }
+
+            const int64_t startIndex = start.asSignedInt();
+            const int64_t endIndex = end.asSignedInt();
+            if (startIndex < 0 || endIndex < startIndex ||
+                static_cast<size_t>(endIndex) > text.asString().size()) {
+                return vm.runtimeError(
+                    "Native function 'slice' bounds are out of range.");
+            }
+
+            result = vm.makeStringValue(text.asString().substr(
+                static_cast<size_t>(startIndex),
+                static_cast<size_t>(endIndex - startIndex)));
             break;
         }
         case BuiltinNativeKind::ERROR: {
@@ -3637,9 +3749,12 @@ Status VirtualMachine::run(bool printReturnValue, Value& returnValue,
             } else if (iterable.isSet()) {
                 iterator->kind = IteratorObject::SET_ITER;
                 iterator->set = iterable.asSet();
+            } else if (iterable.isString()) {
+                iterator->kind = IteratorObject::STRING_ITER;
+                iterator->string = iterable.asString();
             } else {
                 return runtimeError(
-                    "Foreach expects an iterable (array, dict, or set).");
+                    "Foreach expects an iterable (array, dict, set, or string).");
             }
 
             m_stack.pop();
@@ -3670,6 +3785,9 @@ Status VirtualMachine::run(bool printReturnValue, Value& returnValue,
                     hasNext = iterator->set &&
                               iterator->index < iterator->set->elements.size();
                     break;
+                case IteratorObject::STRING_ITER:
+                    hasNext = iterator->index < iterator->string.size();
+                    break;
             }
 
             m_stack.push(Value(hasNext));
@@ -3699,6 +3817,9 @@ Status VirtualMachine::run(bool printReturnValue, Value& returnValue,
                 case IteratorObject::SET_ITER:
                     hasNext = iterator->set &&
                               iterator->index < iterator->set->elements.size();
+                    break;
+                case IteratorObject::STRING_ITER:
+                    hasNext = iterator->index < iterator->string.size();
                     break;
             }
 
@@ -3742,6 +3863,16 @@ Status VirtualMachine::run(bool printReturnValue, Value& returnValue,
                     }
                     nextValue = iterator->set->elements[iterator->index++];
                     break;
+                case IteratorObject::STRING_ITER: {
+                    const size_t start = iterator->index;
+                    size_t width = 0;
+                    if (!utf8ScalarWidthAt(iterator->string, start, width)) {
+                        return runtimeError("Invalid UTF-8 string iteration.");
+                    }
+                    iterator->index += width;
+                    nextValue = makeStringValue(iterator->string.substr(start, width));
+                    break;
+                }
             }
 
             m_stack.push(nextValue);
@@ -3783,6 +3914,16 @@ Status VirtualMachine::run(bool printReturnValue, Value& returnValue,
                     }
                     nextValue = iterator->set->elements[iterator->index++];
                     break;
+                case IteratorObject::STRING_ITER: {
+                    const size_t start = iterator->index;
+                    size_t width = 0;
+                    if (!utf8ScalarWidthAt(iterator->string, start, width)) {
+                        return runtimeError("Invalid UTF-8 string iteration.");
+                    }
+                    iterator->index += width;
+                    nextValue = makeStringValue(iterator->string.substr(start, width));
+                    break;
+                }
             }
 
             m_stack.setAtUnchecked(currentFrame().slotBase + slot,

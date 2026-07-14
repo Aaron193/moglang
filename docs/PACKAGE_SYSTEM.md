@@ -9,6 +9,8 @@ workspace packages, git dependencies, registry packages, source packages,
 native packages, lockfiles, offline installs, hosted registries, publishing,
 signing, registry trust, policy enforcement, and audit workflows are supported.
 
+Official ownership, source/native selection, and compatibility requirements are defined in [Package Policy](PACKAGE_POLICY.md). `std/...` is reserved for language-owned modules; shared code should import official packages using canonical `github.com/moglang/...` paths.
+
 ## Quick Start
 
 Create a project:

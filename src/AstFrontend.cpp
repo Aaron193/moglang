@@ -202,7 +202,7 @@ void annotateImportedFunctionExportsFromSource(const AstFrontendResult& frontend
         }
 
         const std::string name = tokenLexeme(functionDecl->name);
-        if (!isPublicSymbolName(name)) {
+        if (!isPublicSymbolName(name, frontend.allowLowercasePackageExports)) {
             continue;
         }
 
@@ -337,7 +337,7 @@ void collectExportedSymbolTypes(AstFrontendResult& frontend,
                     std::string fallbackName;
                     const std::string& name =
                         internLexeme(interner, value.name, fallbackName);
-                    if (!isPublicSymbolName(name)) {
+                    if (!isPublicSymbolName(name, frontend.allowLowercasePackageExports)) {
                         return;
                     }
 
@@ -357,7 +357,7 @@ void collectExportedSymbolTypes(AstFrontendResult& frontend,
                     std::string fallbackName;
                     const std::string& name =
                         internLexeme(interner, value.name, fallbackName);
-                    if (!isPublicSymbolName(name)) {
+                    if (!isPublicSymbolName(name, frontend.allowLowercasePackageExports)) {
                         return;
                     }
 
@@ -374,7 +374,7 @@ void collectExportedSymbolTypes(AstFrontendResult& frontend,
                     std::string fallbackName;
                     const std::string& name =
                         internLexeme(interner, value.name, fallbackName);
-                    if (!isPublicSymbolName(name)) {
+                    if (!isPublicSymbolName(name, frontend.allowLowercasePackageExports)) {
                         return;
                     }
 
@@ -402,7 +402,7 @@ void collectExportedSymbolTypes(AstFrontendResult& frontend,
                     std::string fallbackName;
                     const std::string& name =
                         internLexeme(interner, varDecl->name, fallbackName);
-                    if (!isPublicSymbolName(name)) {
+                    if (!isPublicSymbolName(name, frontend.allowLowercasePackageExports)) {
                         return;
                     }
 
@@ -561,6 +561,7 @@ bool buildImportedModuleInterface(const ImportTarget& importTarget,
         importedOptions.sourcePath = importTarget.resolvedPath;
         importedOptions.packageSearchPaths = options.packageSearchPaths;
         importedOptions.moduleGraphCache = &cache;
+        importedOptions.allowLowercasePackageExports = !importTarget.apiPath.empty();
         const AstFrontendBuildStatus status =
             buildAstFrontend(source, importedOptions, importedErrors,
                              importedFrontend);
@@ -975,6 +976,7 @@ AstFrontendBuildStatus buildAstFrontend(std::string_view source,
     AstModule module;
     AstParser parser(source);
     outFrontend = AstFrontendResult{};
+    outFrontend.allowLowercasePackageExports = options.allowLowercasePackageExports;
 
     bool parseSuccess = false;
     outFrontend.timings.parseMicros = measureMicros([&]() {

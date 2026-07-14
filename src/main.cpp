@@ -261,7 +261,13 @@ static bool parseAddArgs(int argc, char** argv, int startIndex,
         args.dependency.packageId.empty() && args.dependency.module.empty()) {
         std::string module;
         std::string version;
-        if (splitRemoteModuleVersionSpecifier(args.positional, module, version)) {
+        if (!args.dependency.path.empty()) {
+            // The local manifest is authoritative for path dependencies.
+            // Keep the positional specifier only as a user-facing label.
+        } else if (args.dependency.workspace) {
+            splitPackageVersionSpecifier(args.positional, args.dependency.packageId,
+                                         args.dependency.version);
+        } else if (splitRemoteModuleVersionSpecifier(args.positional, module, version)) {
             args.dependency.module = module;
             if (args.dependency.alias.empty()) {
                 args.dependency.alias = module;
@@ -982,6 +988,26 @@ static int runAddCommand(int argc, char** argv) {
         if (!completeExplicitDependencySpec(projectRoot, dependency, error)) {
             std::cerr << "Add failed: " << error << std::endl;
             return 1;
+        }
+        if (!args.dependency.path.empty() && !args.positional.empty()) {
+            std::string requestedModule;
+            std::string ignoredVersion;
+            bool matches = splitRemoteModuleVersionSpecifier(args.positional, requestedModule, ignoredVersion) &&
+                           requestedModule == dependency.module;
+            if (!matches) {
+                std::string requestedPackageId;
+                splitPackageVersionSpecifier(args.positional, requestedPackageId, ignoredVersion);
+                matches = requestedPackageId == dependency.packageId ||
+                          args.positional == dependency.packageId ||
+                          args.positional == dependency.alias;
+            }
+            if (!matches) {
+                std::cerr << "Add failed: Local path dependency '" << args.dependency.path
+                          << "' resolves to '" << dependency.packageId
+                          << "' (module '" << dependency.module
+                          << "'), not positional specifier '" << args.positional << "'." << std::endl;
+                return 1;
+            }
         }
     } else {
         if (!discoverDependencySpec(projectRoot, args.positional, dependency,

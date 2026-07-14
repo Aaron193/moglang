@@ -1,6 +1,7 @@
 #include "Compiler.hpp"
 
 #include <algorithm>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -11,9 +12,29 @@
 #include "FrontendDiagnostic.hpp"
 #include "FrontendTypeUtils.hpp"
 #include "HirBytecodeEmitter.hpp"
+#include "PackageManifest.hpp"
 #include "StdLib.hpp"
 
 namespace {
+
+bool isSourcePackageEntryPath(const std::string& sourcePath) {
+    if (sourcePath.empty()) return false;
+    std::error_code ec;
+    const std::filesystem::path entryPath = std::filesystem::weakly_canonical(sourcePath, ec);
+    if (ec) return false;
+    for (std::filesystem::path directory = entryPath.parent_path();
+         !directory.empty() && directory != directory.root_path();
+         directory = directory.parent_path()) {
+        PackageManifest manifest;
+        std::string error;
+        if (!loadPackageManifest(directory.string(), manifest, error) ||
+            manifest.kind != "source" || manifest.sourceEntry.empty()) continue;
+        const std::filesystem::path manifestEntry =
+            std::filesystem::weakly_canonical(directory / manifest.sourceEntry, ec);
+        return !ec && manifestEntry == entryPath;
+    }
+    return false;
+}
 
 void printDiagnosticPrefix(const SourceSpan& span) {
     std::cerr << "[error][compile][line " << span.line() << ":" << span.column()
@@ -54,6 +75,7 @@ bool Compiler::compile(std::string_view source, Chunk& chunk,
                        const std::string& sourcePath) {
     m_chunk = &chunk;
     m_sourcePath = sourcePath;
+    m_allowLowercasePackageExports = isSourcePackageEntryPath(sourcePath);
     m_currentClass = nullptr;
     m_contexts.clear();
     m_globalSlots.clear();

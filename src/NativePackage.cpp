@@ -519,14 +519,19 @@ bool resolveImportTarget(const std::string& importerPath,
 
     const std::string resolvedLibraryPath =
         weaklyCanonicalOrEmpty(packageEntry.libraryPath);
-    if (resolvedLibraryPath.empty()) {
+    std::string libraryPath = resolvedLibraryPath;
+    if (libraryPath.empty() && !packageEntry.packageDir.empty()) {
+        libraryPath = weaklyCanonicalOrEmpty(
+            std::filesystem::path(packageEntry.packageDir) / kPackageLibraryFileName);
+    }
+    if (libraryPath.empty()) {
         outError = "Cannot find native package '" + packageEntry.importName + "'.";
         return false;
     }
 
     outTarget.kind = ImportTargetKind::NATIVE_PACKAGE;
-    outTarget.canonicalId = std::string(kNativeImportPrefix) + resolvedLibraryPath;
-    outTarget.resolvedPath = resolvedLibraryPath;
+    outTarget.canonicalId = std::string(kNativeImportPrefix) + libraryPath;
+    outTarget.resolvedPath = libraryPath;
     outTarget.displayName = packageEntry.importName;
     return true;
 }
