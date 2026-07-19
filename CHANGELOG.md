@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.1
+## 0.1.4
 
 - Implement `charCodeAt`, `charFromCode`, and `slice` in the virtual machine.
 - Support the documented `any` type in source package function signatures.
