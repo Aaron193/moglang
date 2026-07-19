@@ -7,6 +7,10 @@
 #include "DependencySpec.hpp"
 #include "PackageRegistry.hpp"
 
+#ifndef MOG_RUNTIME_VERSION
+#define MOG_RUNTIME_VERSION "0.1.1"
+#endif
+
 struct ProjectRegistryConfig {
     std::string alias;
     std::string index;
@@ -39,7 +43,7 @@ struct ProjectScriptConfig {
 struct ProjectManifestData {
     std::string kind = "project";
     std::string name;
-    std::string version = "0.1.0";
+    std::string version = MOG_RUNTIME_VERSION;
     std::string description;
     ProjectScriptConfig scripts;
     std::vector<std::string> workspaceMembers;
