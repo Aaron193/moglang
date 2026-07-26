@@ -4142,7 +4142,7 @@ dependencies = []
 
 [native]
 build = "cmake"
-targets = ["linux-x86_64-gnu", "linux-arm64-gnu", "macos-arm64", "macos-x86_64"]
+targets = ["linux-x86_64-gnu", "linux-arm64-gnu", "macos-arm64"]
 EOF_GIT_NATIVE_MODULE_PACKAGE
 
 git -C "$GIT_NATIVE_MODULE_REPO_DIR" init --initial-branch=main >/dev/null
