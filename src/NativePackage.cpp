@@ -378,6 +378,9 @@ bool packageValueMatchesType(const ExprPackageValue& value,
             return type->kind == TypeKind::F64;
         case EXPR_PACKAGE_VALUE_STR:
             return type->kind == TypeKind::STR;
+        case EXPR_PACKAGE_VALUE_BYTES:
+            return type->kind == TypeKind::ARRAY && type->elementType != nullptr &&
+                   type->elementType->kind == TypeKind::U8;
         case EXPR_PACKAGE_VALUE_HANDLE:
             return false;
         default:
@@ -726,6 +729,12 @@ bool loadNativePackageDescriptor(const std::string& libraryPath,
             descriptor.stringValueStorage.assign(
                 descriptor.value.as.string_value.data,
                 descriptor.value.as.string_value.length);
+        } else if (descriptor.value.kind == EXPR_PACKAGE_VALUE_BYTES &&
+                   descriptor.value.as.bytes_value.data != nullptr) {
+            descriptor.byteValueStorage.assign(
+                descriptor.value.as.bytes_value.data,
+                descriptor.value.as.bytes_value.data +
+                    descriptor.value.as.bytes_value.length);
         }
         outDescriptor.exportTypes[descriptor.name] = descriptor.type;
         outDescriptor.constants.push_back(std::move(descriptor));

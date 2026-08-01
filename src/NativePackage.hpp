@@ -31,6 +31,7 @@ struct NativePackageConstantDescriptor {
     TypeRef type;
     ExprPackageValue value{};
     std::string stringValueStorage;
+    std::vector<uint8_t> byteValueStorage;
 };
 
 struct NativePackageFunctionDescriptor {

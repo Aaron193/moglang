@@ -58,9 +58,27 @@ bool greet(const ExprHostApi* hostApi, const ExprPackageValue* args, size_t argc
     return true;
 }
 
+bool echoBytes(const ExprHostApi* hostApi, const ExprPackageValue* args,
+               size_t argc, ExprPackageValue* outResult,
+               ExprPackageStringView* outError) {
+    (void)hostApi;
+    if (argc != 1 || args == nullptr || outResult == nullptr ||
+        args[0].kind != EXPR_PACKAGE_VALUE_BYTES) {
+        if (outError != nullptr) {
+            static const char kMessage[] = "echoBytes expects Array<u8>";
+            *outError = {kMessage, sizeof(kMessage) - 1};
+        }
+        return false;
+    }
+    outResult->kind = EXPR_PACKAGE_VALUE_BYTES;
+    outResult->as.bytes_value = args[0].as.bytes_value;
+    return true;
+}
+
 constexpr ExprPackageFunctionExport kFunctions[] = {
     {"addI64", "fn(i64, i64) -> i64", 2, addI64},
     {"greet", "fn(str) -> str", 1, greet},
+    {"echoBytes", "fn(Array<u8>) -> Array<u8>", 1, echoBytes},
 };
 
 constexpr ExprPackageConstantExport kConstants[] = {

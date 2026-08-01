@@ -16,12 +16,21 @@ typedef enum ExprPackageValueKind {
     EXPR_PACKAGE_VALUE_F64 = 4,
     EXPR_PACKAGE_VALUE_STR = 5,
     EXPR_PACKAGE_VALUE_HANDLE = 6,
+    EXPR_PACKAGE_VALUE_BYTES = 7,
 } ExprPackageValueKind;
 
 typedef struct ExprPackageStringView {
     const char* data;
     size_t length;
 } ExprPackageStringView;
+
+// Byte views are borrowed for the duration of a native call. The VM copies a
+// returned byte view into a GC-owned Array<u8> before the callback returns to
+// interpreted code.
+typedef struct ExprPackageByteView {
+    const uint8_t* data;
+    size_t length;
+} ExprPackageByteView;
 
 typedef void (*ExprPackageHandleFinalizer)(void* handle_data);
 
@@ -41,6 +50,7 @@ typedef struct ExprPackageValue {
         uint64_t u64_value;
         double f64_value;
         ExprPackageStringView string_value;
+        ExprPackageByteView bytes_value;
         ExprPackageHandleValue handle_value;
     } as;
 } ExprPackageValue;

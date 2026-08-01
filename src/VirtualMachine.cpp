@@ -387,7 +387,8 @@ enum class BuiltinNativeKind : uint8_t {
 
 static const ExprHostApi kExprHostApi = {EXPR_HOST_API_ABI_VERSION};
 
-static bool valueToPackageValue(const Value& value, ExprPackageValue& out) {
+static bool valueToPackageValue(const Value& value, ExprPackageValue& out,
+                                std::vector<uint8_t>& byteStorage) {
     out = ExprPackageValue{};
     if (value.isNil()) {
         out.kind = EXPR_PACKAGE_VALUE_NULL;
@@ -417,6 +418,25 @@ static bool valueToPackageValue(const Value& value, ExprPackageValue& out) {
         out.kind = EXPR_PACKAGE_VALUE_STR;
         out.as.string_value.data = value.asString().c_str();
         out.as.string_value.length = value.asString().size();
+        return true;
+    }
+    if (value.isArray()) {
+        const ArrayObject* array = value.asArray();
+        if (array == nullptr) {
+            return false;
+        }
+        byteStorage.clear();
+        byteStorage.reserve(array->elements.size());
+        for (const Value& element : array->elements) {
+            if (!element.isUnsignedInt() || element.asUnsignedInt() > 255U) {
+                return false;
+            }
+            byteStorage.push_back(static_cast<uint8_t>(element.asUnsignedInt()));
+        }
+        out.kind = EXPR_PACKAGE_VALUE_BYTES;
+        out.as.bytes_value.data =
+            byteStorage.empty() ? nullptr : byteStorage.data();
+        out.as.bytes_value.length = byteStorage.size();
         return true;
     }
     if (value.isNativeHandle()) {
@@ -465,6 +485,22 @@ bool packageValueToValue(VirtualMachine& vm, const ExprPackageValue& value,
                             value.as.string_value.length);
             }
             outValue = vm.makeStringValue(std::move(text));
+            return true;
+        }
+        case EXPR_PACKAGE_VALUE_BYTES: {
+            if (value.as.bytes_value.data == nullptr &&
+                value.as.bytes_value.length != 0) {
+                outError = "Native package returned invalid byte buffer.";
+                return false;
+            }
+            auto* array = vm.gcAlloc<ArrayObject>();
+            array->elementType = TypeInfo::makeU8();
+            array->elements.reserve(value.as.bytes_value.length);
+            for (size_t index = 0; index < value.as.bytes_value.length; ++index) {
+                array->elements.emplace_back(static_cast<uint64_t>(
+                    value.as.bytes_value.data[index]));
+            }
+            outValue = Value(array);
             return true;
         }
         case EXPR_PACKAGE_VALUE_HANDLE: {
@@ -1533,6 +1569,7 @@ Status invokePackageNative(VirtualMachine& vm, const NativeFunctionObject& nativ
     }
 
     std::vector<ExprPackageValue> packageArgs(argumentCount);
+    std::vector<std::vector<uint8_t>> byteArgumentStorage(argumentCount);
     const size_t argBase = calleeIndex + 1;
     for (uint8_t index = 0; index < argumentCount; ++index) {
         const Value& arg =
@@ -1547,7 +1584,8 @@ Status invokePackageNative(VirtualMachine& vm, const NativeFunctionObject& nativ
             }
         }
 
-        if (!valueToPackageValue(arg, packageArgs[index])) {
+        if (!valueToPackageValue(arg, packageArgs[index],
+                                 byteArgumentStorage[index])) {
             return vm.runtimeError("Native package function '" + native.name +
                                    "' cannot accept runtime value of type '" +
                                    valueTypeName(arg) + "'.");
@@ -3984,6 +4022,13 @@ Status VirtualMachine::run(bool printReturnValue, Value& returnValue,
                             constantDescriptor.stringValueStorage.c_str();
                         constantValue.as.string_value.length =
                             constantDescriptor.stringValueStorage.size();
+                    } else if (constantValue.kind == EXPR_PACKAGE_VALUE_BYTES) {
+                        constantValue.as.bytes_value.data =
+                            constantDescriptor.byteValueStorage.empty()
+                                ? nullptr
+                                : constantDescriptor.byteValueStorage.data();
+                        constantValue.as.bytes_value.length =
+                            constantDescriptor.byteValueStorage.size();
                     }
 
                     if (!packageValueToValue(*this, constantValue, value,
