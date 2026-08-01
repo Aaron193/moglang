@@ -41,6 +41,11 @@ The LSP and tooling regression tests cover real editor functionality, including:
 That is enough surface area to document Mog as having serious editor tooling,
 not just syntax coloring.
 
+For source declarations, a contiguous `//` comment group or a `/* ... */`
+comment immediately above the declaration is shown when hovering any reference
+to it. A blank line between the comment and declaration keeps the comment
+detached.
+
 ## Why `package.api.mog` matters
 
 Package API declaration files are not only runtime metadata. They also feed the

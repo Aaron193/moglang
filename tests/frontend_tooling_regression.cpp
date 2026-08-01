@@ -777,6 +777,57 @@ bool testReferencesAndHover() {
         return false;
     }
 
+    const std::string documentedSource =
+        "// Add returns the sum.\n"
+        "// Supports signed values.\n"
+        "fn Add(left i32, right i32) i32 {\n"
+        "    return left + right\n"
+        "}\n"
+        "/* Multiply returns the product. */\n"
+        "fn Multiply(left i32, right i32) i32 {\n"
+        "    return left * right\n"
+        "}\n"
+        "// This comment is separated and must not attach.\n"
+        "\n"
+        "const Result i32 = Add(2, Multiply(3, 4))\n";
+    options.sourcePath = "tooling_doc_comment_hover_regression.mog";
+    ToolingDocumentAnalysis documentedAnalysis =
+        analyzeDocumentForTooling(documentedSource, options);
+    if (!require(documentedAnalysis.status == AstFrontendBuildStatus::Success,
+                 "doc comment hover sample should succeed")) {
+        return false;
+    }
+    const auto documentedFunctionHover = findHoverForTooling(
+        documentedAnalysis, ToolingPosition{11, 21});
+    if (!require(documentedFunctionHover.has_value() &&
+                     documentedFunctionHover->documentation ==
+                         "Add returns the sum.\nSupports signed values.",
+                 "line comment groups should become declaration hover docs")) {
+        return false;
+    }
+    const auto documentedParameterHover = findHoverForTooling(
+        documentedAnalysis, ToolingPosition{3, 11});
+    if (!require(documentedParameterHover.has_value() &&
+                     documentedParameterHover->documentation.empty(),
+                 "declaration docs should not leak onto parameters")) {
+        return false;
+    }
+    const auto blockDocumentedFunctionHover = findHoverForTooling(
+        documentedAnalysis, ToolingPosition{11, 28});
+    if (!require(blockDocumentedFunctionHover.has_value() &&
+                     blockDocumentedFunctionHover->documentation ==
+                         "Multiply returns the product.",
+                 "block comments should become declaration hover docs")) {
+        return false;
+    }
+    const auto undocumentedConstantHover = findHoverForTooling(
+        documentedAnalysis, ToolingPosition{11, 6});
+    if (!require(undocumentedConstantHover.has_value() &&
+                     undocumentedConstantHover->documentation.empty(),
+                 "blank lines should detach comments from declarations")) {
+        return false;
+    }
+
     const std::string importSource =
                 "const { Answer, Get } = @import(\"./modules/frontend_identity_module.mog\")\n"
         "print(Get())\n"
@@ -972,6 +1023,7 @@ bool testReferencesAndHover() {
         importedMemberHoverTempRoot / "logic.mog";
     const std::string importedHoverStateSource =
                 "type GameState struct {\n"
+        "    // running reports whether the game is active.\n"
         "    running bool\n"
         "}\n";
     const std::string importedHoverLogicSource =
@@ -1004,8 +1056,10 @@ bool testReferencesAndHover() {
     }
     if (!require(importedMemberHover->kind == "field" &&
                      importedMemberHover->role == "property" &&
-                     importedMemberHover->detail == "running bool",
-                 "imported member hover should preserve field kind and type detail")) {
+                     importedMemberHover->detail == "running bool" &&
+                     importedMemberHover->documentation ==
+                         "running reports whether the game is active.",
+                 "imported member hover should preserve field detail and docs")) {
         return false;
     }
 
