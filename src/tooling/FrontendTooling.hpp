@@ -133,6 +133,7 @@ struct ToolingDocumentAnalysis {
     ToolingDocumentKind documentKind = ToolingDocumentKind::SourceModule;
     AstFrontendBuildStatus status = AstFrontendBuildStatus::ParseFailed;
     std::string sourcePath;
+    std::string source;
     std::vector<std::string> packageSearchPaths;
     bool hasFrontend = false;
     bool hasParse = false;

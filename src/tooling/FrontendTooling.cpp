@@ -32,6 +32,215 @@ struct DeclarationSite {
     SourceSpan selectionRange;
 };
 
+struct SourceComment {
+    size_t startOffset = 0;
+    size_t endOffset = 0;
+    size_t startLine = 1;
+    size_t endLine = 1;
+    bool lineComment = false;
+};
+
+bool isSourceWhitespace(char ch) {
+    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' ||
+           ch == '\v' || ch == '\f';
+}
+
+bool sourceRangeIsWhitespace(std::string_view source, size_t start, size_t end) {
+    if (start > end || end > source.size()) {
+        return false;
+    }
+    return std::all_of(source.begin() + static_cast<std::ptrdiff_t>(start),
+                       source.begin() + static_cast<std::ptrdiff_t>(end),
+                       isSourceWhitespace);
+}
+
+bool sourceLineHasTextBefore(std::string_view source, size_t offset) {
+    while (offset > 0 && source[offset - 1] != '\n') {
+        if (!isSourceWhitespace(source[offset - 1])) {
+            return true;
+        }
+        --offset;
+    }
+    return false;
+}
+
+std::vector<SourceComment> collectSourceComments(std::string_view source) {
+    std::vector<SourceComment> comments;
+    size_t line = 1;
+    for (size_t index = 0; index < source.size();) {
+        if (source[index] == '\n') {
+            ++line;
+            ++index;
+            continue;
+        }
+
+        if (source[index] == '"' || source[index] == '\'') {
+            const char quote = source[index++];
+            while (index < source.size()) {
+                if (source[index] == '\\' && index + 1 < source.size()) {
+                    index += 2;
+                } else if (source[index] == quote) {
+                    ++index;
+                    break;
+                } else {
+                    if (source[index] == '\n') {
+                        ++line;
+                    }
+                    ++index;
+                }
+            }
+            continue;
+        }
+
+        if (source[index] != '/' || index + 1 >= source.size() ||
+            (source[index + 1] != '/' && source[index + 1] != '*')) {
+            ++index;
+            continue;
+        }
+
+        const size_t start = index;
+        const size_t startLine = line;
+        if (source[index + 1] == '/') {
+            index += 2;
+            while (index < source.size() && source[index] != '\n') {
+                ++index;
+            }
+            comments.push_back(
+                SourceComment{start, index, startLine, startLine, true});
+            continue;
+        }
+
+        index += 2;
+        while (index + 1 < source.size() &&
+               !(source[index] == '*' && source[index + 1] == '/')) {
+            if (source[index] == '\n') {
+                ++line;
+            }
+            ++index;
+        }
+        if (index + 1 >= source.size()) {
+            break;
+        }
+        index += 2;
+        comments.push_back(SourceComment{start, index, startLine, line, false});
+    }
+    return comments;
+}
+
+std::string trimDocLine(std::string_view line) {
+    size_t start = 0;
+    size_t end = line.size();
+    while (start < end && (line[start] == ' ' || line[start] == '\t' ||
+                           line[start] == '\r')) {
+        ++start;
+    }
+    if (start < end && line[start] == '*') {
+        ++start;
+        if (start < end && line[start] == ' ') {
+            ++start;
+        }
+    }
+    while (end > start && (line[end - 1] == ' ' || line[end - 1] == '\t' ||
+                           line[end - 1] == '\r')) {
+        --end;
+    }
+    return std::string(line.substr(start, end - start));
+}
+
+std::string sourceCommentText(std::string_view source,
+                              const SourceComment& comment) {
+    std::string_view text = source.substr(comment.startOffset,
+                                          comment.endOffset - comment.startOffset);
+    if (comment.lineComment) {
+        text.remove_prefix(2);
+        if (!text.empty() && text.front() == ' ') {
+            text.remove_prefix(1);
+        }
+        return std::string(text);
+    }
+
+    text.remove_prefix(2);
+    text.remove_suffix(2);
+    std::vector<std::string> lines;
+    size_t start = 0;
+    while (start <= text.size()) {
+        const size_t newline = text.find('\n', start);
+        const size_t end = newline == std::string_view::npos ? text.size() : newline;
+        lines.push_back(trimDocLine(text.substr(start, end - start)));
+        if (newline == std::string_view::npos) {
+            break;
+        }
+        start = newline + 1;
+    }
+    while (!lines.empty() && lines.front().empty()) {
+        lines.erase(lines.begin());
+    }
+    while (!lines.empty() && lines.back().empty()) {
+        lines.pop_back();
+    }
+    std::string result;
+    for (size_t index = 0; index < lines.size(); ++index) {
+        if (index != 0) {
+            result += '\n';
+        }
+        result += lines[index];
+    }
+    return result;
+}
+
+std::string leadingDocumentation(std::string_view source,
+                                 const DeclarationSite& declaration) {
+    if (declaration.range.start.offset > source.size()) {
+        return "";
+    }
+    size_t declarationLineStart = declaration.range.start.offset;
+    while (declarationLineStart > 0 && source[declarationLineStart - 1] != '\n') {
+        --declarationLineStart;
+    }
+    const auto comments = collectSourceComments(source);
+    size_t first = comments.size();
+    size_t last = comments.size();
+    for (size_t index = comments.size(); index > 0; --index) {
+        const SourceComment& candidate = comments[index - 1];
+        if (candidate.endOffset > declaration.range.start.offset) {
+            continue;
+        }
+        if (declaration.range.start.line != candidate.endLine + 1 ||
+            sourceLineHasTextBefore(source, candidate.startOffset) ||
+            !sourceRangeIsWhitespace(source, candidate.endOffset,
+                                     declarationLineStart)) {
+            return "";
+        }
+        first = index - 1;
+        last = index;
+        break;
+    }
+    if (first == comments.size()) {
+        return "";
+    }
+
+    while (first > 0) {
+        const SourceComment& previous = comments[first - 1];
+        const SourceComment& current = comments[first];
+        if (current.startLine != previous.endLine + 1 ||
+            sourceLineHasTextBefore(source, previous.startOffset) ||
+            !sourceRangeIsWhitespace(source, previous.endOffset,
+                                     current.startOffset)) {
+            break;
+        }
+        --first;
+    }
+
+    std::string documentation;
+    for (size_t index = first; index < last; ++index) {
+        if (!documentation.empty()) {
+            documentation += '\n';
+        }
+        documentation += sourceCommentText(source, comments[index]);
+    }
+    return documentation;
+}
+
 struct ImportBindingSite {
     std::string exportedName;
     ImportTarget importTarget;
@@ -150,6 +359,7 @@ ToolingDocumentAnalysis analyzePackageApiDocumentForTooling(
     analysis.documentKind = ToolingDocumentKind::PackageApi;
     analysis.status = AstFrontendBuildStatus::Success;
     analysis.sourcePath = options.sourcePath;
+    analysis.source = std::string(source);
     analysis.packageSearchPaths = options.packageSearchPaths;
 
     const std::filesystem::path apiPath(options.sourcePath);
@@ -1655,10 +1865,12 @@ HoverPresentation hoverPresentationForDeclaration(
         }
     }
 
-    return HoverPresentation{hoverRoleForKind(declaration.kind),
-                             declarationDetailForDeclaration(analysis,
-                                                             declaration),
-                             ""};
+    return HoverPresentation{
+        hoverRoleForKind(declaration.kind),
+        declarationDetailForDeclaration(analysis, declaration),
+        declaration.kind == "parameter"
+            ? std::string()
+            : leadingDocumentation(analysis.source, declaration)};
 }
 
 std::optional<HoverPresentation> importedDeclarationHoverPresentationForTooling(
@@ -4554,7 +4766,8 @@ std::optional<MemberAccessResolution> resolveMemberAccessForTooling(
                                       hoverRoleForKind(declaration.kind),
                                       declarationDetailForDeclaration(ownerAnalysis,
                                                                       declaration),
-                                      "",
+                                      leadingDocumentation(ownerAnalysis.source,
+                                                           declaration),
                                       declarationType.has_value()
                                           ? *declarationType
                                           : nullptr,
@@ -6022,6 +6235,7 @@ ToolingDocumentAnalysis analyzeDocumentForTooling(
     ToolingDocumentAnalysis analysis;
     analysis.documentKind = ToolingDocumentKind::SourceModule;
     analysis.sourcePath = options.sourcePath;
+    analysis.source = std::string(source);
     analysis.packageSearchPaths = options.packageSearchPaths;
 
     AstFrontendOptions frontendOptions;
