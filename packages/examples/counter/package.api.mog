@@ -15,3 +15,7 @@ fn read(counter Counter) i64
 
 @doc("Add to the counter and return the updated value.")
 fn add(counter Counter, delta i64) i64
+
+@doc("Second opaque handle type used to verify native-handle type safety.")
+@native_handle("GaugeHandle")
+opaque type Gauge

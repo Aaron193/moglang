@@ -672,7 +672,13 @@ if ! grep -Fq 'schema_version = "lock.v4"' "$TEMP_DIR/mog.lock"; then
     cat "$TEMP_DIR/mog.lock"
     exit 1
 fi
-if ! grep -Fq 'generator_version = "0.1.0"' "$TEMP_DIR/mog.lock"; then
+RUNTIME_VERSION="$($MOG --version | sed -n 's/^mog \([0-9][0-9.]*\) (native ABI [0-9][0-9]*)$/\1/p')"
+if [[ -z "$RUNTIME_VERSION" ]]; then
+    echo "[FAIL] could not determine runtime version from mog --version"
+    exit 1
+fi
+
+if ! grep -Fq "generator_version = \"$RUNTIME_VERSION\"" "$TEMP_DIR/mog.lock"; then
     echo "[FAIL] lockfile should record generator_version"
     cat "$TEMP_DIR/mog.lock"
     exit 1
@@ -683,7 +689,7 @@ if ! grep -Fq 'schema_version = "install.v4"' "$TEMP_DIR/.mog/install/registry.t
     cat "$TEMP_DIR/.mog/install/registry.toml"
     exit 1
 fi
-if ! grep -Fq 'generator_version = "0.1.0"' "$TEMP_DIR/.mog/install/registry.toml"; then
+if ! grep -Fq "generator_version = \"$RUNTIME_VERSION\"" "$TEMP_DIR/.mog/install/registry.toml"; then
     echo "[FAIL] install registry should record generator_version"
     cat "$TEMP_DIR/.mog/install/registry.toml"
     exit 1
@@ -735,6 +741,43 @@ fi
 "$MOG" --validate-package "$PROJECT_ROOT/packages/examples/math" >/dev/null
 
 popd >/dev/null
+
+CARET_PACKAGE_DIR="$TEMP_DIR/caret-package"
+CARET_CONSUMER_DIR="$TEMP_DIR/caret-consumer"
+mkdir -p "$CARET_PACKAGE_DIR/src" "$CARET_CONSUMER_DIR"
+cat > "$CARET_PACKAGE_DIR/mog.toml" <<'EOF_CARET_PACKAGE'
+kind = "source"
+import_name = "caret_pkg"
+namespace = "acme"
+name = "caret-package"
+version = "0.2.0"
+license = "MIT"
+description = "Caret compatibility regression fixture."
+entry = "src/main.mog"
+dependencies = []
+EOF_CARET_PACKAGE
+cat > "$CARET_PACKAGE_DIR/src/main.mog" <<'EOF_CARET_SOURCE'
+const VALUE i64 = 1
+EOF_CARET_SOURCE
+cat > "$CARET_CONSUMER_DIR/mog.toml" <<EOF_CARET_CONSUMER
+kind = "project"
+name = "caret-consumer"
+version = "0.1.0"
+description = "Caret compatibility regression consumer."
+
+[dependencies]
+caret_pkg = { path = "$CARET_PACKAGE_DIR", package = "acme:caret-package", version = "^0.1.1" }
+EOF_CARET_CONSUMER
+
+if (cd "$CARET_CONSUMER_DIR" && "$MOG" install >/tmp/mog_caret_zero_major_failure.txt 2>&1); then
+    echo "[FAIL] ^0.1.1 must reject the incompatible 0.2.0 package version"
+    exit 1
+fi
+if ! grep -Fq "requires version '^0.1.1'" /tmp/mog_caret_zero_major_failure.txt; then
+    echo "[FAIL] incompatible pre-1.0 caret failures should report the requirement"
+    cat /tmp/mog_caret_zero_major_failure.txt
+    exit 1
+fi
 
 LEGACY_SOURCE_PROJECT="$(mktemp -d)"
 mkdir -p "$LEGACY_SOURCE_PROJECT/vendor/examples/legacysource/src"
@@ -826,9 +869,11 @@ import sys
 
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
-updated = text.replace(
-    'hello = { path = "../../home/dev/Desktop/projects/programming-language/packages/examples/hello", package = "examples:hello", version = "0.1.0" }',
-    'hello = { path = "../../home/dev/Desktop/projects/programming-language/packages/examples/hello", package = "examples:hello", version = "9.9.9" }',
+lines = text.splitlines(keepends=True)
+updated = "".join(
+    line.replace('version = "0.1.0"', 'version = "9.9.9"')
+    if line.lstrip().startswith("hello = ") else line
+    for line in lines
 )
 if updated == text:
     raise SystemExit("failed to update hello dependency version")
@@ -4009,6 +4054,7 @@ git -C "$GIT_MODULE_REPO_DIR" config user.name "Mog Tests"
 git -C "$GIT_MODULE_REPO_DIR" add . >/dev/null
 git -C "$GIT_MODULE_REPO_DIR" commit -m "init module" >/dev/null
 git -C "$GIT_MODULE_REPO_DIR" tag v0.1.0
+git -C "$GIT_MODULE_REPO_DIR" tag v0.1.1
 
 git config --file "$GIT_MODULE_CONFIG" \
     url."file://$GIT_MODULE_REPO_DIR".insteadOf \
@@ -4083,6 +4129,30 @@ if ! grep -Fq '"github.com/example/math" = { version = "v0.1.0" }' \
     "$GIT_MODULE_ADD_DIR/mog.toml"; then
     echo "[FAIL] add should write Go-style Git module dependency keys"
     cat "$GIT_MODULE_ADD_DIR/mog.toml"
+    exit 1
+fi
+
+GIT_MODULE_MISMATCH_DIR="$TEMP_DIR/git-module-tag-mismatch"
+mkdir -p "$GIT_MODULE_MISMATCH_DIR"
+cat > "$GIT_MODULE_MISMATCH_DIR/mog.toml" <<'EOF_GIT_MODULE_MISMATCH'
+kind = "project"
+name = "git-module-tag-mismatch"
+version = "0.1.0"
+description = "git module tag mismatch"
+
+[dependencies]
+"github.com/example/math" = { version = "v0.1.1" }
+EOF_GIT_MODULE_MISMATCH
+
+if (cd "$GIT_MODULE_MISMATCH_DIR" && \
+    GIT_CONFIG_GLOBAL="$GIT_MODULE_CONFIG" "$MOG" install \
+        >/tmp/mog_git_tag_manifest_mismatch.txt 2>&1); then
+    echo "[FAIL] install should reject Git tags that disagree with package manifest versions"
+    exit 1
+fi
+if ! grep -Fq "package manifest reports version" /tmp/mog_git_tag_manifest_mismatch.txt; then
+    echo "[FAIL] Git tag/version mismatch should explain the manifest discrepancy"
+    cat /tmp/mog_git_tag_manifest_mismatch.txt
     exit 1
 fi
 
@@ -4265,7 +4335,7 @@ const hello = @import("hello")
 print(hello.Greet())
 EOF_POLICY_CI_APP
 
-if ! (cd "$POLICY_CI_DIR" && "$MOG" install >/dev/null); then
+if ! (cd "$POLICY_CI_DIR" && CI= "$MOG" install >/dev/null); then
     echo "[FAIL] baseline install should succeed before CI locked policy is enforced"
     exit 1
 fi

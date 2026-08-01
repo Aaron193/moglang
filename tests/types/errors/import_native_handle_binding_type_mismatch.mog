@@ -1,4 +1,4 @@
-const window = @import("window")
+const counter = @import("counter")
 
-const { create: fn(i64) window.Window } =
+const { create: fn(i64) counter.Gauge } =
     @import("counter")

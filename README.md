@@ -452,9 +452,8 @@ const c counter.Counter = counter.create(10i64)
 print(counter.read(c))
 ```
 
-Official runtime-maintained packages still use the reserved `mog:*` canonical
-package ID internally. The first official package is exposed to users as
-`window` and is built only when SDL2 is available at configure time:
+Official external packages use canonical `github.com/moglang/...` module paths
+and are installed separately from the runtime. For example:
 
 Headless smoke usage for tests:
 
@@ -483,10 +482,20 @@ entirely in the language on top of those primitives.
 Visible manual demos live under `examples/` and call `window.show(win)` after
 creation so the current hidden-by-default behavior remains stable for tests.
 
-If SDL2 is not installed, the interpreter still builds normally and simply
-skips the optional `window` package target.
+The Window package is not bundled with the interpreter. A Git dependency builds
+it from source and therefore requires CMake, a C++17 compiler, and SDL2
+development files. Registry dependencies may instead provide signed prebuilt
+artifacts.
 
 ## Package Manifests
+
+Check the installed runtime and native package ABI before resolving package
+compatibility issues:
+
+```bash
+mog --version
+# mog 0.1.5 (native ABI 3)
+```
 
 For the full package-manager guide, including dependency sources, registries,
 publishing, signing, policy, audit, native artifacts, and current post-V1
@@ -598,13 +607,16 @@ Lockfile-based vulnerability checks are also available:
 ./build/interpreter audit --offline
 ```
 
-The official window package lives in [github.com/moglang/window](https://github.com/moglang/window). Its release workflow builds and signs target-specific registry artifacts; the language runtime neither builds nor publishes it.
+The official Window package lives in [github.com/moglang/window](https://github.com/moglang/window).
+Its GitHub release workflow publishes convenience archives; Git-based MOG
+dependencies build from source. Signed prebuilt installation requires publishing
+those artifacts through a configured MOG registry.
 
 Validate a package directory against its manifest and compiled shared library:
 
 ```bash
-./build/interpreter --validate-package packages/examples/math
-./build/interpreter --validate-package=packages/examples/counter
+./build/interpreter validate-package packages/examples/math
+./build/interpreter validate-package packages/examples/counter
 ```
 
 The validator checks package ID syntax, reserved `mog` usage, manifest/ABI
