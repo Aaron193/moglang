@@ -3,6 +3,10 @@
 Mog releases are built by GitHub Actions when a version tag beginning with `v`
 is pushed. Ordinary pushes to `main` do **not** create a release.
 
+Foundation packages are independently versioned and released. Their shared CI,
+tagging, consumer installation, and registry publication process is documented
+in [PACKAGE_CI_RELEASES.md](PACKAGE_CI_RELEASES.md).
+
 ## Before releasing
 
 1. Finish the intended changes and run relevant local tests.
@@ -82,3 +86,5 @@ finds `mog-lsp` automatically when the executable is on the editor's `PATH`.
 ## If a release build fails
 
 Do not replace an existing version tag with different source. Fix the issue,
+increment the runtime version, update the changelog, and publish a new tag after
+CI passes. Tags and published release artifacts are immutable release records.
