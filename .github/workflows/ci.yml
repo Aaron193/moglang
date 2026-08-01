@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Verify embedded version
+        run: ./build/mog --version
+      - name: Frontend and CLI regressions
+        run: |
+          ./tests/test_ast_frontend.sh
+          ./tests/test_ast_emitter_regression.sh
+          bash tests/test_cli_flags.sh
+      - name: Package validation and manager regressions
+        run: |
+          bash tests/test_package_validation.sh
+          bash tests/test_package_manager.sh
+
+  foundation-packages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: moglang/encoding
+          path: foundation-packages/encoding
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: moglang/fs
+          path: foundation-packages/fs
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: moglang/json
+          path: foundation-packages/json
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: moglang/log
+          path: foundation-packages/log
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: moglang/math
+          path: foundation-packages/math
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: moglang/path
+          path: foundation-packages/path
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: moglang/random
+          path: foundation-packages/random
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: moglang/test
+          path: foundation-packages/test
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: moglang/time
+          path: foundation-packages/time
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: moglang/window
+          path: foundation-packages/window
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev libsdl2-dev
+      - name: Build Mog runtime
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+      - name: Test foundation package compatibility
+        env:
+          SDL_VIDEODRIVER: dummy
+        run: bash tests/test_foundation_packages.sh ./build/interpreter ./foundation-packages

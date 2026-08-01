@@ -84,8 +84,8 @@ install without rebuilding.
 Validate a package directory against its manifest and compiled shared library:
 
 ```bash
-./build/interpreter --validate-package packages/examples/math
-./build/interpreter --validate-package=packages/examples/counter
+./build/interpreter validate-package packages/examples/math
+./build/interpreter validate-package packages/examples/counter
 ```
 
 The current validator checks package ID syntax, reserved `mog` usage,

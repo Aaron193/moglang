@@ -178,7 +178,7 @@ run_expect_compile_error \
 
 run_expect_compile_error \
     "$SCRIPT_DIR/types/errors/assign_handle_foreign_type.mog" \
-    "cannot assign 'counter.Counter' to variable 'bad' of type 'window.Window'" || failed=1
+    "cannot assign 'counter.Counter' to variable 'bad' of type 'counter.Gauge'" || failed=1
 
 run_expect_compile_error \
     "$SCRIPT_DIR/types/errors/import_binding_type_mismatch.mog" \
@@ -202,7 +202,7 @@ run_expect_compile_error \
 
 run_expect_compile_error \
     "$SCRIPT_DIR/types/errors/import_native_handle_binding_type_mismatch.mog" \
-    "cannot assign imported value 'function(i64) -> counter.Counter' to binding 'create' of type 'function(i64) -> window.Window'" \
+    "cannot assign imported value 'function(i64) -> counter.Counter' to binding 'create' of type 'function(i64) -> counter.Gauge'" \
     "3:9" || failed=1
 
 run_expect_compile_error \

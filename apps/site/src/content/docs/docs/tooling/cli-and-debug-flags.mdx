@@ -37,6 +37,16 @@ Add extra package roots when needed:
 ./build/interpreter --package-path /path/to/packages app.mog
 ```
 
+Check the installed runtime and native package ABI before diagnosing package
+compatibility issues:
+
+```bash
+mog --version
+# mog 0.1.5 (native ABI 3)
+```
+
+`mog version` and `mog -V` print the same version line.
+
 ## Runtime and diagnostics flags
 
 The current interpreter exposes these runtime/debugging switches:
@@ -67,6 +77,7 @@ while emitting their extra diagnostics.
 
 Current package-management commands include:
 
+- `version`
 - `init`
 - `add`
 - `remove`
@@ -134,8 +145,8 @@ optimization, cache stats, and total frontend time.
 The interpreter also validates package directories:
 
 ```bash
-./build/interpreter --validate-package packages/examples/math
-./build/interpreter --validate-package=packages/examples/counter
+./build/interpreter validate-package packages/examples/math
+./build/interpreter validate-package packages/examples/counter
 ```
 
 ## Intentional non-feature

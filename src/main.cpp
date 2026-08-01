@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "ModuleResolver.hpp"
+#include "NativePackageAPI.hpp"
 #include "PackageManager.hpp"
 #include "PackageManifest.hpp"
 #include "PackageRegistry.hpp"
@@ -81,6 +82,7 @@ static void printUsage(const char* executable) {
     std::cout
         << "Usage: " << executable << " <command> [options]\n"
         << "Commands:\n"
+        << "  version                Print runtime and native ABI versions\n"
         << "  init [name]            Create a project mog.toml in the current directory\n"
         << "  add <module[@tag]>     Add a package dependency and install it\n"
         << "  remove <alias>         Remove a dependency and install the updated graph\n"
@@ -1469,6 +1471,16 @@ int main(int argc, char** argv) {
     }
 
     const std::string command = argv[1];
+
+    if (command == "--version" || command == "-V" || command == "version") {
+        if (argc != 2) {
+            std::cerr << command << " does not accept arguments." << std::endl;
+            return 1;
+        }
+        std::cout << "mog " << MOG_RUNTIME_VERSION << " (native ABI "
+                  << EXPR_NATIVE_PACKAGE_ABI_VERSION << ")" << std::endl;
+        return 0;
+    }
     if (command == "--validate-package") {
         if (argc < 3) {
             std::cerr << "Missing value for --validate-package." << std::endl;

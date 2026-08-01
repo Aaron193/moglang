@@ -1143,10 +1143,18 @@ bool versionSatisfiesRequirement(const SemanticVersion& version,
         case VersionRequirement::Kind::EXACT:
             return compareSemanticVersions(version, requirement.version) == 0;
         case VersionRequirement::Kind::CARET:
-            if (version.major != requirement.version.major) {
+            if (compareSemanticVersions(version, requirement.version) < 0) {
                 return false;
             }
-            return compareSemanticVersions(version, requirement.version) >= 0;
+            if (requirement.version.major != 0) {
+                return version.major == requirement.version.major;
+            }
+            if (requirement.version.minor != 0) {
+                return version.major == 0 &&
+                       version.minor == requirement.version.minor;
+            }
+            return version.major == 0 && version.minor == 0 &&
+                   version.patch == requirement.version.patch;
         case VersionRequirement::Kind::TILDE:
             if (version.major != requirement.version.major ||
                 version.minor != requirement.version.minor) {
@@ -6338,6 +6346,14 @@ bool resolveDependencyNode(
                        "', but manifest requires '" + dependency.module + "'.";
             return false;
         }
+        if (!dependency.gitTag.empty() &&
+            normalizeGitTagVersion(dependency.gitTag) !=
+                normalizeGitTagVersion(outNode.entry.version)) {
+            outError = "Dependency '" + dependency.alias + "' selected git tag '" +
+                       dependency.gitTag + "', but the package manifest reports version '" +
+                       outNode.entry.version + "'.";
+            return false;
+        }
         if (!loadPackageManifestDependencies(packageSourceDir,
                                              outNode.manifestDependencies,
                                              outError)) {
@@ -8570,6 +8586,14 @@ bool completeExplicitDependencySpec(const std::string& projectRoot,
             outError = "Git dependency '" + dependency.git +
                        "' resolved module '" + entry.module +
                        "', but expected '" + dependency.module + "'.";
+            return false;
+        }
+        if (!dependency.gitTag.empty() &&
+            normalizeGitTagVersion(dependency.gitTag) !=
+                normalizeGitTagVersion(entry.version)) {
+            outError = "Git dependency '" + dependency.git + "' selected tag '" +
+                       dependency.gitTag + "', but the package manifest reports version '" +
+                       entry.version + "'.";
             return false;
         }
         fillFromEntry(entry);

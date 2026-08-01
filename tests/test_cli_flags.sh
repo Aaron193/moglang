@@ -13,6 +13,12 @@ if [[ ! -x "$INTERPRETER" ]]; then
 fi
 
 set +e
+VERSION_OUTPUT="$($INTERPRETER --version 2>&1)"
+VERSION_STATUS=$?
+VERSION_COMMAND_OUTPUT="$($INTERPRETER version 2>&1)"
+VERSION_COMMAND_STATUS=$?
+VERSION_SHORT_OUTPUT="$($INTERPRETER -V 2>&1)"
+VERSION_SHORT_STATUS=$?
 TRACE_OUTPUT="$($INTERPRETER --trace "$TARGET" 2>&1)"
 TRACE_STATUS=$?
 SHOW_RETURN_OUTPUT="$($INTERPRETER --show-return "$TARGET" 2>&1)"
@@ -26,6 +32,19 @@ FRONTEND_TIMINGS_JSON_STATUS=$?
 STRICT_FLAG_OUTPUT="$($INTERPRETER --strict "$TARGET" 2>&1)"
 STRICT_FLAG_STATUS=$?
 set -e
+
+if [[ $VERSION_STATUS -ne 0 ]] ||
+   ! grep -Eq '^mog [0-9]+\.[0-9]+\.[0-9]+ \(native ABI [0-9]+\)$' <<< "$VERSION_OUTPUT"; then
+    echo "[FAIL] --version output is missing or malformed"
+    echo "$VERSION_OUTPUT"
+    exit 1
+fi
+if [[ $VERSION_COMMAND_STATUS -ne 0 || $VERSION_SHORT_STATUS -ne 0 ||
+      "$VERSION_COMMAND_OUTPUT" != "$VERSION_OUTPUT" ||
+      "$VERSION_SHORT_OUTPUT" != "$VERSION_OUTPUT" ]]; then
+    echo "[FAIL] version command aliases should match --version"
+    exit 1
+fi
 
 if [[ $TRACE_STATUS -ne 0 ]]; then
     echo "[FAIL] --trace execution failed"

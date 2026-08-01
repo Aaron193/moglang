@@ -9,9 +9,10 @@ is pushed. Ordinary pushes to `main` do **not** create a release.
 2. Run `bash ../packages/github.com/moglang/ci/validate-packages.sh ./build/interpreter`
    after building the runtime. This validates every package contract and test;
    the GitHub workflow repeats the native checks on Linux x86_64/ARM64 and
-   macOS x86_64/ARM64.
+   macOS ARM64.
 3. Release the runtime before packages that declare its new minimum version.
-   The 0.1.1 foundation packages require runtime `^0.1.1`.
+   Current foundation packages require runtime `^0.1.4`; package CI tests both
+   the 0.1.4 compatibility floor and runtime `main`.
 4. Set the release version in the VS Code extension manifest when the editor
    extension changed. Edit `tooling/vscode-mog/package.json` and commit it with
    the release.
@@ -27,7 +28,7 @@ is pushed. Ordinary pushes to `main` do **not** create a release.
 
 Mog uses semantic versioning:
 
-- Patch (`v0.1.4`): bug fix only.
+- Patch (`v0.1.5`): bug fix only.
 - Minor (`v0.2.0`): backwards-compatible language or tooling feature.
 - Major (`v1.0.0`): breaking language, CLI, or package compatibility change.
 
@@ -36,15 +37,17 @@ Mog uses semantic versioning:
 Tag the exact commit that should be released and push only that tag:
 
 ```bash
-git tag -a v0.1.4 -m "Mog 0.1.4"
-git push origin v0.1.4
+git tag -a v0.1.5 -m "Mog 0.1.5"
+git push origin v0.1.5
 ```
 
 The `Release Mog` GitHub Actions workflow then:
 
 1. Builds `mog` and `mog-lsp` on Linux x64, macOS ARM64, and Windows x64.
 2. Produces `.tar.gz` and `.zip` archives for each platform.
-3. Creates or updates the matching GitHub Release and attaches the archives.
+3. Verifies the embedded `mog --version` output against the tag.
+4. Creates or updates the matching GitHub Release and attaches the archives and
+   `SHA256SUMS`.
 
 Open the workflow run in GitHub Actions and wait for every job to succeed.
 Then review the release notes and assets on the GitHub Releases page.

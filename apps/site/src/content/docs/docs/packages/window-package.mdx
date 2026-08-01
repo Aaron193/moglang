@@ -3,13 +3,14 @@ title: Window Package
 description: The official SDL-backed window package, its current API, and the demos that use it.
 ---
 
-`window` is the first official runtime-maintained package in the repo. It is
-SDL-backed and only builds when SDL2 is available at configure time.
+`window` is an independently versioned official package. Git installs build it
+from source and require SDL2 development files; it is not bundled into the Mog
+runtime.
 
 ## Importing the package
 
 ```rust
-const window = @import("window")
+const window = @import("github.com/moglang/window")
 ```
 
 ## Core lifecycle
@@ -82,31 +83,25 @@ Headless test coverage:
 
 ## Build note
 
-If SDL2 is not installed, the main interpreter still builds normally and simply
-skips the optional `window` package target.
+Installing Window from Git requires CMake, a C++17 compiler, and SDL2 development
+files. The Mog runtime itself does not require SDL2.
 
 ## Publishing the official package
 
-The repo now carries a scripted publish path for the official package:
+Window's tag workflow builds target-specific convenience archives and attaches
+checksums to a GitHub Release. MOG does not consume GitHub Release archives as
+prebuilt dependencies. To offer prebuilt installation, publish each prepared
+target bundle to a configured registry:
 
 ```bash
-./scripts/publish_official_window.sh --registry-path /tmp/mog-registry
-./scripts/publish_official_window.sh --registry-path /tmp/mog-registry --signing-key ./keys/release.toml
-./scripts/publish_official_window.sh --registry release --workspace ./dist/publish-workspace --bundle-root ./dist/publish-bundles --signing-key ./keys/release.toml
+mog publish --registry official --signing-key ./keys/release.toml .
+mog publish --registry official --target linux-arm64-gnu \
+  --native-artifact-dir ./dist/linux-arm64-gnu \
+  --signing-key ./keys/release.toml .
 ```
 
-The script:
-
-- checks that `build/packages/mog/window/package.so` or `package.dylib` exists
-- uses the existing `mog publish` flow under the hood
-- can sign the generated registry index with `--signing-key <registry-key.v1>`
-- can also publish through an existing registry alias with
-  `--registry <alias> --workspace <dir>`
-- can publish one or more prepared native bundles with `--bundle-root <dir>`,
-  which is how the multi-runner GitHub Actions workflow aggregates target builds
-
-If SDL2 was not available when the repo was built, the script fails early with
-an explicit missing-artifact message instead of publishing a partial package.
+The registry service URL, credentials, and signing key are deployment secrets;
+they are not stored in the package repository.
 
 ## Related pages
 

@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.10)
 # Set VCPKG_ROOT to the path of your vcpkg installation
 # set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
 
-# Override this from a release build, for example: -DMOG_VERSION=0.1.4
-set(MOG_VERSION "0.1.4" CACHE STRING "Version of the Mog distribution")
+# Override this from a release build, for example: -DMOG_VERSION=0.1.5
+set(MOG_VERSION "0.1.5" CACHE STRING "Version of the Mog distribution")
 project(mog VERSION ${MOG_VERSION})
 
 find_package(OpenSSL REQUIRED)
@@ -125,6 +125,11 @@ set_target_properties(examples_math_package PROPERTIES
     OUTPUT_NAME "package"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/math"
 )
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/math")
+configure_file(packages/examples/math/mog.toml
+               packages/examples/math/mog.toml COPYONLY)
+configure_file(packages/examples/math/package.api.mog
+               packages/examples/math/package.api.mog COPYONLY)
 
 add_library(examples_mismatch_package MODULE
     packages/examples/mismatch/package.cpp
@@ -137,6 +142,11 @@ set_target_properties(examples_mismatch_package PROPERTIES
     OUTPUT_NAME "package"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/mismatch"
 )
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/mismatch")
+configure_file(packages/examples/mismatch/mog.toml
+               packages/examples/mismatch/mog.toml COPYONLY)
+configure_file(packages/examples/mismatch/package.api.mog
+               packages/examples/mismatch/package.api.mog COPYONLY)
 
 add_library(examples_counter_package MODULE
     packages/examples/counter/package.cpp
@@ -149,6 +159,11 @@ set_target_properties(examples_counter_package PROPERTIES
     OUTPUT_NAME "package"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/counter"
 )
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/counter")
+configure_file(packages/examples/counter/mog.toml
+               packages/examples/counter/mog.toml COPYONLY)
+configure_file(packages/examples/counter/package.api.mog
+               packages/examples/counter/package.api.mog COPYONLY)
 
 
 if(ENABLE_VM_TRACE)
