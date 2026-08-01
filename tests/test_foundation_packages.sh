@@ -30,6 +30,7 @@ run_package_test() {
         "$package_dir/.github/package-test.toml.in" > "$project_dir/mog.toml"
     (
         cd "$project_dir"
+        "$MOG" install
         "$MOG" run "$package_dir/tests/main.mog"
     )
 
