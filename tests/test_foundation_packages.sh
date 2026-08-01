@@ -28,15 +28,20 @@ run_package_test() {
         -e "s|__PACKAGE_VERSION__|$package_version|g" \
         -e "s|__PACKAGE_PATH__|$package_dir|g" \
         "$package_dir/.github/package-test.toml.in" > "$project_dir/mog.toml"
+    cp "$package_dir/tests/main.mog" "$project_dir/main.mog"
     (
         cd "$project_dir"
         "$MOG" install
-        "$MOG" run "$package_dir/tests/main.mog"
+        "$MOG" run main.mog
     )
 
+    local fixture
+    local fixture_name
     for fixture in "$package_dir"/tests/errors/*.mog; do
         [[ -e "$fixture" ]] || continue
-        if (cd "$project_dir" && "$MOG" run "$fixture"); then
+        fixture_name="error-$(basename "$fixture")"
+        cp "$fixture" "$project_dir/$fixture_name"
+        if (cd "$project_dir" && "$MOG" run "$fixture_name"); then
             echo "Expected failure fixture succeeded: $fixture" >&2
             exit 1
         fi

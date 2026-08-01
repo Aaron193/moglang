@@ -4335,7 +4335,7 @@ const hello = @import("hello")
 print(hello.Greet())
 EOF_POLICY_CI_APP
 
-if ! (cd "$POLICY_CI_DIR" && "$MOG" install >/dev/null); then
+if ! (cd "$POLICY_CI_DIR" && CI= "$MOG" install >/dev/null); then
     echo "[FAIL] baseline install should succeed before CI locked policy is enforced"
     exit 1
 fi
