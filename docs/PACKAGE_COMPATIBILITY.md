@@ -1,5 +1,8 @@
 # Foundation Package Compatibility
 
+See [PACKAGE_CI_RELEASES.md](PACKAGE_CI_RELEASES.md) for the shared package CI,
+versioning, tagging, GitHub Release, and registry publication process.
+
 | Package | Kind | Mog runtime | ABI | Notes |
 | --- | --- | --- | --- | --- |
 | encoding, json, log, math, path, test | source | ^0.1.4 | — | Portable |
