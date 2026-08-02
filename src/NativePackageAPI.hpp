@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define EXPR_HOST_API_ABI_VERSION 1u
+#define EXPR_HOST_API_ABI_VERSION 2u
 #define EXPR_NATIVE_PACKAGE_ABI_VERSION 3u
 #define EXPR_NATIVE_PACKAGE_NAMESPACED_ABI_VERSION 2u
 
@@ -17,7 +17,11 @@ typedef enum ExprPackageValueKind {
     EXPR_PACKAGE_VALUE_STR = 5,
     EXPR_PACKAGE_VALUE_HANDLE = 6,
     EXPR_PACKAGE_VALUE_BYTES = 7,
+    EXPR_PACKAGE_VALUE_REF = 8,
 } ExprPackageValueKind;
+
+typedef struct ExprPersistentValue ExprPersistentValue;
+typedef struct ExprPackageValueRef ExprPackageValueRef;
 
 typedef struct ExprPackageStringView {
     const char* data;
@@ -52,11 +56,34 @@ typedef struct ExprPackageValue {
         ExprPackageStringView string_value;
         ExprPackageByteView bytes_value;
         ExprPackageHandleValue handle_value;
+        const ExprPackageValueRef* ref_value;
     } as;
 } ExprPackageValue;
 
+typedef bool (*ExprHostRetainValueFn)(void* context,
+                                      const ExprPackageValue* borrowed_value,
+                                      ExprPersistentValue** out_persistent,
+                                      ExprPackageStringView* out_error);
+typedef void (*ExprHostReleaseValueFn)(void* context,
+                                       ExprPersistentValue* persistent);
+typedef bool (*ExprHostGetValueFn)(void* context,
+                                   ExprPersistentValue* persistent,
+                                   ExprPackageValue* out_borrowed_value,
+                                   ExprPackageStringView* out_error);
+typedef bool (*ExprHostInvokeValueFn)(void* context,
+                                      ExprPersistentValue* persistent_callable,
+                                      const ExprPackageValue* args, size_t argc,
+                                      ExprPackageValue* out_result,
+                                      ExprPackageStringView* out_error);
+
 typedef struct ExprHostApi {
     uint32_t abi_version;
+    size_t struct_size;
+    void* context;
+    ExprHostRetainValueFn retainValue;
+    ExprHostReleaseValueFn releaseValue;
+    ExprHostGetValueFn getValue;
+    ExprHostInvokeValueFn invokeValue;
 } ExprHostApi;
 
 typedef bool (*ExprNativePackageFn)(const ExprHostApi* host_api,

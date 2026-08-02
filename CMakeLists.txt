@@ -9,6 +9,7 @@ set(MOG_VERSION "0.1.5" CACHE STRING "Version of the Mog distribution")
 project(mog VERSION ${MOG_VERSION})
 
 find_package(OpenSSL REQUIRED)
+find_package(Threads REQUIRED)
 
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     message(FATAL_ERROR
@@ -41,13 +42,24 @@ file(GLOB_RECURSE SOURCES
     "src/*.cpp"
 )
 
+# The package manager publishes the exact canonical ABI header. Generate its
+# embedded representation at configure time so the two copies cannot drift.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/NativePackageAPI.hpp"
+     NATIVE_PACKAGE_API_HEADER_CONTENT)
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/NativePackageAPIEmbedded.hpp.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/NativePackageAPIEmbedded.hpp"
+    @ONLY
+)
+
 set(CORE_SOURCES ${SOURCES})
 list(REMOVE_ITEM CORE_SOURCES
      "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
 
 add_library(interpreter_core STATIC ${CORE_SOURCES})
 target_include_directories(interpreter_core
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src"
+           "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_compile_definitions(interpreter_core
     PUBLIC MOG_RUNTIME_VERSION="${MOG_VERSION}")
 target_link_libraries(interpreter_core PUBLIC OpenSSL::Crypto)
@@ -105,6 +117,14 @@ target_include_directories(frontend_tooling_regression
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 target_link_libraries(frontend_tooling_regression PRIVATE interpreter_core)
+
+add_executable(host_api_v2_cross_vm_regression
+    tests/host_api_v2_cross_vm_regression.cpp
+)
+target_include_directories(host_api_v2_cross_vm_regression
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+target_link_libraries(host_api_v2_cross_vm_regression PRIVATE interpreter_core)
 
 add_executable(mog-lsp
     tooling/lsp/mog-lsp.cpp
@@ -164,6 +184,24 @@ configure_file(packages/examples/counter/mog.toml
                packages/examples/counter/mog.toml COPYONLY)
 configure_file(packages/examples/counter/package.api.mog
                packages/examples/counter/package.api.mog COPYONLY)
+
+add_library(examples_host_api_package MODULE
+    packages/examples/host_api/package.cpp
+)
+target_include_directories(examples_host_api_package
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+target_link_libraries(examples_host_api_package PRIVATE Threads::Threads)
+set_target_properties(examples_host_api_package PROPERTIES
+    PREFIX ""
+    OUTPUT_NAME "package"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/host_api"
+)
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/host_api")
+configure_file(packages/examples/host_api/mog.toml
+               packages/examples/host_api/mog.toml COPYONLY)
+configure_file(packages/examples/host_api/package.api.mog
+               packages/examples/host_api/package.api.mog COPYONLY)
 
 
 if(ENABLE_VM_TRACE)
@@ -301,10 +339,12 @@ set(PROJECT_COMPILE_TARGETS
     ast_frontend_regression
     frontend_benchmark
     frontend_tooling_regression
+    host_api_v2_cross_vm_regression
     mog-lsp
     examples_math_package
     examples_mismatch_package
     examples_counter_package
+    examples_host_api_package
 )
 
 if(TARGET mog_window_package)
@@ -331,10 +371,12 @@ set(PROJECT_LINK_TARGETS
     ast_frontend_regression
     frontend_benchmark
     frontend_tooling_regression
+    host_api_v2_cross_vm_regression
     mog-lsp
     examples_math_package
     examples_mismatch_package
     examples_counter_package
+    examples_host_api_package
 )
 
 if(TARGET mog_window_package)

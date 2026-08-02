@@ -2,6 +2,7 @@
 #include <array>
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -27,8 +28,9 @@ class VirtualMachine {
                                       size_t calleeIndex);
     friend bool packageValueToValue(VirtualMachine& vm,
                                     const ExprPackageValue& value,
-                                    Value& outValue,
-                                    std::string& outError);
+                                    Value& outValue, std::string& outError);
+
+    struct HostApiState;
 
     struct CallFrame {
         Chunk* chunk;
@@ -62,11 +64,14 @@ class VirtualMachine {
     std::vector<std::string> m_packageSearchPaths;
     std::vector<void*> m_loadedNativeLibraryHandles;
     std::deque<NativePackageBinding> m_nativePackageBindings;
+    std::unique_ptr<HostApiState> m_hostApiState;
     ModuleObject* m_currentModule = nullptr;
     // open upvalues, maintained in descending stack-index order
     UpvalueObject* m_openUpvaluesHead = nullptr;
     bool m_traceEnabled = false;
     bool m_disassembleEnabled = false;
+    size_t m_callbackNestingDepth = 0;
+    std::string m_capturedRuntimeError;
 
     CallFrame& currentFrame() { return *m_activeFrame; }
     ModuleObject* currentGlobalModule() {
@@ -114,6 +119,7 @@ class VirtualMachine {
                size_t stopFrameCount = 0);
     Status runtimeError(const std::string& message);
     void printStackTrace();
+    std::string formatStackTrace() const;
     Status callClosure(ClosureObject* closure, uint8_t argumentCount,
                        InstanceObject* receiver = nullptr);
     Status callValue(Value callee, uint8_t argumentCount, size_t calleeIndex);
@@ -129,6 +135,24 @@ class VirtualMachine {
     void collectGarbage();
     void unloadNativeLibraries();
     void resetRuntimeState();
+    ExprHostApi makeHostApi();
+    bool resolvePackageValue(const ExprPackageValue& value, Value& outValue,
+                             std::string& outError);
+    ExprPackageValue makeBorrowedPackageValue(const Value& value);
+    static bool hostRetainValue(void* context,
+                                const ExprPackageValue* borrowedValue,
+                                ExprPersistentValue** outPersistent,
+                                ExprPackageStringView* outError);
+    static void hostReleaseValue(void* context,
+                                 ExprPersistentValue* persistent);
+    static bool hostGetValue(void* context, ExprPersistentValue* persistent,
+                             ExprPackageValue* outBorrowedValue,
+                             ExprPackageStringView* outError);
+    static bool hostInvokeValue(void* context,
+                                ExprPersistentValue* persistentCallable,
+                                const ExprPackageValue* args, size_t argc,
+                                ExprPackageValue* outResult,
+                                ExprPackageStringView* outError);
 
     template <typename T, typename... Args>
     T* gcAlloc(Args&&... args) {
@@ -142,7 +166,7 @@ class VirtualMachine {
     }
 
    public:
-    VirtualMachine() = default;
+    VirtualMachine();
     ~VirtualMachine();
 
     void setPackageSearchPaths(std::vector<std::string> packageSearchPaths) {
