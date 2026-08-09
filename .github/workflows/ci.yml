@@ -19,6 +19,11 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: moglang/http
+          ref: v0.1.0
+          path: integration-packages/http
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libssl-dev libsdl2-dev
       - name: Configure
@@ -36,6 +41,11 @@ jobs:
         run: |
           bash tests/test_package_validation.sh
           bash tests/test_package_manager.sh
+      - name: Host API and HTTP/WebSocket integration
+        run: |
+          bash tests/test_host_api_v2.sh build
+          bash integration-packages/http/tests/test_http_package.sh \
+            ./build/interpreter ./integration-packages/http
 
   foundation-packages:
     runs-on: ubuntu-latest

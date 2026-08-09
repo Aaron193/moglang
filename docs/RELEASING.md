@@ -32,7 +32,7 @@ in [PACKAGE_CI_RELEASES.md](PACKAGE_CI_RELEASES.md).
 
 Mog uses semantic versioning:
 
-- Patch (`v0.1.5`): bug fix only.
+- Patch (`v0.1.6`): backward-compatible runtime or tooling improvements.
 - Minor (`v0.2.0`): backwards-compatible language or tooling feature.
 - Major (`v1.0.0`): breaking language, CLI, or package compatibility change.
 
@@ -41,8 +41,8 @@ Mog uses semantic versioning:
 Tag the exact commit that should be released and push only that tag:
 
 ```bash
-git tag -a v0.1.5 -m "Mog 0.1.5"
-git push origin v0.1.5
+git tag -a v0.1.6 -m "Mog 0.1.6"
+git push origin v0.1.6
 ```
 
 The `Release Mog` GitHub Actions workflow then:

@@ -494,7 +494,7 @@ compatibility issues:
 
 ```bash
 mog --version
-# mog 0.1.5 (native ABI 3)
+# mog 0.1.6 (native ABI 3)
 ```
 
 For the full package-manager guide, including dependency sources, registries,

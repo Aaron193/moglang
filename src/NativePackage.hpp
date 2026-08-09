@@ -56,6 +56,7 @@ struct NativePackageBinding {
     std::string packageNamespace;
     std::string packageName;
     const ExprPackageFunctionExport* function = nullptr;
+    TypeRef functionType;
 };
 
 bool isValidPackageIdPart(std::string_view text);
@@ -71,8 +72,7 @@ std::vector<std::string> normalizePackageSearchPaths(
 bool resolveImportTarget(const std::string& importerPath,
                          const std::string& rawImportPath,
                          const std::vector<std::string>& packageSearchPaths,
-                         ImportTarget& outTarget,
-                         std::string& outError);
+                         ImportTarget& outTarget, std::string& outError);
 
 bool isNativeImportTargetId(const std::string& canonicalId);
 std::string nativeImportLibraryPath(const std::string& canonicalId);
@@ -80,6 +80,5 @@ TypeRef parsePackageType(std::string_view text, std::string& outError);
 
 bool loadNativePackageDescriptor(const std::string& libraryPath,
                                  NativePackageDescriptor& outDescriptor,
-                                 std::string& outError,
-                                 bool keepLibraryLoaded,
+                                 std::string& outError, bool keepLibraryLoaded,
                                  void** outLibraryHandle);

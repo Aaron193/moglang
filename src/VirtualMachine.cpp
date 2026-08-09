@@ -13,12 +13,36 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "DynamicLibrary.hpp"
 #include "NativePackage.hpp"
 #include "StdLib.hpp"
+
+struct ExprPackageValueRef {
+    VirtualMachine* owner = nullptr;
+    std::thread::id ownerThread;
+    Value value;
+};
+
+struct ExprPersistentValue {
+    VirtualMachine* owner = nullptr;
+    std::thread::id ownerThread;
+    Value value;
+};
+
+struct VirtualMachine::HostApiState {
+    std::thread::id ownerThread = std::this_thread::get_id();
+    std::unordered_map<ExprPersistentValue*,
+                       std::unique_ptr<ExprPersistentValue>> persistentValues;
+    std::vector<std::unique_ptr<ExprPackageValueRef>> borrowedValues;
+    std::deque<std::vector<uint8_t>> borrowedByteStorage;
+    std::string error;
+    size_t activeNativeCalls = 0;
+};
 
 template <typename Integer>
 static std::string fastIntegerToString(Integer value) {
@@ -385,8 +409,6 @@ enum class BuiltinNativeKind : uint8_t {
     SET,
 };
 
-static const ExprHostApi kExprHostApi = {EXPR_HOST_API_ABI_VERSION};
-
 static bool valueToPackageValue(const Value& value, ExprPackageValue& out,
                                 std::vector<uint8_t>& byteStorage) {
     out = ExprPackageValue{};
@@ -523,6 +545,39 @@ bool packageValueToValue(VirtualMachine& vm, const ExprPackageValue& value,
                 return false;
             }
 
+            // Host callback results expose native handles as borrowed handle
+            // metadata. If a package forwards that result back to Mog, retain
+            // the original GC object instead of creating a second owner for
+            // the same finalizer payload.
+            const auto reuseMatchingHandle = [&](const Value& candidate) {
+                if (!candidate.isNativeHandle()) return false;
+                NativeHandleObject* existing = candidate.asNativeHandle();
+                if (existing == nullptr ||
+                    existing->handleData != handleValue.handle_data ||
+                    existing->finalizer != handleValue.finalizer ||
+                    existing->packageNamespace != handleValue.package_namespace ||
+                    existing->packageName != handleValue.package_name ||
+                    existing->typeName != handleValue.type_name) {
+                    return false;
+                }
+                outValue = candidate;
+                return true;
+            };
+            for (size_t index = 0; index < vm.m_stack.size(); ++index) {
+                if (reuseMatchingHandle(vm.m_stack.getAtUnchecked(index))) {
+                    return true;
+                }
+            }
+            if (vm.m_hostApiState) {
+                for (const auto& borrowed : vm.m_hostApiState->borrowedValues) {
+                    if (reuseMatchingHandle(borrowed->value)) return true;
+                }
+                for (const auto& entry :
+                     vm.m_hostApiState->persistentValues) {
+                    if (reuseMatchingHandle(entry.second->value)) return true;
+                }
+            }
+
             auto* handle = vm.gcAlloc<NativeHandleObject>();
             handle->packageNamespace = handleValue.package_namespace;
             handle->packageName = handleValue.package_name;
@@ -534,6 +589,8 @@ bool packageValueToValue(VirtualMachine& vm, const ExprPackageValue& value,
             outValue = Value(handle);
             return true;
         }
+        case EXPR_PACKAGE_VALUE_REF:
+            return vm.resolvePackageValue(value, outValue, outError);
         default:
             outError = "Native package returned unsupported value kind.";
             return false;
@@ -1111,6 +1168,15 @@ void VirtualMachine::markRoots() {
 
     m_gc.markObject(m_currentModule);
 
+    if (m_hostApiState) {
+        for (const auto& entry : m_hostApiState->persistentValues) {
+            m_gc.markValue(entry.second->value);
+        }
+        for (const auto& borrowed : m_hostApiState->borrowedValues) {
+            m_gc.markValue(borrowed->value);
+        }
+    }
+
     std::array<const Chunk*, MAX_FRAMES> visitedRootChunks{};
     size_t visitedRootChunkCount = 0;
     for (size_t i = 0; i < m_frameCount; ++i) {
@@ -1152,7 +1218,12 @@ void VirtualMachine::collectGarbage() {
 }
 
 void VirtualMachine::printStackTrace() {
-    std::cerr << "[trace][runtime] stack:" << std::endl;
+    std::cerr << formatStackTrace();
+}
+
+std::string VirtualMachine::formatStackTrace() const {
+    std::ostringstream out;
+    out << "[trace][runtime] stack:\n";
 
     for (int index = static_cast<int>(m_frameCount) - 1; index >= 0; --index) {
         const CallFrame& frame = m_frames[index];
@@ -1170,9 +1241,10 @@ void VirtualMachine::printStackTrace() {
             }
         }
 
-        std::cerr << "  at " << functionName << "() [line "
-                  << frame.chunk->lineAt(offset) << "]" << std::endl;
+        out << "  at " << functionName << "() [line "
+            << frame.chunk->lineAt(offset) << "]\n";
     }
+    return out.str();
 }
 
 Status VirtualMachine::runtimeError(const std::string& message) {
@@ -1182,9 +1254,14 @@ Status VirtualMachine::runtimeError(const std::string& message) {
         offset = 0;
     }
 
-    std::cerr << "[error][runtime][line " << frame.chunk->lineAt(offset) << "] "
-              << message << std::endl;
-    printStackTrace();
+    std::ostringstream formatted;
+    formatted << "[error][runtime][line " << frame.chunk->lineAt(offset) << "] "
+              << message << "\n" << formatStackTrace();
+    if (m_callbackNestingDepth > 0) {
+        m_capturedRuntimeError = formatted.str();
+    } else {
+        std::cerr << formatted.str();
+    }
     return Status::RUNTIME_ERROR;
 }
 
@@ -1558,6 +1635,281 @@ Status invokeBuiltinNative(VirtualMachine& vm, const NativeFunctionObject& nativ
     return Status::OK;
 }
 
+ExprHostApi VirtualMachine::makeHostApi() {
+    if (!m_hostApiState) {
+        m_hostApiState = std::make_unique<HostApiState>();
+    }
+    return ExprHostApi{EXPR_HOST_API_ABI_VERSION,
+                       sizeof(ExprHostApi),
+                       this,
+                       &VirtualMachine::hostRetainValue,
+                       &VirtualMachine::hostReleaseValue,
+                       &VirtualMachine::hostGetValue,
+                       &VirtualMachine::hostInvokeValue};
+}
+
+ExprPackageValue VirtualMachine::makeBorrowedPackageValue(const Value& value) {
+    if (!m_hostApiState) {
+        m_hostApiState = std::make_unique<HostApiState>();
+    }
+    auto borrowed = std::make_unique<ExprPackageValueRef>();
+    borrowed->owner = this;
+    borrowed->ownerThread = m_hostApiState->ownerThread;
+    borrowed->value = value;
+    const ExprPackageValueRef* raw = borrowed.get();
+    m_hostApiState->borrowedValues.push_back(std::move(borrowed));
+
+    ExprPackageValue result{};
+    result.kind = EXPR_PACKAGE_VALUE_REF;
+    result.as.ref_value = raw;
+    return result;
+}
+
+bool VirtualMachine::resolvePackageValue(const ExprPackageValue& value,
+                                         Value& outValue,
+                                         std::string& outError) {
+    if (value.kind != EXPR_PACKAGE_VALUE_REF || value.as.ref_value == nullptr) {
+        return packageValueToValue(*this, value, outValue, outError);
+    }
+    if (!m_hostApiState ||
+        std::this_thread::get_id() != m_hostApiState->ownerThread) {
+        outError = "Mog value reference used from a foreign thread.";
+        return false;
+    }
+    for (const auto& borrowed : m_hostApiState->borrowedValues) {
+        if (borrowed.get() == value.as.ref_value) {
+            if (borrowed->owner != this ||
+                borrowed->ownerThread != m_hostApiState->ownerThread) {
+                outError = "Mog value reference belongs to a different VM.";
+                return false;
+            }
+            outValue = borrowed->value;
+            return true;
+        }
+    }
+    outError = "Mog value reference is no longer valid.";
+    return false;
+}
+
+template <typename HostState>
+static void setHostError(HostState& state, std::string message,
+                         ExprPackageStringView* outError) {
+    state.error = std::move(message);
+    if (outError != nullptr) {
+        outError->data = state.error.data();
+        outError->length = state.error.size();
+    }
+}
+
+bool VirtualMachine::hostRetainValue(void* context,
+                                     const ExprPackageValue* borrowedValue,
+                                     ExprPersistentValue** outPersistent,
+                                     ExprPackageStringView* outError) {
+    auto* vm = static_cast<VirtualMachine*>(context);
+    if (vm == nullptr || borrowedValue == nullptr || outPersistent == nullptr) {
+        return false;
+    }
+    if (!vm->m_hostApiState) {
+        vm->m_hostApiState = std::make_unique<HostApiState>();
+    }
+    if (std::this_thread::get_id() != vm->m_hostApiState->ownerThread) {
+        setHostError(*vm->m_hostApiState,
+                     "Cannot retain a Mog value from a foreign thread.",
+                     outError);
+        return false;
+    }
+    if (vm->m_hostApiState->activeNativeCalls == 0) {
+        setHostError(*vm->m_hostApiState,
+                     "Cannot retain a Mog value through an inactive or different VM.",
+                     outError);
+        return false;
+    }
+
+    Value value;
+    std::string error;
+    if (!vm->resolvePackageValue(*borrowedValue, value, error)) {
+        setHostError(*vm->m_hostApiState, std::move(error), outError);
+        return false;
+    }
+    auto persistent = std::make_unique<ExprPersistentValue>();
+    persistent->owner = vm;
+    persistent->ownerThread = vm->m_hostApiState->ownerThread;
+    persistent->value = value;
+    ExprPersistentValue* raw = persistent.get();
+    vm->m_hostApiState->persistentValues.emplace(raw, std::move(persistent));
+    *outPersistent = raw;
+    return true;
+}
+
+void VirtualMachine::hostReleaseValue(void* context,
+                                      ExprPersistentValue* persistent) {
+    auto* vm = static_cast<VirtualMachine*>(context);
+    if (vm == nullptr || persistent == nullptr || !vm->m_hostApiState ||
+        std::this_thread::get_id() != vm->m_hostApiState->ownerThread) {
+        return;
+    }
+    vm->m_hostApiState->persistentValues.erase(persistent);
+}
+
+bool VirtualMachine::hostGetValue(void* context,
+                                  ExprPersistentValue* persistent,
+                                  ExprPackageValue* outBorrowedValue,
+                                  ExprPackageStringView* outError) {
+    auto* vm = static_cast<VirtualMachine*>(context);
+    if (vm == nullptr || persistent == nullptr || outBorrowedValue == nullptr) {
+        return false;
+    }
+    if (!vm->m_hostApiState ||
+        std::this_thread::get_id() != vm->m_hostApiState->ownerThread) {
+        if (vm->m_hostApiState) {
+            setHostError(*vm->m_hostApiState,
+                         "Cannot retrieve a Mog value from a foreign thread.",
+                         outError);
+        }
+        return false;
+    }
+    if (vm->m_hostApiState->activeNativeCalls == 0) {
+        setHostError(*vm->m_hostApiState,
+                     "Cannot retrieve a Mog value through an inactive or different VM.",
+                     outError);
+        return false;
+    }
+    auto found = vm->m_hostApiState->persistentValues.find(persistent);
+    if (found == vm->m_hostApiState->persistentValues.end() ||
+        found->second->owner != vm) {
+        setHostError(*vm->m_hostApiState,
+                     "Persistent Mog value belongs to a different VM or was released.",
+                     outError);
+        return false;
+    }
+    *outBorrowedValue = vm->makeBorrowedPackageValue(found->second->value);
+    return true;
+}
+
+bool VirtualMachine::hostInvokeValue(void* context,
+                                     ExprPersistentValue* persistentCallable,
+                                     const ExprPackageValue* args, size_t argc,
+                                     ExprPackageValue* outResult,
+                                     ExprPackageStringView* outError) {
+    auto* vm = static_cast<VirtualMachine*>(context);
+    if (vm == nullptr || persistentCallable == nullptr || outResult == nullptr ||
+        (argc != 0 && args == nullptr)) {
+        return false;
+    }
+    if (!vm->m_hostApiState ||
+        std::this_thread::get_id() != vm->m_hostApiState->ownerThread) {
+        if (vm->m_hostApiState) {
+            setHostError(*vm->m_hostApiState,
+                         "Cannot invoke a Mog value from a foreign thread.",
+                         outError);
+        }
+        return false;
+    }
+    if (vm->m_hostApiState->activeNativeCalls == 0) {
+        setHostError(*vm->m_hostApiState,
+                     "Cannot invoke a Mog value through an inactive or different VM.",
+                     outError);
+        return false;
+    }
+    auto found = vm->m_hostApiState->persistentValues.find(persistentCallable);
+    if (found == vm->m_hostApiState->persistentValues.end() ||
+        found->second->owner != vm) {
+        setHostError(*vm->m_hostApiState,
+                     "Persistent Mog callable belongs to a different VM or was released.",
+                     outError);
+        return false;
+    }
+    const Value callable = found->second->value;
+    if (!(callable.isFunction() || callable.isClosure() ||
+          callable.isBoundMethod() || callable.isNative() ||
+          callable.isNativeBound())) {
+        setHostError(*vm->m_hostApiState,
+                     "Persistent Mog value is not callable.", outError);
+        return false;
+    }
+    if (argc > 255) {
+        setHostError(*vm->m_hostApiState,
+                     "Mog callbacks accept at most 255 arguments.", outError);
+        return false;
+    }
+
+    const size_t savedStackSize = vm->m_stack.size();
+    if (savedStackSize + argc + 1 > STACK_SIZE) {
+        setHostError(*vm->m_hostApiState,
+                     "Insufficient VM stack space for Mog callback.", outError);
+        return false;
+    }
+    const size_t savedFrameCount = vm->m_frameCount;
+    CallFrame* savedActiveFrame = vm->m_activeFrame;
+    ModuleObject* savedModule = vm->m_currentModule;
+    const std::string previousCapturedError = vm->m_capturedRuntimeError;
+    vm->m_capturedRuntimeError.clear();
+    ++vm->m_callbackNestingDepth;
+
+    vm->m_stack.push(callable);
+    for (size_t index = 0; index < argc; ++index) {
+        Value argument;
+        std::string conversionError;
+        if (!packageValueToValue(*vm, args[index], argument, conversionError)) {
+            vm->m_stack.popN(vm->m_stack.size() - savedStackSize);
+            --vm->m_callbackNestingDepth;
+            vm->m_capturedRuntimeError = previousCapturedError;
+            setHostError(*vm->m_hostApiState,
+                         "Invalid Mog callback argument: " + conversionError,
+                         outError);
+            return false;
+        }
+        vm->m_stack.push(std::move(argument));
+    }
+
+    Status status = vm->callValue(callable, static_cast<uint8_t>(argc),
+                                  savedStackSize);
+    Value result;
+    if (status == Status::OK) {
+        if (vm->m_frameCount > savedFrameCount) {
+            status = vm->run(false, result, savedFrameCount);
+        } else {
+            result = vm->m_stack.top();
+        }
+    }
+
+    std::string callbackError = vm->m_capturedRuntimeError;
+    if (status != Status::OK) {
+        vm->closeUpvalues(savedStackSize);
+    }
+    vm->m_frameCount = savedFrameCount;
+    vm->m_activeFrame = savedActiveFrame;
+    vm->m_currentModule = savedModule;
+    if (vm->m_stack.size() > savedStackSize) {
+        vm->m_stack.popN(vm->m_stack.size() - savedStackSize);
+    }
+    --vm->m_callbackNestingDepth;
+    vm->m_capturedRuntimeError = previousCapturedError;
+
+    if (status != Status::OK) {
+        if (callbackError.empty()) {
+            callbackError = "Mog callback failed.";
+        }
+        setHostError(*vm->m_hostApiState, std::move(callbackError), outError);
+        return false;
+    }
+
+    // Keep the result rooted and its borrowed storage alive until the outer
+    // native call returns.
+    auto borrowed = std::make_unique<ExprPackageValueRef>();
+    borrowed->owner = vm;
+    borrowed->ownerThread = vm->m_hostApiState->ownerThread;
+    borrowed->value = result;
+    Value& rootedResult = borrowed->value;
+    vm->m_hostApiState->borrowedValues.push_back(std::move(borrowed));
+    vm->m_hostApiState->borrowedByteStorage.emplace_back();
+    if (!valueToPackageValue(rootedResult, *outResult,
+                             vm->m_hostApiState->borrowedByteStorage.back())) {
+        *outResult = vm->makeBorrowedPackageValue(rootedResult);
+    }
+    return true;
+}
+
 Status invokePackageNative(VirtualMachine& vm, const NativeFunctionObject& native,
                            uint8_t argumentCount, size_t calleeIndex) {
     auto* binding =
@@ -1570,11 +1922,24 @@ Status invokePackageNative(VirtualMachine& vm, const NativeFunctionObject& nativ
 
     std::vector<ExprPackageValue> packageArgs(argumentCount);
     std::vector<std::vector<uint8_t>> byteArgumentStorage(argumentCount);
+    if (!vm.m_hostApiState) {
+        vm.m_hostApiState = std::make_unique<VirtualMachine::HostApiState>();
+    }
+    const size_t borrowedValueBase =
+        vm.m_hostApiState->borrowedValues.size();
+    const size_t borrowedBytesBase =
+        vm.m_hostApiState->borrowedByteStorage.size();
     const size_t argBase = calleeIndex + 1;
     for (uint8_t index = 0; index < argumentCount; ++index) {
         const Value& arg =
             vm.m_stack.getAtUnchecked(argBase + static_cast<size_t>(index));
-        if (arg.isNativeHandle()) {
+        TypeRef expectedType;
+        if (binding->functionType &&
+            index < binding->functionType->paramTypes.size()) {
+            expectedType = binding->functionType->paramTypes[index];
+        }
+        if (arg.isNativeHandle() && expectedType &&
+            expectedType->kind == TypeKind::NATIVE_HANDLE) {
             NativeHandleObject* handle = arg.asNativeHandle();
             if (handle == nullptr || handle->packageId != binding->packageId) {
                 return vm.runtimeError("Native package function '" +
@@ -1584,8 +1949,13 @@ Status invokePackageNative(VirtualMachine& vm, const NativeFunctionObject& nativ
             }
         }
 
-        if (!valueToPackageValue(arg, packageArgs[index],
-                                 byteArgumentStorage[index])) {
+        if (expectedType && (expectedType->kind == TypeKind::FUNCTION ||
+                             expectedType->kind == TypeKind::ANY)) {
+            packageArgs[index] = vm.makeBorrowedPackageValue(arg);
+        } else if (!valueToPackageValue(arg, packageArgs[index],
+                                        byteArgumentStorage[index])) {
+            vm.m_hostApiState->borrowedValues.resize(borrowedValueBase);
+            vm.m_hostApiState->borrowedByteStorage.resize(borrowedBytesBase);
             return vm.runtimeError("Native package function '" + native.name +
                                    "' cannot accept runtime value of type '" +
                                    valueTypeName(arg) + "'.");
@@ -1594,9 +1964,24 @@ Status invokePackageNative(VirtualMachine& vm, const NativeFunctionObject& nativ
 
     ExprPackageValue resultValue{};
     ExprPackageStringView errorView{nullptr, 0};
-    bool ok = binding->function->callback(&kExprHostApi, packageArgs.data(),
-                                          packageArgs.size(), &resultValue,
-                                          &errorView);
+    ExprHostApi hostApi = vm.makeHostApi();
+    bool ok = false;
+    ++vm.m_hostApiState->activeNativeCalls;
+    try {
+        ok = binding->function->callback(&hostApi, packageArgs.data(),
+                                         packageArgs.size(), &resultValue,
+                                         &errorView);
+    } catch (const std::exception& error) {
+        vm.m_hostApiState->error =
+            std::string("Native package threw an exception: ") + error.what();
+        errorView = {vm.m_hostApiState->error.data(),
+                     vm.m_hostApiState->error.size()};
+    } catch (...) {
+        vm.m_hostApiState->error = "Native package threw an unknown exception.";
+        errorView = {vm.m_hostApiState->error.data(),
+                     vm.m_hostApiState->error.size()};
+    }
+    --vm.m_hostApiState->activeNativeCalls;
     if (!ok) {
         std::string message = "Native package function '" + binding->packageId +
                               "." + native.name + "' failed.";
@@ -1605,6 +1990,8 @@ Status invokePackageNative(VirtualMachine& vm, const NativeFunctionObject& nativ
                       native.name + "' failed: " +
                       std::string(errorView.data, errorView.length);
         }
+        vm.m_hostApiState->borrowedValues.resize(borrowedValueBase);
+        vm.m_hostApiState->borrowedByteStorage.resize(borrowedBytesBase);
         return vm.runtimeError(message);
     }
 
@@ -1614,6 +2001,8 @@ Status invokePackageNative(VirtualMachine& vm, const NativeFunctionObject& nativ
             handleValue.package_name == nullptr ||
             binding->packageNamespace != handleValue.package_namespace ||
             binding->packageName != handleValue.package_name) {
+            vm.m_hostApiState->borrowedValues.resize(borrowedValueBase);
+            vm.m_hostApiState->borrowedByteStorage.resize(borrowedBytesBase);
             return vm.runtimeError("Native package function '" +
                                    binding->packageId + "." + native.name +
                                    "' returned a handle owned by a different "
@@ -1624,6 +2013,8 @@ Status invokePackageNative(VirtualMachine& vm, const NativeFunctionObject& nativ
     Value result;
     std::string conversionError;
     if (!packageValueToValue(vm, resultValue, result, conversionError)) {
+        vm.m_hostApiState->borrowedValues.resize(borrowedValueBase);
+        vm.m_hostApiState->borrowedByteStorage.resize(borrowedBytesBase);
         return vm.runtimeError("Native package function '" +
                                binding->packageId + "." + native.name +
                                "' returned invalid value: " + conversionError);
@@ -1631,6 +2022,8 @@ Status invokePackageNative(VirtualMachine& vm, const NativeFunctionObject& nativ
 
     vm.m_stack.popN(vm.m_stack.size() - calleeIndex);
     vm.m_stack.push(std::move(result));
+    vm.m_hostApiState->borrowedValues.resize(borrowedValueBase);
+    vm.m_hostApiState->borrowedByteStorage.resize(borrowedBytesBase);
     return Status::OK;
 }
 
@@ -4007,6 +4400,7 @@ Status VirtualMachine::run(bool printReturnValue, Value& returnValue,
                     binding.packageNamespace = packageDescriptor.packageNamespace;
                     binding.packageName = packageDescriptor.packageName;
                     binding.function = functionDescriptor.callback;
+                    binding.functionType = functionDescriptor.type;
                     nativeFn->userdata = &binding;
                     module->exports[functionDescriptor.name] = Value(nativeFn);
                     module->exportTypes[functionDescriptor.name] =
@@ -4556,6 +4950,8 @@ Status VirtualMachine::run(bool printReturnValue, Value& returnValue,
 #undef VM_OPCODE_ADDR
 #undef VM_CASE
 
+VirtualMachine::VirtualMachine() = default;
+
 VirtualMachine::~VirtualMachine() {
     resetRuntimeState();
 }
@@ -4570,6 +4966,9 @@ void VirtualMachine::unloadNativeLibraries() {
 }
 
 void VirtualMachine::resetRuntimeState() {
+    // Remove language-level reachability first. Native handles are then swept
+    // while their package code and Host API context are still alive, allowing
+    // finalizers to release persistent roots safely.
     m_stack.reset();
     m_frameCount = 0;
     m_activeFrame = nullptr;
@@ -4581,10 +4980,19 @@ void VirtualMachine::resetRuntimeState() {
     m_nativeGlobals.clear();
     m_moduleCache.clear();
     m_importStack.clear();
-    m_nativePackageBindings.clear();
     m_currentModule = nullptr;
+    if (m_hostApiState) {
+        m_hostApiState->borrowedValues.clear();
+        m_hostApiState->borrowedByteStorage.clear();
+    }
     m_gc.sweep();
+    if (m_hostApiState) {
+        m_hostApiState->persistentValues.clear();
+    }
+    m_gc.sweep();
+    m_nativePackageBindings.clear();
     unloadNativeLibraries();
+    m_hostApiState.reset();
 }
 
 Status VirtualMachine::interpret(std::string_view source, bool printReturnValue,

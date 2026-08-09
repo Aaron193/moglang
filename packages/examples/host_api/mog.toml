@@ -1,0 +1,9 @@
+kind = "native"
+module = "examples/host_api"
+import_name = "host_api"
+namespace = "examples"
+name = "host_api"
+version = "0.1.0"
+license = "MIT"
+abi_version = 3
+mog_runtime = "^0.1.6"

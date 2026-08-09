@@ -1,0 +1,3 @@
+#pragma once
+
+inline constexpr const char kPublishedNativePackageApiHeader[] = R"MOG_NATIVE_API(@NATIVE_PACKAGE_API_HEADER_CONTENT@)MOG_NATIVE_API";

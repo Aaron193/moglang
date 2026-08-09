@@ -1,0 +1,16 @@
+package host_api
+
+@native_handle("PersistentHandle")
+opaque type Persistent
+
+fn retainCallable(callback fn(i64) i64) Persistent
+fn retainAny(value any) Persistent
+fn getAny(value Persistent) any
+fn invoke(value Persistent, argument i64) i64
+fn tryInvoke(value Persistent, argument i64) bool
+fn invokeBytes(callback fn(Array<u8>) Array<u8>, value Array<u8>) Array<u8>
+fn invokeHandle(callback fn(Persistent) Persistent, value Persistent) Persistent
+fn foreignThreadRejected(value any) bool
+fn stashForCrossVm(value any) bool
+fn crossVmRejected() bool
+fn release(value Persistent) void
