@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.6
+
+- Add Host API v2 so native packages can retain Mog values and invoke Mog
+  callbacks safely across garbage collections.
+- Preserve callback results, native handles, byte arrays, nested invocations,
+  and recoverable runtime errors across the native package boundary.
+- Reject persistent values used by a different VM or from a foreign thread.
+- Generate the package manager's published native API header from the canonical
+  runtime header and retain compatibility with existing native ABI 3 packages.
+- Exercise Host API v2 and the HTTP/WebSocket package in runtime CI.
+
 ## 0.1.5
 
 - Add `mog --version` with native ABI diagnostics.

@@ -6,5 +6,4 @@ name = "host_api"
 version = "0.1.0"
 license = "MIT"
 abi_version = 3
-mog_runtime = "^0.1.5"
-
+mog_runtime = "^0.1.6"
