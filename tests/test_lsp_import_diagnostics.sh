@@ -26,6 +26,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from urllib.parse import unquote, urlparse
 
 LSP_BIN = sys.argv[1]
 
@@ -58,6 +59,14 @@ def read_until(proc, predicate):
         message = read_message(proc)
         if predicate(message):
             return message
+
+
+def canonical_file_uri(uri):
+    """Resolve equivalent macOS /var and /private/var file URI spellings."""
+    parsed = urlparse(uri)
+    if parsed.scheme != "file":
+        raise AssertionError(f"expected file URI, got {uri!r}")
+    return pathlib.Path(unquote(parsed.path)).resolve().as_uri()
 
 
 workspace = pathlib.Path(tempfile.mkdtemp(prefix="mog_lsp_import_diag_"))
@@ -120,7 +129,7 @@ try:
     related = importer_diag.get("relatedInformation", [])
     if not related:
         raise AssertionError(f"expected related information for importer diagnostic: {importer_diag}")
-    if related[0]["location"]["uri"] != dep_uri:
+    if canonical_file_uri(related[0]["location"]["uri"]) != canonical_file_uri(dep_uri):
         raise AssertionError(f"expected related information to target imported file: {related}")
 
     send_message(proc, {

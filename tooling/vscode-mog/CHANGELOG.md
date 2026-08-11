@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Fix macOS verification of imported-file diagnostic locations when the system
+  resolves `/var` through `/private/var`.
+
 ## 0.1.1
 
 - Ship platform-specific extension packages with a tested bundled Mog language
