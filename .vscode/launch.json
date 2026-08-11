@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Mog: Extension Development Host",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/tooling/vscode-mog",
+        "${workspaceFolder}/examples"
+      ],
+      "env": {
+        "MOG_SERVER_PATH": "${workspaceFolder}/build/tooling-debug",
+        "MOG_LSP_DEVELOPMENT": "1"
+      },
+      "preLaunchTask": "Mog: Prepare Tooling Development",
+      "outFiles": ["${workspaceFolder}/tooling/vscode-mog/**/*.js"]
+    }
+  ]
+}

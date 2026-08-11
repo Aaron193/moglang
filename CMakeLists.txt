@@ -6,8 +6,16 @@ cmake_minimum_required(VERSION 3.10)
 
 # Override this from a release build, for example: -DMOG_VERSION=0.1.6
 set(MOG_VERSION "0.1.6" CACHE STRING "Version of the Mog distribution")
+set(MOG_TOOLING_PROTOCOL_VERSION "1.0" CACHE STRING
+    "Mog editor tooling protocol version")
 project(mog VERSION ${MOG_VERSION})
 
+option(MOG_STATIC_OPENSSL
+       "Link OpenSSL statically so packaged Mog executables are self-contained"
+       ON)
+if(MOG_STATIC_OPENSSL)
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+endif()
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -132,7 +140,17 @@ add_executable(mog-lsp
 target_include_directories(mog-lsp
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
+target_compile_definitions(mog-lsp PRIVATE
+    MOG_TOOLING_PROTOCOL_VERSION="${MOG_TOOLING_PROTOCOL_VERSION}")
 target_link_libraries(mog-lsp PRIVATE interpreter_core)
+
+# Marketplace and runtime archives cannot rely on an MSYS2 installation being
+# present on an end user's machine. Keep the MinGW language/runtime support
+# libraries inside the two distributed executables.
+if(MINGW)
+    target_link_options(mog PRIVATE -static -static-libgcc -static-libstdc++)
+    target_link_options(mog-lsp PRIVATE -static -static-libgcc -static-libstdc++)
+endif()
 
 add_library(examples_math_package MODULE
     packages/examples/math/package.cpp
@@ -381,6 +399,14 @@ set(PROJECT_LINK_TARGETS
 
 if(TARGET mog_window_package)
     list(APPEND PROJECT_LINK_TARGETS mog_window_package)
+endif()
+
+# The protocol regression suite exercises native package navigation. Building
+# the language-server target must therefore also produce its local fixture
+# packages in the server-adjacent `packages` tree.
+add_dependencies(mog-lsp examples_math_package examples_counter_package)
+if(TARGET mog_window_package)
+    add_dependencies(mog-lsp mog_window_package)
 endif()
 
 foreach(target_name IN LISTS PROJECT_LINK_TARGETS)

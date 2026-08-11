@@ -1,0 +1,241 @@
+name: Release VS Code Extension
+
+on:
+  push:
+    tags: ["vscode/v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vscode/vX.Y.Z tag to validate and publish
+        required: true
+        type: string
+      channel:
+        description: Marketplace release channel
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - pre-release
+
+permissions:
+  contents: read
+
+jobs:
+  context:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - id: release
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_CHANNEL: ${{ inputs.channel || 'stable' }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^vscode/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Extension tag must have the form vscode/vX.Y.Z: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${RELEASE_TAG#vscode/v}" >> "$GITHUB_OUTPUT"
+          [[ "$RELEASE_CHANNEL" == pre-release ]] && prerelease=true || prerelease=false
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+  validate:
+    needs: context
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.context.outputs.tag }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tooling/vscode-mog/package-lock.json
+      - name: Verify tag, manifest, lockfile, and changelog versions
+        working-directory: tooling/vscode-mog
+        env:
+          RELEASE_VERSION: ${{ needs.context.outputs.version }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const expected = process.env.RELEASE_VERSION;
+          const manifest = require('./package.json');
+          const lock = require('./package-lock.json');
+          if (manifest.version !== expected || lock.version !== expected ||
+              lock.packages?.['']?.version !== expected) {
+            throw new Error(`version mismatch: tag=${expected}, manifest=${manifest.version}, lock=${lock.version}, lock root=${lock.packages?.['']?.version}`);
+          }
+          const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+          if (!changelog.includes(`## ${expected}`) && !changelog.includes(`## [${expected}]`)) {
+            throw new Error(`CHANGELOG.md has no ${expected} heading`);
+          }
+          NODE
+      - name: Install and check extension dependencies
+        working-directory: tooling/vscode-mog
+        run: |
+          npm ci
+          npm run compile
+          npm run check
+
+  package:
+    needs: [context, validate]
+    name: Package ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: ubuntu-22.04
+            shell: bash
+            executable: mog-lsp
+            architecture: x86_64
+          - target: darwin-arm64
+            runner: macos-14
+            shell: bash
+            executable: mog-lsp
+            architecture: arm64
+          - target: win32-x64
+            runner: windows-2022
+            shell: msys2 {0}
+            executable: mog-lsp.exe
+            architecture: x86_64
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.context.outputs.tag }}
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev libsdl2-dev xvfb
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install openssl@3
+      - name: Set up MSYS2
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
+        with:
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-ninja
+            unzip
+      - name: Verify extension runner architecture
+        run: test "$(uname -m)" = "${{ matrix.architecture }}"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tooling/vscode-mog/package-lock.json
+      - name: Build bundled language server
+        run: |
+          cmake -S . -B build/extension -DCMAKE_BUILD_TYPE=Release \
+            -DOPENSSL_USE_STATIC_LIBS=TRUE
+          cmake --build build/extension --target mog-lsp --parallel
+          bash tests/test_lsp_formatting.sh ./build/extension/${{ matrix.executable }}
+          bash tests/test_lsp_import_diagnostics.sh ./build/extension/${{ matrix.executable }}
+          bash tests/test_lsp_navigation.sh ./build/extension/${{ matrix.executable }}
+          bash tests/test_lsp_protocol.sh ./build/extension/${{ matrix.executable }}
+          bash tests/test_lsp_smoke.sh ./build/extension/${{ matrix.executable }}
+      - name: Stage server and package target-specific VSIX
+        working-directory: tooling/vscode-mog
+        run: |
+          npm ci
+          npm run compile
+          mkdir -p runtime/${{ matrix.target }} ../../dist
+          cp ../../build/extension/${{ matrix.executable }} runtime/${{ matrix.target }}/
+          prerelease=()
+          [[ '${{ needs.context.outputs.prerelease }}' == true ]] && prerelease=(--pre-release)
+          npm run package -- "${prerelease[@]}" --target ${{ matrix.target }} \
+            --out ../../dist/vscode-mog-${{ needs.context.outputs.version }}-${{ matrix.target }}.vsix
+      - name: Inspect and smoke-test exact VSIX contents
+        run: bash scripts/validate_vsix.sh dist/vscode-mog-${{ needs.context.outputs.version }}-${{ matrix.target }}.vsix ${{ matrix.target }}
+      - name: Test installed extension artifact on Linux
+        if: runner.os == 'Linux'
+        working-directory: tooling/vscode-mog
+        env:
+          MOG_TEST_VSIX: ${{ github.workspace }}/dist/vscode-mog-${{ needs.context.outputs.version }}-${{ matrix.target }}.vsix
+        run: xvfb-run -a npm run test:extension -- --vsix "$MOG_TEST_VSIX"
+      - name: Test installed extension artifact on macOS and Windows
+        if: runner.os != 'Linux'
+        working-directory: tooling/vscode-mog
+        env:
+          MOG_TEST_VSIX: ${{ github.workspace }}/dist/vscode-mog-${{ needs.context.outputs.version }}-${{ matrix.target }}.vsix
+        run: npm run test:extension -- --vsix "$MOG_TEST_VSIX"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: vscode-mog-${{ matrix.target }}
+          path: dist/*.vsix
+          if-no-files-found: error
+
+  publish:
+    needs: [context, package]
+    runs-on: ubuntu-latest
+    environment: vscode-marketplace
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.context.outputs.tag }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tooling/vscode-mog/package-lock.json
+      - name: Install pinned publisher tooling
+        working-directory: tooling/vscode-mog
+        run: npm ci
+      - name: Refuse to replace an existing GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view '${{ needs.context.outputs.tag }}' >/dev/null 2>&1; then
+            echo "Release already exists; published artifacts are immutable" >&2
+            exit 1
+          fi
+      - name: Generate checksums for tested artifacts
+        run: sha256sum dist/*.vsix > dist/SHA256SUMS
+      - name: Publish target packages to Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          PRERELEASE: ${{ needs.context.outputs.prerelease }}
+        run: |
+          for package in dist/*.vsix; do
+            prerelease=()
+            [[ "$PRERELEASE" == true ]] && prerelease=(--pre-release)
+            ./tooling/vscode-mog/node_modules/.bin/vsce publish \
+              "${prerelease[@]}" --packagePath "$package"
+          done
+      - name: Publish immutable GitHub release assets
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: ${{ needs.context.outputs.tag }}
+          files: dist/*
+      - name: Verify Marketplace reports the published version
+        env:
+          EXPECTED_VERSION: ${{ needs.context.outputs.version }}
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8; do
+            ./tooling/vscode-mog/node_modules/.bin/vsce show \
+              moglang.vscode-mog --json > marketplace.json
+            if node -e "const p=require('./marketplace.json'); process.exit(p.versions?.some(v => v.version === process.env.EXPECTED_VERSION) ? 0 : 1)"; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Marketplace did not report $EXPECTED_VERSION after publication" >&2
+          exit 1

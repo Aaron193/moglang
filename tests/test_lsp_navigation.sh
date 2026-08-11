@@ -3,15 +3,22 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LSP_BIN="$PROJECT_ROOT/build/mog-lsp"
+LSP_BIN="${1:-$PROJECT_ROOT/build/mog-lsp}"
+if [[ -d "$LSP_BIN" ]]; then
+    if [[ -x "$LSP_BIN/mog-lsp.exe" ]]; then
+        LSP_BIN="$LSP_BIN/mog-lsp.exe"
+    else
+        LSP_BIN="$LSP_BIN/mog-lsp"
+    fi
+fi
 
 if [[ ! -x "$LSP_BIN" ]]; then
     echo "LSP binary not found at $LSP_BIN"
-    echo "Build first with: $PROJECT_ROOT/build.sh"
+    echo "Pass a server executable or build directory as the first argument."
     exit 1
 fi
 
-python3 - "$LSP_BIN" <<'PY'
+python3 - "$LSP_BIN" "$PROJECT_ROOT" <<'PY'
 import json
 import os
 import subprocess
@@ -20,7 +27,7 @@ import tempfile
 from pathlib import Path
 
 lsp_bin = sys.argv[1]
-repo_root = Path(lsp_bin).resolve().parents[1]
+repo_root = Path(sys.argv[2]).resolve()
 
 
 def send_message(proc, payload):
@@ -357,14 +364,14 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             'description = "managed project"',
             "",
             "[dependencies]",
-            'math = { path = "packages/examples/math", package = "examples:math", version = "0.1.0" }',
+            'hello = { path = "packages/examples/hello", package = "examples:hello", version = "0.1.0" }',
             ""
         ]),
         encoding="utf-8",
     )
     managed_project_source = "\n".join([
-        'const math = @import("math")',
-        "print(math.MEANING_OF_LIFE)",
+        'const hello = @import("hello")',
+        "print(hello.MESSAGE)",
         ""
     ])
     managed_project_path = project_root / "main.mog"
@@ -400,6 +407,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env={**os.environ, "MOG_CACHE_DIR": str(Path(tmpdir) / ".cache")},
     )
 
     try:

@@ -251,6 +251,11 @@ Run additional suites:
 
 The VS Code extension lives under `tooling/vscode-mog`.
 
+For extension or language-server development, open this repository root and run
+the **Mog: Extension Development Host** launch configuration. It builds an
+isolated debug server and opens a representative workspace without changing
+personal settings. See [the tooling development guide](docs/TOOLING_DEVELOPMENT.md).
+
 `.mog` files now declare a Mog language icon through the extension manifest, so
 Explorer and tabs can show the bundled icon when the active file icon theme
 supports language default icons. Themes such as `Minimal` may still show the
@@ -632,11 +637,18 @@ cmake --build build/release --parallel
 cpack --config build/release/CPackConfig.cmake -B dist
 ```
 
-After extracting the archive, add its `bin` directory to `PATH`; users can then run `mog app.mog`. The VS Code extension under `tooling/vscode-mog` supplies syntax highlighting, snippets, and LSP diagnostics, formatting, navigation, references, and rename. It discovers `mog-lsp` on `PATH`. Package it with `npx @vscode/vsce package` from that directory and install the generated `.vsix`.
+After extracting the archive, add its `bin` directory to `PATH`; users can then
+run `mog app.mog`. Public target-specific VS Code packages bundle their tested
+`mog-lsp`, so Marketplace users do not need to configure a server path. Runtime
+and development-build discovery remain as fallbacks, and `mog.serverPath` is an
+advanced explicit override. The extension supplies syntax highlighting,
+snippets, completion, hover, diagnostics, formatting, navigation, references,
+and rename.
 
 
-See [the runtime release guide](docs/RELEASING.md) for Mog and VS Code release
-steps. Package maintainers should use the centralized
+See [the runtime and editor release guide](docs/RELEASING.md) for independent
+`runtime/vX.Y.Z` and `vscode/vX.Y.Z` release streams, compatibility, rollback,
+and artifact verification. Package maintainers should use the centralized
 [package CI and release guide](docs/PACKAGE_CI_RELEASES.md) for package
 versioning, tagging, GitHub artifacts, registry publication, and consumer
 installation behavior.

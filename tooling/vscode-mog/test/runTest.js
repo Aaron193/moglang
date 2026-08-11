@@ -1,0 +1,61 @@
+"use strict";
+
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const AdmZip = require("adm-zip");
+const { runTests } = require("@vscode/test-electron");
+
+async function main() {
+  const vsixArgument = process.argv.findIndex((value) => value === "--vsix");
+  const vsixPath = process.env.MOG_TEST_VSIX ||
+    (vsixArgument >= 0 ? process.argv[vsixArgument + 1] : undefined);
+  let temporaryRoot;
+  let extensionDevelopmentPath = path.resolve(__dirname, "..");
+  if (vsixPath) {
+    const exactArtifact = path.resolve(vsixPath);
+    if (!fs.statSync(exactArtifact).isFile()) throw new Error(`VSIX not found: ${exactArtifact}`);
+    temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mog-vsix-test-"));
+    new AdmZip(exactArtifact).extractAllTo(temporaryRoot, true);
+    extensionDevelopmentPath = path.join(temporaryRoot, "extension");
+    const packagedManifest = JSON.parse(
+      fs.readFileSync(path.join(extensionDevelopmentPath, "package.json"), "utf8")
+    );
+    if (`${packagedManifest.publisher}.${packagedManifest.name}` !== "moglang.vscode-mog") {
+      throw new Error(`Unexpected extension artifact: ${packagedManifest.publisher}.${packagedManifest.name}`);
+    }
+  }
+  const extensionTestsPath = path.resolve(__dirname, "suite", "index");
+  const workspacePath = path.resolve(__dirname, "fixtures", "multi-root.code-workspace");
+  const defaultServer = path.resolve(__dirname, "..", "..", "..", "build", "mog-lsp");
+  const serverPath = process.env.MOG_LSP_PATH || defaultServer;
+  if (fs.existsSync(serverPath)) {
+    process.env.MOG_LSP_DEVELOPMENT = "1";
+    process.env.MOG_SERVER_PATH = serverPath;
+  }
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), "mog-vscode-user-"));
+  const extensions = fs.mkdtempSync(path.join(os.tmpdir(), "mog-vscode-extensions-"));
+  try {
+    await runTests({
+      extensionDevelopmentPath,
+      extensionTestsPath,
+      launchArgs: [
+        workspacePath,
+        "--disable-extensions",
+        "--user-data-dir",
+        userData,
+        "--extensions-dir",
+        extensions
+      ]
+    });
+  } finally {
+    fs.rmSync(userData, { recursive: true, force: true });
+    fs.rmSync(extensions, { recursive: true, force: true });
+    if (temporaryRoot) fs.rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

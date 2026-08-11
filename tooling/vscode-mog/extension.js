@@ -1,110 +1,37 @@
-const fs = require("fs");
-const path = require("path");
+"use strict";
+
 const vscode = require("vscode");
-const { LanguageClient, TransportKind } = require("vscode-languageclient/node");
+const { ServerManager } = require("./src/lifecycle");
 
-let client = null;
+let manager;
 
-function executableCandidates(workspaceFolder, configuredPath) {
-  if (configuredPath) {
-    return [configuredPath];
-  }
-
-  if (!workspaceFolder) {
-    return [];
-  }
-
-  const root = workspaceFolder.uri.fsPath;
-  const suffix = process.platform === "win32" ? ".exe" : "";
-  return [
-    path.join(root, "build", `mog-lsp${suffix}`),
-    path.join(root, "build", "Debug", `mog-lsp${suffix}`),
-    path.join(root, "build", "Release", `mog-lsp${suffix}`)
-  ];
-}
-
-function installedServerPath() {
-  const suffix = process.platform === "win32" ? ".exe" : "";
-  const executable = `mog-lsp${suffix}`;
-  const pathEntries = (process.env.PATH || "").split(path.delimiter);
-
-  for (const directory of pathEntries) {
-    const candidate = path.join(directory, executable);
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
-function findServerPath() {
-  const workspaceFolder = vscode.workspace.workspaceFolders
-    ? vscode.workspace.workspaceFolders[0]
-    : null;
-  const configuredPath = vscode.workspace
-    .getConfiguration("mog")
-    .get("serverPath");
-
-  for (const candidate of executableCandidates(workspaceFolder, configuredPath)) {
-    if (candidate && fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return installedServerPath();
-}
-
-function activate(context) {
-  const serverPath = findServerPath();
-  if (!serverPath) {
-    vscode.window.showWarningMessage(
-      "Mog language support could not find `mog-lsp`. Install Mog so it is on PATH, or set `mog.serverPath`."
-    );
-    return;
-  }
-
-  const workspaceFolder = vscode.workspace.workspaceFolders
-    ? vscode.workspace.workspaceFolders[0]
-    : null;
-  const serverOptions = {
-    run: {
-      command: serverPath,
-      transport: TransportKind.stdio,
-      options: workspaceFolder ? { cwd: workspaceFolder.uri.fsPath } : undefined
-    },
-    debug: {
-      command: serverPath,
-      transport: TransportKind.stdio,
-      options: workspaceFolder ? { cwd: workspaceFolder.uri.fsPath } : undefined
-    }
-  };
-
-  const clientOptions = {
-    documentSelector: [{ scheme: "file", language: "mog" }],
-    outputChannelName: "Mog Language Support"
-  };
-
-  client = new LanguageClient(
-    "mog",
-    "Mog Language Server",
-    serverOptions,
-    clientOptions
+async function activate(context) {
+  manager = new ServerManager(context);
+  context.subscriptions.push(
+    vscode.commands.registerCommand("mog.showServerStatus", () => manager.showStatus()),
+    vscode.commands.registerCommand("mog.restartServer", () => manager.restart()),
+    vscode.commands.registerCommand("mog.selectServer", () => manager.selectServer()),
+    vscode.commands.registerCommand("mog.openServerLog", () => manager.output.show(true)),
+    vscode.commands.registerCommand("mog.installProjectDependencies", () => manager.installDependencies()),
+    vscode.workspace.onDidOpenTextDocument((document) => manager.openDocument(document)),
+    vscode.workspace.onDidChangeWorkspaceFolders((event) => manager.removeWorkspaceFolders(event)),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (
+        !manager.updatingConfiguration &&
+        (event.affectsConfiguration("mog.serverPath") || event.affectsConfiguration("mog.runtimePath"))
+      ) {
+        void manager.restartAll();
+      }
+    })
   );
-  context.subscriptions.push(client.start());
+  await manager.start();
+  return { manager };
 }
 
-function deactivate() {
-  if (!client) {
-    return undefined;
-  }
-
-  const stopPromise = client.stop();
-  client = null;
-  return stopPromise;
+async function deactivate() {
+  const current = manager;
+  manager = undefined;
+  if (current) await current.dispose();
 }
 
-module.exports = {
-  activate,
-  deactivate
-};
+module.exports = { activate, deactivate };
