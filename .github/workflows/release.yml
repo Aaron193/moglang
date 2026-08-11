@@ -1,8 +1,8 @@
-name: Release Mog
+name: Release Mog Runtime
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["runtime/v*"]
   workflow_dispatch:
     inputs:
       tag:
@@ -25,8 +25,8 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Release tag must have the form vX.Y.Z: $RELEASE_TAG" >&2
+          if [[ ! "$RELEASE_TAG" =~ ^runtime/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must have the form runtime/vX.Y.Z: $RELEASE_TAG" >&2
             exit 1
           fi
           echo "value=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
@@ -34,7 +34,7 @@ jobs:
         shell: bash
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: echo "value=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+        run: echo "value=${RELEASE_TAG#runtime/v}" >> "$GITHUB_OUTPUT"
 
   validate:
     needs: release-context
@@ -44,6 +44,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ needs.release-context.outputs.tag }}
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev libsdl2-dev
       - name: Verify source version matches tag
         env:
           RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
@@ -63,6 +65,15 @@ jobs:
           bash tests/test_cli_flags.sh
           bash tests/test_package_validation.sh
           bash tests/test_package_manager.sh
+      - name: Editor and LSP release gates
+        run: |
+          bash tests/test_vscode_manifest.sh
+          bash tests/test_vscode_grammar.sh
+          bash tests/test_lsp_formatting.sh ./build/mog-lsp
+          bash tests/test_lsp_import_diagnostics.sh ./build/mog-lsp
+          bash tests/test_lsp_navigation.sh ./build/mog-lsp
+          bash tests/test_lsp_protocol.sh ./build/mog-lsp
+          bash tests/test_lsp_smoke.sh ./build/mog-lsp
 
   package:
     needs: [release-context, validate]
@@ -73,14 +84,17 @@ jobs:
       matrix:
         include:
           - name: linux-x64
-            runner: ubuntu-latest
+            runner: ubuntu-22.04
             shell: bash
+            architecture: x86_64
           - name: macos-arm64
             runner: macos-latest
             shell: bash
+            architecture: arm64
           - name: windows-x64
-            runner: windows-latest
+            runner: windows-2022
             shell: msys2 {0}
+            architecture: x86_64
     defaults:
       run:
         shell: ${{ matrix.shell }}
@@ -88,6 +102,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ needs.release-context.outputs.tag }}
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev libsdl2-dev
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install openssl@3
@@ -101,9 +118,12 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-openssl
             mingw-w64-x86_64-ninja
+      - name: Verify release runner architecture
+        run: test "$(uname -m)" = "${{ matrix.architecture }}"
       - name: Configure
         run: >-
           cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
+          -DOPENSSL_USE_STATIC_LIBS=TRUE
           -DMOG_VERSION=${{ needs.release-context.outputs.version }}
       - name: Build
         run: cmake --build build/release --parallel
@@ -113,10 +133,24 @@ jobs:
           "mog ${{ needs.release-context.outputs.version }} (native ABI 3)"
       - name: Package
         run: cpack --config build/release/CPackConfig.cmake -B dist
+      - name: Validate packaged executables and dependencies
+        run: |
+          shopt -s nullglob
+          archives=(dist/*.tar.gz dist/*.zip)
+          if (( ${#archives[@]} == 0 )); then
+            echo "CPack produced no runtime archives" >&2
+            exit 1
+          fi
+          for archive in "${archives[@]}"; do
+            bash scripts/validate_runtime_archive.sh "$archive" \
+              "${{ needs.release-context.outputs.version }}"
+          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mog-${{ matrix.name }}
-          path: dist/*
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
           if-no-files-found: error
 
   publish:
@@ -129,6 +163,14 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Refuse to replace an existing GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view '${{ needs.release-context.outputs.tag }}' >/dev/null 2>&1; then
+            echo "Release already exists; published artifacts are immutable" >&2
+            exit 1
+          fi
       - name: Generate checksums
         run: sha256sum dist/* > dist/SHA256SUMS
       - name: Publish release assets

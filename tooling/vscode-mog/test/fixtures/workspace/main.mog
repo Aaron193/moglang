@@ -1,0 +1,7 @@
+fn add(x i32) i32 {
+    return x
+}
+
+const Answer i32 = add(42)
+print(Answer)
+var broken i32 = "oops"

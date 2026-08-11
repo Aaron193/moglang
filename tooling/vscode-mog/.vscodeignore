@@ -1,0 +1,11 @@
+.vscode/**
+.eslintrc.json
+test/**
+node_modules/**
+extension.js
+src/**
+**/*.vsix
+**/*.log
+images/fileicons/*.svg
+.gitignore
+runtime/**/.gitkeep

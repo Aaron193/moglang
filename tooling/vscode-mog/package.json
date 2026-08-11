@@ -1,33 +1,65 @@
 {
   "name": "vscode-mog",
-  "displayName": "Moglang Developer Tools",
-  "description": "Syntax highlighting and diagnostics for Mog.",
+  "displayName": "Mog Language Support",
+  "description": "Complete Mog language support with completion, navigation, diagnostics, formatting, hover, and rename.",
   "version": "0.1.0",
   "publisher": "moglang",
+  "license": "GPL-3.0-only",
+  "icon": "images/fileicons/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moglang/mog.git"
+  },
+  "bugs": {
+    "url": "https://github.com/moglang/mog/issues"
+  },
+  "homepage": "https://github.com/moglang/mog/tree/main/tooling/vscode-mog#readme",
+  "keywords": [
+    "mog",
+    "moglang",
+    "language-server",
+    "lsp",
+    "intellisense"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Formatters",
+    "Linters"
   ],
   "activationEvents": [
     "onLanguage:mog"
   ],
-  "main": "./extension.js",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "compile": "esbuild extension.js --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
+    "watch": "npm run compile -- --watch",
+    "lint": "eslint extension.js src test",
+    "check": "npm run compile && node --check extension.js && node --check src/discovery.js && node --check src/compatibility.js && node --check src/client.js && node --check src/lifecycle.js && node --check src/restart.js && npm run lint && npm test",
+    "test": "node --test test/unit/*.test.js",
+    "test:lsp": "bash ../../tests/test_lsp_smoke.sh ${MOG_LSP_PATH:-../../build/mog-lsp} && bash ../../tests/test_lsp_protocol.sh ${MOG_LSP_PATH:-../../build/mog-lsp} && bash ../../tests/test_lsp_formatting.sh ${MOG_LSP_PATH:-../../build/mog-lsp} && bash ../../tests/test_lsp_import_diagnostics.sh ${MOG_LSP_PATH:-../../build/mog-lsp} && bash ../../tests/test_lsp_navigation.sh ${MOG_LSP_PATH:-../../build/mog-lsp}",
+    "test:extension": "npm run compile && node ./test/runTest.js",
+    "package": "npm run compile && vsce package --no-dependencies",
+    "publish": "npm run compile && vsce publish --no-dependencies"
+  },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.6.2",
+    "adm-zip": "^0.6.0",
+    "esbuild": "^0.25.8",
+    "eslint": "^8.57.1"
   },
   "contributes": {
     "languages": [
       {
         "id": "mog",
-        "aliases": [
-          "Mog",
-          "mog"
-        ],
-        "extensions": [
-          ".mog"
-        ],
+        "aliases": ["Mog", "mog"],
+        "extensions": [".mog"],
         "icon": {
           "light": "./images/fileicons/icon.png",
           "dark": "./images/fileicons/icon.png"
@@ -48,13 +80,27 @@
         "path": "./snippets/mog.code-snippets"
       }
     ],
+    "commands": [
+      { "command": "mog.showServerStatus", "title": "Mog: Show Language Server Status" },
+      { "command": "mog.restartServer", "title": "Mog: Restart Language Server" },
+      { "command": "mog.selectServer", "title": "Mog: Select Language Server" },
+      { "command": "mog.openServerLog", "title": "Mog: Open Language Server Log" },
+      { "command": "mog.installProjectDependencies", "title": "Mog: Install Project Dependencies" }
+    ],
     "configuration": {
       "title": "Mog",
       "properties": {
         "mog.serverPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the mog-lsp executable. Defaults to build outputs in the current workspace, then mog-lsp on PATH."
+          "scope": "resource",
+          "description": "Advanced override for the mog-lsp executable. Relative paths resolve from the relevant workspace folder. Invalid overrides do not silently fall back."
+        },
+        "mog.runtimePath": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Optional Mog runtime executable or installation directory used to locate its matching language server."
         }
       }
     }

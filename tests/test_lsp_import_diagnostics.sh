@@ -3,11 +3,18 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LSP_BIN="$PROJECT_ROOT/build/mog-lsp"
+LSP_BIN="${1:-$PROJECT_ROOT/build/mog-lsp}"
+if [[ -d "$LSP_BIN" ]]; then
+    if [[ -x "$LSP_BIN/mog-lsp.exe" ]]; then
+        LSP_BIN="$LSP_BIN/mog-lsp.exe"
+    else
+        LSP_BIN="$LSP_BIN/mog-lsp"
+    fi
+fi
 
 if [[ ! -x "$LSP_BIN" ]]; then
     echo "LSP binary not found at $LSP_BIN"
-    echo "Build first with: $PROJECT_ROOT/build.sh"
+    echo "Pass a server executable or build directory as the first argument."
     exit 1
 fi
 

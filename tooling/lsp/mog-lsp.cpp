@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -277,8 +278,10 @@ class JsonParser {
                     outString.push_back('\t');
                     break;
                 case 'u':
-                    outError = "Unicode escapes are not supported.";
-                    return false;
+                    if (!parseUnicodeEscape(outString, outError)) {
+                        return false;
+                    }
+                    break;
                 default:
                     outError = "Invalid JSON escape sequence.";
                     return false;
@@ -287,6 +290,75 @@ class JsonParser {
 
         outError = "Unterminated JSON string.";
         return false;
+    }
+
+    bool parseHexQuad(uint32_t& outCodeUnit) {
+        if (m_pos + 4 > m_text.size()) {
+            return false;
+        }
+        outCodeUnit = 0;
+        for (size_t index = 0; index < 4; ++index) {
+            const char ch = m_text[m_pos++];
+            uint32_t digit = 0;
+            if (ch >= '0' && ch <= '9') {
+                digit = static_cast<uint32_t>(ch - '0');
+            } else if (ch >= 'a' && ch <= 'f') {
+                digit = static_cast<uint32_t>(10 + ch - 'a');
+            } else if (ch >= 'A' && ch <= 'F') {
+                digit = static_cast<uint32_t>(10 + ch - 'A');
+            } else {
+                return false;
+            }
+            outCodeUnit = (outCodeUnit << 4U) | digit;
+        }
+        return true;
+    }
+
+    static void appendUtf8(std::string& output, uint32_t codePoint) {
+        if (codePoint <= 0x7fU) {
+            output.push_back(static_cast<char>(codePoint));
+        } else if (codePoint <= 0x7ffU) {
+            output.push_back(static_cast<char>(0xc0U | (codePoint >> 6U)));
+            output.push_back(static_cast<char>(0x80U | (codePoint & 0x3fU)));
+        } else if (codePoint <= 0xffffU) {
+            output.push_back(static_cast<char>(0xe0U | (codePoint >> 12U)));
+            output.push_back(static_cast<char>(0x80U | ((codePoint >> 6U) & 0x3fU)));
+            output.push_back(static_cast<char>(0x80U | (codePoint & 0x3fU)));
+        } else {
+            output.push_back(static_cast<char>(0xf0U | (codePoint >> 18U)));
+            output.push_back(static_cast<char>(0x80U | ((codePoint >> 12U) & 0x3fU)));
+            output.push_back(static_cast<char>(0x80U | ((codePoint >> 6U) & 0x3fU)));
+            output.push_back(static_cast<char>(0x80U | (codePoint & 0x3fU)));
+        }
+    }
+
+    bool parseUnicodeEscape(std::string& output, std::string& outError) {
+        uint32_t first = 0;
+        if (!parseHexQuad(first)) {
+            outError = "Invalid JSON Unicode escape.";
+            return false;
+        }
+        uint32_t codePoint = first;
+        if (first >= 0xd800U && first <= 0xdbffU) {
+            if (m_pos + 2 > m_text.size() || m_text[m_pos] != '\\' ||
+                m_text[m_pos + 1] != 'u') {
+                outError = "JSON high surrogate is missing a low surrogate.";
+                return false;
+            }
+            m_pos += 2;
+            uint32_t second = 0;
+            if (!parseHexQuad(second) || second < 0xdc00U || second > 0xdfffU) {
+                outError = "Invalid JSON low surrogate.";
+                return false;
+            }
+            codePoint = 0x10000U + ((first - 0xd800U) << 10U) +
+                        (second - 0xdc00U);
+        } else if (first >= 0xdc00U && first <= 0xdfffU) {
+            outError = "Unexpected JSON low surrogate.";
+            return false;
+        }
+        appendUtf8(output, codePoint);
+        return true;
     }
 
     bool parseNumber(double& outNumber, std::string& outError) {
@@ -494,12 +566,16 @@ std::string serializeJson(const JsonValue& value) {
     return serializeArray(std::get<JsonArray>(value.value));
 }
 
-bool readMessage(std::istream& input, std::string& outPayload) {
+bool readMessage(std::istream& input, std::string& outPayload,
+                 std::string& outError) {
     outPayload.clear();
+    outError.clear();
     std::string line;
-    size_t contentLength = 0;
+    std::optional<size_t> contentLength;
+    bool sawHeader = false;
 
     while (std::getline(input, line)) {
+        sawHeader = true;
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
         }
@@ -508,20 +584,50 @@ bool readMessage(std::istream& input, std::string& outPayload) {
             break;
         }
 
-        const std::string prefix = "Content-Length:";
-        if (line.rfind(prefix, 0) == 0) {
-            contentLength = static_cast<size_t>(
-                std::strtoull(line.substr(prefix.size()).c_str(), nullptr, 10));
+        const size_t colon = line.find(':');
+        if (colon == std::string::npos) {
+            outError = "Malformed LSP header.";
+            continue;
+        }
+        std::string name = line.substr(0, colon);
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::tolower(ch));
+        });
+        if (name == "content-length") {
+            const std::string value = line.substr(colon + 1);
+            char* end = nullptr;
+            errno = 0;
+            const unsigned long long parsed = std::strtoull(value.c_str(), &end, 10);
+            while (end != nullptr && *end != '\0' &&
+                   std::isspace(static_cast<unsigned char>(*end)) != 0) {
+                ++end;
+            }
+            if (errno != 0 || end == nullptr || *end != '\0' || parsed == 0 ||
+                parsed > 16U * 1024U * 1024U) {
+                outError = "Invalid Content-Length header.";
+            } else {
+                contentLength = static_cast<size_t>(parsed);
+            }
         }
     }
 
-    if (contentLength == 0) {
+    if (!sawHeader && input.eof()) {
         return false;
     }
+    if (!contentLength.has_value()) {
+        if (outError.empty()) {
+            outError = "Missing Content-Length header.";
+        }
+        return true;
+    }
 
-    outPayload.resize(contentLength);
-    input.read(outPayload.data(), static_cast<std::streamsize>(contentLength));
-    return input.good() || input.gcount() == static_cast<std::streamsize>(contentLength);
+    outPayload.resize(*contentLength);
+    input.read(outPayload.data(), static_cast<std::streamsize>(*contentLength));
+    if (input.gcount() != static_cast<std::streamsize>(*contentLength)) {
+        outPayload.clear();
+        outError = "Unexpected EOF in LSP message body.";
+    }
+    return true;
 }
 
 void writeMessage(std::ostream& output, const std::string& payload) {
@@ -662,7 +768,10 @@ bool isHiddenOrBuildDirectory(const std::filesystem::path& path) {
         if (name.empty() || name == ".") {
             continue;
         }
-        if (name == "build") {
+        if (name == "build" || startsWith(name, "build-") ||
+            startsWith(name, "cmake-build-") || name == "node_modules" ||
+            name == "dist" || name == "out" || name == "target" ||
+            name == "generated") {
             return true;
         }
         if (!name.empty() && name.front() == '.') {
@@ -686,6 +795,8 @@ JsonValue makeRange(const ToolingRange& range) {
     });
 }
 
+JsonValue makeRange(const ToolingRange& range, std::string_view text);
+
 JsonValue makeLocation(const std::string& uri, const ToolingRange& range) {
     return JsonValue(JsonObject{
         {"uri", JsonValue(uri)},
@@ -703,15 +814,27 @@ JsonValue makeStringArray(std::initializer_list<std::string_view> values) {
 }
 
 JsonValue makeRelatedInformation(const std::string& uri,
-                                 const ToolingDiagnostic& diagnostic) {
+                                 const ToolingDiagnostic& diagnostic,
+                                 std::string_view documentText) {
     JsonArray items;
     items.reserve(diagnostic.notes.size() + diagnostic.importTrace.size());
 
     for (const auto& note : diagnostic.notes) {
         const std::string noteUri =
             note.path.empty() ? uri : pathToFileUri(note.path);
+        const auto noteText = note.path.empty() ? std::optional<std::string>{}
+                                                : readFileText(note.path);
+        const std::string_view rangeText = note.path.empty()
+                                               ? documentText
+                                               : (noteText.has_value()
+                                                      ? std::string_view(*noteText)
+                                                      : std::string_view{});
         items.push_back(JsonValue(JsonObject{
-            {"location", makeLocation(noteUri, note.range)},
+            {"location", JsonValue(JsonObject{
+                 {"uri", JsonValue(noteUri)},
+                 {"range", rangeText.empty() ? makeRange(note.range)
+                                               : makeRange(note.range, rangeText)},
+             })},
             {"message", JsonValue(note.message)},
         }));
     }
@@ -728,8 +851,20 @@ JsonValue makeRelatedInformation(const std::string& uri,
         const std::string frameUri = frame.importerPath.empty()
                                          ? uri
                                          : pathToFileUri(frame.importerPath);
+        const auto frameText = frame.importerPath.empty()
+                                   ? std::optional<std::string>{}
+                                   : readFileText(frame.importerPath);
+        const std::string_view rangeText = frame.importerPath.empty()
+                                               ? documentText
+                                               : (frameText.has_value()
+                                                      ? std::string_view(*frameText)
+                                                      : std::string_view{});
         items.push_back(JsonValue(JsonObject{
-            {"location", makeLocation(frameUri, frame.range)},
+            {"location", JsonValue(JsonObject{
+                 {"uri", JsonValue(frameUri)},
+                 {"range", rangeText.empty() ? makeRange(frame.range)
+                                               : makeRange(frame.range, rangeText)},
+             })},
             {"message", JsonValue(std::move(message))},
         }));
     }
@@ -740,6 +875,87 @@ JsonValue makeRelatedInformation(const std::string& uri,
 bool isCompletionIdentifierChar(char ch) {
     return std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_' ||
            ch == '@';
+}
+
+size_t utf8SequenceLength(unsigned char lead) {
+    if ((lead & 0x80U) == 0) {
+        return 1;
+    }
+    if ((lead & 0xe0U) == 0xc0U) {
+        return 2;
+    }
+    if ((lead & 0xf0U) == 0xe0U) {
+        return 3;
+    }
+    if ((lead & 0xf8U) == 0xf0U) {
+        return 4;
+    }
+    return 1;
+}
+
+size_t utf16UnitsForSequence(std::string_view text, size_t offset) {
+    return offset < text.size() && utf8SequenceLength(
+               static_cast<unsigned char>(text[offset])) == 4
+               ? 2
+               : 1;
+}
+
+size_t lineStartOffset(std::string_view text, size_t targetLine) {
+    size_t offset = 0;
+    size_t line = 0;
+    while (offset < text.size() && line < targetLine) {
+        if (text[offset++] == '\n') {
+            ++line;
+        }
+    }
+    return offset;
+}
+
+ToolingPosition protocolToToolingPosition(std::string_view text,
+                                          ToolingPosition position) {
+    const size_t start = lineStartOffset(text, position.line);
+    size_t offset = start;
+    size_t units = 0;
+    while (offset < text.size() && text[offset] != '\n' &&
+           units < position.character) {
+        size_t length = utf8SequenceLength(static_cast<unsigned char>(text[offset]));
+        if (offset + length > text.size()) {
+            length = 1;
+        }
+        const size_t nextUnits = utf16UnitsForSequence(text, offset);
+        if (units + nextUnits > position.character) {
+            break;
+        }
+        units += nextUnits;
+        offset += length;
+    }
+    position.character = offset - start;
+    return position;
+}
+
+ToolingPosition toolingToProtocolPosition(std::string_view text,
+                                          ToolingPosition position) {
+    const size_t start = lineStartOffset(text, position.line);
+    const size_t end = std::min(text.size(), start + position.character);
+    size_t offset = start;
+    size_t units = 0;
+    while (offset < end && text[offset] != '\n') {
+        size_t length = utf8SequenceLength(static_cast<unsigned char>(text[offset]));
+        if (offset + length > end) {
+            length = 1;
+        }
+        units += utf16UnitsForSequence(text, offset);
+        offset += length;
+    }
+    position.character = units;
+    return position;
+}
+
+JsonValue makeRange(const ToolingRange& range, std::string_view text) {
+    return JsonValue(JsonObject{
+        {"start", makePosition(toolingToProtocolPosition(text, range.start))},
+        {"end", makePosition(toolingToProtocolPosition(text, range.end))},
+    });
 }
 
 size_t offsetForPosition(std::string_view text, const ToolingPosition& position) {
@@ -804,16 +1020,27 @@ class MogLspServer {
 
     int run() {
         std::string payload;
-        while (readMessage(std::cin, payload)) {
+        std::string framingError;
+        while (readMessage(std::cin, payload, framingError)) {
+            if (!framingError.empty()) {
+                sendErrorResponse(JsonValue(nullptr), -32700, framingError);
+                if (std::cin.eof()) {
+                    break;
+                }
+                continue;
+            }
             JsonValue message;
             std::string parseError;
             JsonParser parser(payload);
             if (!parser.parse(message, parseError)) {
+                sendErrorResponse(JsonValue(nullptr), -32700, parseError);
                 continue;
             }
 
             const auto objectRef = asObject(message);
             if (!objectRef.has_value()) {
+                sendErrorResponse(JsonValue(nullptr), -32600,
+                                  "JSON-RPC message must be an object.");
                 continue;
             }
 
@@ -831,6 +1058,13 @@ class MogLspServer {
     AstFrontendModuleGraphCache m_cache;
     std::vector<std::string> m_packageSearchPaths;
     std::vector<std::string> m_workspaceRoots;
+    std::vector<std::string> m_workspaceFiles;
+    std::unordered_map<std::string, std::vector<std::string>>
+        m_workspaceIgnorePrefixes;
+    std::unordered_map<std::string, std::string> m_installFailures;
+    std::unordered_set<std::string> m_installAttempted;
+    std::unordered_set<std::string> m_cancelledRequests;
+    bool m_explicitDependencyInstallation = false;
     bool m_shutdownRequested = false;
     bool m_exitRequested = false;
 
@@ -840,6 +1074,9 @@ class MogLspServer {
                                         ? nullptr
                                         : std::get_if<std::string>(&methodValue->value);
         if (method == nullptr) {
+            const JsonValue* invalidId = getObjectValue(message, "id");
+            sendErrorResponse(invalidId == nullptr ? JsonValue(nullptr) : *invalidId,
+                              -32600, "JSON-RPC request has no valid method.");
             return;
         }
 
@@ -848,7 +1085,25 @@ class MogLspServer {
         if (const JsonValue* paramsValue = getObjectValue(message, "params")) {
             if (const auto paramsRef = asObject(*paramsValue); paramsRef.has_value()) {
                 params = &paramsRef->get();
+            } else if (!std::holds_alternative<std::nullptr_t>(paramsValue->value)) {
+                if (id != nullptr) {
+                    sendErrorResponse(*id, -32602,
+                                      "JSON-RPC params must be an object.");
+                }
+                return;
             }
+        }
+
+        if (*method == "$/cancelRequest" && params != nullptr) {
+            if (const JsonValue* cancelledId = getObjectValue(*params, "id")) {
+                m_cancelledRequests.insert(serializeJson(*cancelledId));
+            }
+            return;
+        }
+        if (id != nullptr &&
+            m_cancelledRequests.erase(serializeJson(*id)) != 0) {
+            sendErrorResponse(*id, -32800, "Request cancelled.");
+            return;
         }
 
         if (*method == "initialize") {
@@ -870,6 +1125,30 @@ class MogLspServer {
 
         if (*method == "exit") {
             m_exitRequested = true;
+            return;
+        }
+
+        if (*method == "workspace/didChangeWorkspaceFolders" && params != nullptr) {
+            handleWorkspaceFoldersChanged(*params);
+            return;
+        }
+
+        if (*method == "workspace/didChangeWatchedFiles" && params != nullptr) {
+            handleWatchedFilesChanged(*params);
+            return;
+        }
+
+        if (*method == "workspace/didChangeConfiguration") {
+            m_cache = AstFrontendModuleGraphCache{};
+            for (auto& [uri, document] : m_documents) {
+                (void)uri;
+                analyzeAndPublish(document);
+            }
+            return;
+        }
+
+        if (*method == "mog/installProjectDependencies" && id != nullptr) {
+            handleInstallProjectDependencies(*id, params);
             return;
         }
 
@@ -958,7 +1237,7 @@ class MogLspServer {
         }
 
         if (id != nullptr) {
-            sendResponse(*id, JsonValue(nullptr));
+            sendErrorResponse(*id, -32601, "Method not found: " + *method);
         }
     }
 
@@ -1062,8 +1341,8 @@ class MogLspServer {
             return;
         }
 
-        sendResponse(id,
-                     makeDocumentSymbolsResponse(documentIt->second.analysis));
+        sendResponse(id, makeDocumentSymbolsResponse(documentIt->second.analysis,
+                                                      documentIt->second.text));
     }
 
     void handleFormatting(const JsonValue& id, const JsonObject& params) {
@@ -1091,7 +1370,7 @@ class MogLspServer {
         edit["range"] = makeRange(ToolingRange{
             ToolingPosition{0, 0},
             endPositionForText(documentIt->second.text),
-        });
+        }, documentIt->second.text);
         edit["newText"] = JsonValue(*formatted);
 
         JsonArray edits;
@@ -1101,9 +1380,28 @@ class MogLspServer {
 
     void handleInitialize(const JsonValue* id, const JsonObject* params) {
         m_workspaceRoots.clear();
+        m_explicitDependencyInstallation = false;
         if (params != nullptr) {
+            if (const JsonValue* optionsValue =
+                    getObjectValue(*params, "initializationOptions")) {
+                if (const auto options = asObject(*optionsValue);
+                    options.has_value()) {
+                    if (const JsonValue* mogValue =
+                            getObjectValue(options->get(), "mog")) {
+                        if (const auto mog = asObject(*mogValue);
+                            mog.has_value()) {
+                            m_explicitDependencyInstallation =
+                                getBooleanValue(
+                                    mog->get(),
+                                    "explicitDependencyInstallation")
+                                    .value_or(false);
+                        }
+                    }
+                }
+            }
             configureWorkspaceRoots(*params);
         }
+        rebuildWorkspaceIndex();
         sendInitializeResponse(id);
     }
 
@@ -1181,9 +1479,8 @@ class MogLspServer {
             item["name"] = JsonValue(ranked[index].symbol.name);
             item["kind"] =
                 JsonValue(symbolKindForToolingKind(ranked[index].symbol.kind));
-            item["location"] = makeLocation(
-                pathToFileUri(ranked[index].symbol.path),
-                ranked[index].symbol.selectionRange);
+            item["location"] = makeProtocolLocation(
+                ranked[index].symbol.path, ranked[index].symbol.selectionRange);
             item["containerName"] = JsonValue(ranked[index].displayPath);
             items.push_back(JsonValue(std::move(item)));
         }
@@ -1204,7 +1501,7 @@ class MogLspServer {
             return;
         }
 
-        const auto position = getPosition(params);
+        const auto position = getPosition(params, documentIt->second.text);
         if (!position.has_value()) {
             sendResponse(id, JsonValue(nullptr));
             return;
@@ -1217,8 +1514,8 @@ class MogLspServer {
             JsonArray items;
             items.reserve(fieldDeclarationReferences.size());
             for (const auto& reference : fieldDeclarationReferences) {
-                items.push_back(makeLocation(pathToFileUri(reference.path),
-                                             reference.selectionRange));
+                items.push_back(makeProtocolLocation(reference.path,
+                                                     reference.selectionRange));
             }
             sendResponse(id, JsonValue(std::move(items)));
             return;
@@ -1231,8 +1528,8 @@ class MogLspServer {
             JsonArray items;
             items.reserve(typeDeclarationReferences.size());
             for (const auto& reference : typeDeclarationReferences) {
-                items.push_back(makeLocation(pathToFileUri(reference.path),
-                                             reference.selectionRange));
+                items.push_back(makeProtocolLocation(reference.path,
+                                                     reference.selectionRange));
             }
             sendResponse(id, JsonValue(std::move(items)));
             return;
@@ -1245,8 +1542,8 @@ class MogLspServer {
             return;
         }
 
-        sendResponse(id, makeLocation(pathToFileUri(definition->path),
-                                      definition->selectionRange));
+        sendResponse(id, makeProtocolLocation(definition->path,
+                                              definition->selectionRange));
     }
 
     void handleReferences(const JsonValue& id, const JsonObject& params) {
@@ -1262,7 +1559,7 @@ class MogLspServer {
             return;
         }
 
-        const auto position = getPosition(params);
+        const auto position = getPosition(params, documentIt->second.text);
         if (!position.has_value()) {
             sendResponse(id, JsonValue(JsonArray{}));
             return;
@@ -1286,8 +1583,8 @@ class MogLspServer {
         JsonArray items;
         items.reserve(references.size());
         for (const auto& reference : references) {
-            items.push_back(
-                makeLocation(pathToFileUri(reference.path), reference.selectionRange));
+            items.push_back(makeProtocolLocation(reference.path,
+                                                 reference.selectionRange));
         }
         sendResponse(id, JsonValue(std::move(items)));
     }
@@ -1305,7 +1602,7 @@ class MogLspServer {
             return;
         }
 
-        const auto position = getPosition(params);
+        const auto position = getPosition(params, documentIt->second.text);
         if (!position.has_value()) {
             sendResponse(id, JsonValue(nullptr));
             return;
@@ -1336,7 +1633,7 @@ class MogLspServer {
 
         JsonObject result;
         result["contents"] = JsonValue(std::move(contents));
-        result["range"] = makeRange(hover->range);
+        result["range"] = makeRange(hover->range, documentIt->second.text);
         sendResponse(id, JsonValue(std::move(result)));
     }
 
@@ -1353,7 +1650,7 @@ class MogLspServer {
             return;
         }
 
-        const auto position = getPosition(params);
+        const auto position = getPosition(params, documentIt->second.text);
         if (!position.has_value()) {
             sendResponse(id, JsonValue(JsonArray{}));
             return;
@@ -1417,7 +1714,8 @@ class MogLspServer {
 
         sendResponse(id, makeSemanticTokensResponse(
                              findSemanticTokensForTooling(
-                                 documentIt->second.analysis)));
+                                 documentIt->second.analysis),
+                             documentIt->second.text));
     }
 
     void handleSignatureHelp(const JsonValue& id, const JsonObject& params) {
@@ -1433,7 +1731,7 @@ class MogLspServer {
             return;
         }
 
-        const auto position = getPosition(params);
+        const auto position = getPosition(params, documentIt->second.text);
         if (!position.has_value()) {
             sendResponse(id, JsonValue(nullptr));
             return;
@@ -1483,7 +1781,7 @@ class MogLspServer {
             return;
         }
 
-        const auto position = getPosition(params);
+        const auto position = getPosition(params, documentIt->second.text);
         if (!position.has_value()) {
             sendResponse(id, JsonValue(nullptr));
             return;
@@ -1497,7 +1795,7 @@ class MogLspServer {
         }
 
         JsonObject result;
-        result["range"] = makeRange(target->range);
+        result["range"] = makeRange(target->range, documentIt->second.text);
         result["placeholder"] = JsonValue(target->placeholder);
         sendResponse(id, JsonValue(std::move(result)));
     }
@@ -1515,7 +1813,7 @@ class MogLspServer {
             return;
         }
 
-        const auto position = getPosition(params);
+        const auto position = getPosition(params, documentIt->second.text);
         if (!position.has_value()) {
             sendResponse(id, JsonValue(nullptr));
             return;
@@ -1587,7 +1885,8 @@ class MogLspServer {
         return getIntegerValue(document->get(), "version");
     }
 
-    std::optional<ToolingPosition> getPosition(const JsonObject& params) const {
+    std::optional<ToolingPosition> getPosition(const JsonObject& params,
+                                               std::string_view text) const {
         const JsonValue* positionValue = getObjectValue(params, "position");
         if (positionValue == nullptr) {
             return std::nullopt;
@@ -1598,13 +1897,13 @@ class MogLspServer {
             return std::nullopt;
         }
 
-        return ToolingPosition{
+        return protocolToToolingPosition(text, ToolingPosition{
             static_cast<size_t>(
                 getIntegerValue(positionObject->get(), "line").value_or(0)),
             static_cast<size_t>(getIntegerValue(positionObject->get(),
                                                 "character")
                                     .value_or(0)),
-        };
+        });
     }
 
     void configureWorkspaceRoots(const JsonObject& params) {
@@ -1649,29 +1948,170 @@ class MogLspServer {
             }
         }
 
-        for (const auto& root : m_workspaceRoots) {
-            ensureInstallForProjectRoot(root);
+        if (!m_explicitDependencyInstallation) {
+            for (const auto& root : m_workspaceRoots) {
+                ensureInstallForProjectRoot(root);
+            }
         }
     }
 
-    void ensureInstallForProjectRoot(const std::string& root) {
+    bool ensureInstallForProjectRoot(const std::string& root,
+                                     bool force = false) {
         const std::filesystem::path manifestPath =
             std::filesystem::path(root) / "mog.toml";
         std::error_code ec;
         if (!std::filesystem::exists(manifestPath, ec) || ec) {
-            return;
+            return true;
+        }
+        if (!force && m_installAttempted.find(root) != m_installAttempted.end()) {
+            return m_installFailures.find(root) == m_installFailures.end();
         }
 
+        m_installAttempted.insert(root);
         std::string error;
-        ensureProjectPackagesInstalled(root, InstallOptions{}, error);
+        if (ensureProjectPackagesInstalled(root, InstallOptions{}, error)) {
+            m_installFailures.erase(root);
+            return true;
+        }
+
+        const std::string message = "Could not install Mog dependencies for '" +
+                                    root + "': " + error;
+        m_installFailures[root] = message;
+        sendShowMessage(1, message);
+        return false;
     }
 
     void ensureInstallForPath(const std::string& path) {
+        if (m_explicitDependencyInstallation) {
+            return;
+        }
         std::string projectRoot;
         if (!findProjectRootForPackages(path, projectRoot)) {
             return;
         }
         ensureInstallForProjectRoot(projectRoot);
+    }
+
+    void handleInstallProjectDependencies(const JsonValue& id,
+                                          const JsonObject* params) {
+        std::string root;
+        if (params != nullptr) {
+            if (const auto uri = getStringValue(*params, "uri"); uri.has_value()) {
+                const std::string path = canonicalizePath(decodeUriPath(*uri));
+                findProjectRootForPackages(path, root);
+            }
+            if (root.empty()) {
+                root = getStringValue(*params, "projectRoot").value_or("");
+                root = canonicalizePath(root);
+            }
+        }
+        if (root.empty()) {
+            sendErrorResponse(id, -32602,
+                              "No Mog project root was supplied or discovered.");
+            return;
+        }
+
+        if (!ensureInstallForProjectRoot(root, true)) {
+            sendErrorResponse(id, -32001, m_installFailures[root]);
+            return;
+        }
+        JsonObject result;
+        result["projectRoot"] = JsonValue(root);
+        result["installed"] = JsonValue(true);
+        sendResponse(id, JsonValue(std::move(result)));
+    }
+
+    void handleWorkspaceFoldersChanged(const JsonObject& params) {
+        const JsonValue* eventValue = getObjectValue(params, "event");
+        const auto event = eventValue == nullptr ? std::nullopt : asObject(*eventValue);
+        if (!event.has_value()) {
+            return;
+        }
+
+        if (const JsonValue* removedValue = getObjectValue(event->get(), "removed")) {
+            if (const auto removed = asArray(*removedValue); removed.has_value()) {
+                for (const auto& value : removed->get()) {
+                    const auto folder = asObject(value);
+                    if (!folder.has_value()) {
+                        continue;
+                    }
+                    const auto uri = getStringValue(folder->get(), "uri");
+                    if (!uri.has_value()) {
+                        continue;
+                    }
+                    const std::string path = canonicalizePath(decodeUriPath(*uri));
+                    m_workspaceRoots.erase(
+                        std::remove(m_workspaceRoots.begin(), m_workspaceRoots.end(),
+                                    path),
+                        m_workspaceRoots.end());
+                }
+            }
+        }
+
+        if (const JsonValue* addedValue = getObjectValue(event->get(), "added")) {
+            if (const auto added = asArray(*addedValue); added.has_value()) {
+                for (const auto& value : added->get()) {
+                    const auto folder = asObject(value);
+                    if (!folder.has_value()) {
+                        continue;
+                    }
+                    const auto uri = getStringValue(folder->get(), "uri");
+                    if (!uri.has_value()) {
+                        continue;
+                    }
+                    const std::string path = canonicalizePath(decodeUriPath(*uri));
+                    if (std::find(m_workspaceRoots.begin(), m_workspaceRoots.end(),
+                                  path) == m_workspaceRoots.end()) {
+                        m_workspaceRoots.push_back(path);
+                        if (!m_explicitDependencyInstallation) {
+                            ensureInstallForProjectRoot(path);
+                        }
+                    }
+                }
+            }
+        }
+        rebuildWorkspaceIndex();
+    }
+
+    void handleWatchedFilesChanged(const JsonObject& params) {
+        const JsonValue* changesValue = getObjectValue(params, "changes");
+        const auto changes = changesValue == nullptr ? std::nullopt
+                                                     : asArray(*changesValue);
+        if (!changes.has_value()) {
+            return;
+        }
+        for (const auto& value : changes->get()) {
+            const auto change = asObject(value);
+            if (!change.has_value()) {
+                continue;
+            }
+            const auto uri = getStringValue(change->get(), "uri");
+            if (!uri.has_value()) {
+                continue;
+            }
+            const std::string path = canonicalizePath(decodeUriPath(*uri));
+            if (std::filesystem::path(path).filename() == "mog.toml") {
+                std::string root;
+                if (findProjectRootForPackages(path, root)) {
+                    m_installAttempted.erase(root);
+                    m_installFailures.erase(root);
+                }
+            }
+            if (std::filesystem::path(path).extension() != ".mog") {
+                continue;
+            }
+            const int type = getIntegerValue(change->get(), "type").value_or(2);
+            m_workspaceFiles.erase(
+                std::remove(m_workspaceFiles.begin(), m_workspaceFiles.end(), path),
+                m_workspaceFiles.end());
+            if (type != 3 &&
+                std::find(m_workspaceFiles.begin(), m_workspaceFiles.end(), path) ==
+                    m_workspaceFiles.end()) {
+                m_workspaceFiles.push_back(path);
+                std::sort(m_workspaceFiles.begin(), m_workspaceFiles.end());
+            }
+            m_cache.nodes.erase(path);
+        }
     }
 
     const DocumentState* findOpenDocumentByPath(const std::string& path) const {
@@ -1682,6 +2122,27 @@ class MogLspServer {
             }
         }
         return nullptr;
+    }
+
+    std::optional<std::string> textForPath(const std::string& path) const {
+        if (const DocumentState* document = findOpenDocumentByPath(path)) {
+            return document->text;
+        }
+        return readFileText(path);
+    }
+
+    JsonValue makeProtocolRange(const std::string& path,
+                                const ToolingRange& range) const {
+        const auto text = textForPath(path);
+        return text.has_value() ? makeRange(range, *text) : makeRange(range);
+    }
+
+    JsonValue makeProtocolLocation(const std::string& path,
+                                   const ToolingRange& range) const {
+        return JsonValue(JsonObject{
+            {"uri", JsonValue(pathToFileUri(path))},
+            {"range", makeProtocolRange(path, range)},
+        });
     }
 
     std::optional<ToolingDocumentAnalysis> analyzeWorkspaceDocument(
@@ -1707,9 +2168,10 @@ class MogLspServer {
         return analyzeDocumentForTooling(*text, options);
     }
 
-    std::vector<std::string> collectWorkspaceFiles() const {
+    void rebuildWorkspaceIndex() {
         std::vector<std::string> files;
         std::unordered_set<std::string> seen;
+        m_workspaceIgnorePrefixes.clear();
 
         auto addFile = [&](const std::string& rawPath) {
             const std::string path = canonicalizePath(rawPath);
@@ -1727,6 +2189,32 @@ class MogLspServer {
                 continue;
             }
 
+            auto& ignores = m_workspaceIgnorePrefixes[root];
+            for (const char* ignoreFile : {".gitignore", ".ignore"}) {
+                std::ifstream input(std::filesystem::path(root) / ignoreFile);
+                std::string pattern;
+                while (std::getline(input, pattern)) {
+                    while (!pattern.empty() &&
+                           std::isspace(static_cast<unsigned char>(pattern.back()))) {
+                        pattern.pop_back();
+                    }
+                    if (pattern.empty() || pattern.front() == '#' ||
+                        pattern.front() == '!' || pattern.find('*') != std::string::npos) {
+                        continue;
+                    }
+                    while (!pattern.empty() &&
+                           (pattern.front() == '/' || pattern.front() == '.')) {
+                        pattern.erase(pattern.begin());
+                    }
+                    while (!pattern.empty() && pattern.back() == '/') {
+                        pattern.pop_back();
+                    }
+                    if (!pattern.empty()) {
+                        ignores.push_back(pattern);
+                    }
+                }
+            }
+
             std::filesystem::recursive_directory_iterator iterator(
                 root, std::filesystem::directory_options::skip_permission_denied,
                 ec);
@@ -1734,8 +2222,16 @@ class MogLspServer {
             while (!ec && iterator != end) {
                 const std::filesystem::path path = iterator->path();
                 if (iterator->is_directory(ec)) {
+                    const std::string relative =
+                        path.lexically_relative(root).generic_string();
+                    const bool ignored = std::any_of(
+                        ignores.begin(), ignores.end(), [&](const std::string& prefix) {
+                            return relative == prefix ||
+                                   startsWith(relative, prefix + "/");
+                        });
                     if (!ec &&
-                        isHiddenOrBuildDirectory(path.lexically_relative(root))) {
+                        (isHiddenOrBuildDirectory(path.lexically_relative(root)) ||
+                         ignored)) {
                         iterator.disable_recursion_pending();
                     }
                     iterator.increment(ec);
@@ -1750,6 +2246,18 @@ class MogLspServer {
             }
         }
 
+        m_workspaceFiles = std::move(files);
+        std::sort(m_workspaceFiles.begin(), m_workspaceFiles.end());
+    }
+
+    std::vector<std::string> collectWorkspaceFiles() const {
+        std::vector<std::string> files = m_workspaceFiles;
+        std::unordered_set<std::string> seen(files.begin(), files.end());
+        auto addFile = [&](const std::string& path) {
+            if (!path.empty() && seen.insert(path).second) {
+                files.push_back(path);
+            }
+        };
         for (const auto& [uri, document] : m_documents) {
             (void)uri;
             if (std::filesystem::path(document.path).extension() != ".mog") {
@@ -1833,8 +2341,21 @@ class MogLspServer {
         }
 
         JsonObject result;
+        result["serverInfo"] = JsonValue(JsonObject{
+            {"name", JsonValue(std::string("mog-lsp"))},
+            {"version", JsonValue(std::string(MOG_RUNTIME_VERSION))},
+        });
+        result["mog"] = JsonValue(JsonObject{
+            {"serverVersion", JsonValue(std::string(MOG_RUNTIME_VERSION))},
+            {"toolingProtocolVersion",
+             JsonValue(std::string(MOG_TOOLING_PROTOCOL_VERSION))},
+            {"features", makeStringArray({"explicitDependencyInstall",
+                                           "workspaceFolders", "utf16Positions",
+                                           "workspaceIndex"})},
+        });
         result["capabilities"] = JsonValue(JsonObject{
             {"textDocumentSync", JsonValue(1.0)},
+            {"positionEncoding", JsonValue(std::string("utf-16"))},
             {"documentFormattingProvider", JsonValue(true)},
             {"documentSymbolProvider", JsonValue(true)},
             {"workspaceSymbolProvider", JsonValue(true)},
@@ -1862,6 +2383,14 @@ class MogLspServer {
                                    JsonValue(JsonArray{
                                        JsonValue(std::string("(")),
                                        JsonValue(std::string(","))})}})},
+            {"workspace",
+             JsonValue(JsonObject{
+                 {"workspaceFolders",
+                  JsonValue(JsonObject{
+                      {"supported", JsonValue(true)},
+                      {"changeNotifications", JsonValue(true)},
+                  })},
+             })},
         });
         sendResponse(*id, JsonValue(std::move(result)));
     }
@@ -1955,7 +2484,8 @@ class MogLspServer {
     }
 
     JsonValue makeSemanticTokensResponse(
-        const std::vector<ToolingSemanticToken>& tokens) const {
+        const std::vector<ToolingSemanticToken>& tokens,
+        std::string_view text = {}) const {
         JsonArray data;
         data.reserve(tokens.size() * 5);
 
@@ -1967,29 +2497,36 @@ class MogLspServer {
                 continue;
             }
 
+            const ToolingPosition start = text.empty()
+                                              ? token.range.start
+                                              : toolingToProtocolPosition(
+                                                    text, token.range.start);
+            const ToolingPosition end = text.empty()
+                                            ? token.range.end
+                                            : toolingToProtocolPosition(
+                                                  text, token.range.end);
             size_t length = 0;
-            if (token.range.end.character >= token.range.start.character) {
-                length = token.range.end.character - token.range.start.character;
+            if (end.character >= start.character) {
+                length = end.character - start.character;
             }
             if (length == 0) {
                 continue;
             }
 
             const size_t deltaLine =
-                hasPrevious ? token.range.start.line - previousLine
-                            : token.range.start.line;
+                hasPrevious ? start.line - previousLine : start.line;
             const size_t deltaStart =
                 (!hasPrevious || deltaLine != 0)
-                    ? token.range.start.character
-                    : token.range.start.character - previousCharacter;
+                    ? start.character
+                    : start.character - previousCharacter;
             data.push_back(JsonValue(static_cast<double>(deltaLine)));
             data.push_back(JsonValue(static_cast<double>(deltaStart)));
             data.push_back(JsonValue(static_cast<double>(length)));
             data.push_back(JsonValue(semanticTokenTypeIndex(token.kind)));
             data.push_back(
                 JsonValue(semanticTokenModifierMask(token.modifiers)));
-            previousLine = token.range.start.line;
-            previousCharacter = token.range.start.character;
+            previousLine = start.line;
+            previousCharacter = start.character;
             hasPrevious = true;
         }
 
@@ -1999,15 +2536,15 @@ class MogLspServer {
     }
 
     JsonValue makeDocumentSymbolsResponse(
-        const ToolingDocumentAnalysis& analysis) const {
+        const ToolingDocumentAnalysis& analysis, std::string_view text) const {
         JsonArray items;
         items.reserve(analysis.documentSymbols.size());
         for (const auto& symbol : analysis.documentSymbols) {
             JsonObject item;
             item["name"] = JsonValue(symbol.name);
             item["kind"] = JsonValue(symbolKindForToolingKind(symbol.kind));
-            item["range"] = makeRange(symbol.range);
-            item["selectionRange"] = makeRange(symbol.selectionRange);
+            item["range"] = makeRange(symbol.range, text);
+            item["selectionRange"] = makeRange(symbol.selectionRange, text);
             if (!symbol.detail.empty()) {
                 item["detail"] = JsonValue(symbol.detail);
             }
@@ -2035,7 +2572,7 @@ class MogLspServer {
             }
 
             JsonObject item;
-            item["range"] = makeRange(edit.range);
+            item["range"] = makeProtocolRange(edit.path, edit.range);
             item["newText"] = JsonValue(edit.newText);
             editArray->push_back(JsonValue(std::move(item)));
         }
@@ -2066,13 +2603,31 @@ class MogLspServer {
         writeMessage(std::cout, serializeJson(JsonValue(std::move(payload))));
     }
 
+    void sendShowMessage(int type, const std::string& message) {
+        JsonObject payload;
+        payload["jsonrpc"] = JsonValue(std::string("2.0"));
+        payload["method"] = JsonValue(std::string("window/showMessage"));
+        payload["params"] = JsonValue(JsonObject{
+            {"type", JsonValue(static_cast<double>(type))},
+            {"message", JsonValue(message)},
+        });
+        writeMessage(std::cout, serializeJson(JsonValue(std::move(payload))));
+    }
+
     void sendPublishDiagnostics(const std::string& uri,
                                 const std::vector<ToolingDiagnostic>& diagnostics) {
+        const auto documentIt = m_documents.find(uri);
+        const std::string_view documentText =
+            documentIt == m_documents.end()
+                ? std::string_view{}
+                : std::string_view(documentIt->second.text);
         JsonArray lspDiagnostics;
         lspDiagnostics.reserve(diagnostics.size());
         for (const auto& diagnostic : diagnostics) {
             JsonObject item;
-            item["range"] = makeRange(diagnostic.range);
+            item["range"] = documentText.empty()
+                                ? makeRange(diagnostic.range)
+                                : makeRange(diagnostic.range, documentText);
             item["severity"] = JsonValue(1.0);
             item["source"] = JsonValue(std::string("mog"));
             item["message"] = JsonValue(diagnostic.message);
@@ -2080,7 +2635,8 @@ class MogLspServer {
                 item["code"] = JsonValue(diagnostic.code);
             }
 
-            JsonValue related = makeRelatedInformation(uri, diagnostic);
+            JsonValue related =
+                makeRelatedInformation(uri, diagnostic, documentText);
             if (const auto* relatedArray = std::get_if<JsonArray>(&related.value);
                 relatedArray != nullptr && !relatedArray->empty()) {
                 item["relatedInformation"] = related;
@@ -2109,6 +2665,22 @@ std::vector<std::string> defaultPackageSearchPaths(const char* executablePath) {
         const std::filesystem::path executable =
             std::filesystem::weakly_canonical(executablePath);
         paths.push_back((executable.parent_path() / "packages").string());
+
+        // Development servers commonly live in build/tooling-debug. Find the
+        // checkout as well so source package APIs remain available independent
+        // of the chosen build directory.
+        std::filesystem::path ancestor = executable.parent_path();
+        while (ancestor.has_parent_path() && ancestor != ancestor.parent_path()) {
+            std::error_code ec;
+            if (std::filesystem::exists(ancestor / "tooling" / "lsp" /
+                                            "mog-lsp.cpp",
+                                        ec) &&
+                !ec) {
+                paths.push_back((ancestor / "packages").string());
+                break;
+            }
+            ancestor = ancestor.parent_path();
+        }
     } catch (const std::exception&) {
     }
 
