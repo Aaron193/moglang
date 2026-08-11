@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4
+
+- Make bundled native-package discovery portable across module filename
+  suffixes and compile the language server with GCC as well as Clang.
+
 ## 0.1.3
 
 - Fix native package resolution when an optional library path is absent, so

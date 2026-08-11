@@ -7,6 +7,7 @@
 #include <fstream>
 #include <initializer_list>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -23,14 +24,15 @@
 
 namespace {
 
-struct JsonValue;
-using JsonObject = std::unordered_map<std::string, JsonValue>;
-using JsonArray = std::vector<JsonValue>;
+struct JsonObject;
+struct JsonArray;
+using JsonObjectPtr = std::shared_ptr<JsonObject>;
+using JsonArrayPtr = std::shared_ptr<JsonArray>;
 
 struct JsonValue {
     using Variant =
-        std::variant<std::nullptr_t, bool, double, std::string, JsonObject,
-                     JsonArray>;
+        std::variant<std::nullptr_t, bool, double, std::string, JsonObjectPtr,
+                     JsonArrayPtr>;
 
     Variant value = nullptr;
 
@@ -39,9 +41,23 @@ struct JsonValue {
     explicit JsonValue(bool boolean) : value(boolean) {}
     explicit JsonValue(double number) : value(number) {}
     explicit JsonValue(std::string string) : value(std::move(string)) {}
-    explicit JsonValue(JsonObject object) : value(std::move(object)) {}
-    explicit JsonValue(JsonArray array) : value(std::move(array)) {}
+    explicit JsonValue(JsonObject object);
+    explicit JsonValue(JsonArray array);
 };
+
+struct JsonObject : std::unordered_map<std::string, JsonValue> {
+    using std::unordered_map<std::string, JsonValue>::unordered_map;
+};
+
+struct JsonArray : std::vector<JsonValue> {
+    using std::vector<JsonValue>::vector;
+};
+
+JsonValue::JsonValue(JsonObject object)
+    : value(std::make_shared<JsonObject>(std::move(object))) {}
+
+JsonValue::JsonValue(JsonArray array)
+    : value(std::make_shared<JsonArray>(std::move(array))) {}
 
 class JsonParser {
    public:
@@ -417,16 +433,18 @@ class JsonParser {
 
 std::optional<std::reference_wrapper<const JsonObject>> asObject(
     const JsonValue& value) {
-    if (const auto* object = std::get_if<JsonObject>(&value.value)) {
-        return *object;
+    if (const auto* object = std::get_if<JsonObjectPtr>(&value.value);
+        object != nullptr && *object != nullptr) {
+        return **object;
     }
     return std::nullopt;
 }
 
 std::optional<std::reference_wrapper<const JsonArray>> asArray(
     const JsonValue& value) {
-    if (const auto* array = std::get_if<JsonArray>(&value.value)) {
-        return *array;
+    if (const auto* array = std::get_if<JsonArrayPtr>(&value.value);
+        array != nullptr && *array != nullptr) {
+        return **array;
     }
     return std::nullopt;
 }
@@ -560,10 +578,12 @@ std::string serializeJson(const JsonValue& value) {
     if (const auto* string = std::get_if<std::string>(&value.value)) {
         return "\"" + jsonEscape(*string) + "\"";
     }
-    if (const auto* object = std::get_if<JsonObject>(&value.value)) {
-        return serializeObject(*object);
+    if (const auto* object = std::get_if<JsonObjectPtr>(&value.value)) {
+        return object != nullptr && *object != nullptr ? serializeObject(**object)
+                                                       : "null";
     }
-    return serializeArray(std::get<JsonArray>(value.value));
+    const auto& array = std::get<JsonArrayPtr>(value.value);
+    return array != nullptr ? serializeArray(*array) : "null";
 }
 
 bool readMessage(std::istream& input, std::string& outPayload,
@@ -2566,15 +2586,15 @@ class MogLspServer {
                 changes[uri] = JsonValue(JsonArray{});
             }
 
-            auto* editArray = std::get_if<JsonArray>(&changes[uri].value);
-            if (editArray == nullptr) {
+            auto* editArray = std::get_if<JsonArrayPtr>(&changes[uri].value);
+            if (editArray == nullptr || *editArray == nullptr) {
                 continue;
             }
 
             JsonObject item;
             item["range"] = makeProtocolRange(edit.path, edit.range);
             item["newText"] = JsonValue(edit.newText);
-            editArray->push_back(JsonValue(std::move(item)));
+            (*editArray)->push_back(JsonValue(std::move(item)));
         }
 
         JsonObject result;
@@ -2637,8 +2657,9 @@ class MogLspServer {
 
             JsonValue related =
                 makeRelatedInformation(uri, diagnostic, documentText);
-            if (const auto* relatedArray = std::get_if<JsonArray>(&related.value);
-                relatedArray != nullptr && !relatedArray->empty()) {
+            if (const auto* relatedArray = std::get_if<JsonArrayPtr>(&related.value);
+                relatedArray != nullptr && *relatedArray != nullptr &&
+                !(*relatedArray)->empty()) {
                 item["relatedInformation"] = related;
             }
 
