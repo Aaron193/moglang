@@ -94,6 +94,12 @@ std::string packageImportNameFromPackageId(std::string_view packageId) {
 namespace {
 
 std::string weaklyCanonicalOrEmpty(const std::filesystem::path& path) {
+    // `weakly_canonical({})` resolves to the process working directory. An
+    // absent optional library path must remain absent so native-package lookup
+    // can fall back to the package's platform-specific library filename.
+    if (path.empty()) {
+        return "";
+    }
     std::error_code ec;
     std::filesystem::path resolved = std::filesystem::weakly_canonical(path, ec);
     if (ec) {
