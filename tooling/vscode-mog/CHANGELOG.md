@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Fix native package resolution when an optional library path is absent, so
+  platform-specific bundled package libraries load correctly.
+
 ## 0.1.2
 
 - Fix macOS verification of imported-file diagnostic locations when the system
