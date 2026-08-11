@@ -2,7 +2,7 @@
   "name": "vscode-mog",
   "displayName": "Mog Language Support",
   "description": "Complete Mog language support with completion, navigation, diagnostics, formatting, hover, and rename.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "moglang",
   "license": "GPL-3.0-only",
   "icon": "images/fileicons/icon.png",
