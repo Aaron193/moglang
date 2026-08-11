@@ -162,6 +162,7 @@ set_target_properties(examples_math_package PROPERTIES
     PREFIX ""
     OUTPUT_NAME "package"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/math"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/math"
 )
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/math")
 configure_file(packages/examples/math/mog.toml
@@ -179,6 +180,7 @@ set_target_properties(examples_mismatch_package PROPERTIES
     PREFIX ""
     OUTPUT_NAME "package"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/mismatch"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/mismatch"
 )
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/mismatch")
 configure_file(packages/examples/mismatch/mog.toml
@@ -196,6 +198,7 @@ set_target_properties(examples_counter_package PROPERTIES
     PREFIX ""
     OUTPUT_NAME "package"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/counter"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/counter"
 )
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/counter")
 configure_file(packages/examples/counter/mog.toml
@@ -214,6 +217,7 @@ set_target_properties(examples_host_api_package PROPERTIES
     PREFIX ""
     OUTPUT_NAME "package"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/host_api"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/host_api"
 )
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/host_api")
 configure_file(packages/examples/host_api/mog.toml

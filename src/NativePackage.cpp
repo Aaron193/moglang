@@ -27,6 +27,18 @@ constexpr const char* kPackageLibraryFileName = "package.dylib";
 constexpr const char* kPackageLibraryFileName = "package.so";
 #endif
 
+std::vector<const char*> nativePackageLibraryFileNames() {
+#if defined(_WIN32)
+    return {kPackageLibraryFileName, "package.so", "package.dylib"};
+#elif defined(__APPLE__)
+    // CMake MODULE libraries can use .so on macOS, whereas packages built by
+    // other toolchains commonly use .dylib.
+    return {kPackageLibraryFileName, "package.so", "package.dll"};
+#else
+    return {kPackageLibraryFileName, "package.dylib", "package.dll"};
+#endif
+}
+
 bool looksLikeSourceModuleSpecifier(const std::string& rawImportPath) {
     if (rawImportPath.empty()) {
         return false;
@@ -530,8 +542,13 @@ bool resolveImportTarget(const std::string& importerPath,
         weaklyCanonicalOrEmpty(packageEntry.libraryPath);
     std::string libraryPath = resolvedLibraryPath;
     if (libraryPath.empty() && !packageEntry.packageDir.empty()) {
-        libraryPath = weaklyCanonicalOrEmpty(
-            std::filesystem::path(packageEntry.packageDir) / kPackageLibraryFileName);
+        for (const char* fileName : nativePackageLibraryFileNames()) {
+            libraryPath = weaklyCanonicalOrEmpty(
+                std::filesystem::path(packageEntry.packageDir) / fileName);
+            if (!libraryPath.empty()) {
+                break;
+            }
+        }
     }
     if (libraryPath.empty()) {
         outError = "Cannot find native package '" + packageEntry.importName + "'.";
