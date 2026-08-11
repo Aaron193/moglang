@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- Skip optional window-package navigation assertions when that platform's
+  bundled fixture is not present.
+
 ## 0.1.4
 
 - Make bundled native-package discovery portable across module filename

@@ -28,6 +28,11 @@ from pathlib import Path
 
 lsp_bin = sys.argv[1]
 repo_root = Path(sys.argv[2]).resolve()
+native_window_fixture = Path(lsp_bin).resolve().parent / "packages" / "mog" / "window"
+has_native_window = any(
+    (native_window_fixture / filename).is_file()
+    for filename in ("package.so", "package.dylib", "package.dll")
+)
 
 
 def send_message(proc, payload):
@@ -785,26 +790,27 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         if native_package_diagnostics["params"]["diagnostics"]:
             raise AssertionError(
                 f"native package sample should stay diagnostics-free: {native_package_diagnostics['params']['diagnostics']}")
-        send_message(proc, {
-            "jsonrpc": "2.0",
-            "method": "textDocument/didOpen",
-            "params": {
-                "textDocument": {
-                    "uri": native_window_uri,
-                    "languageId": "mog",
-                    "version": 1,
-                    "text": native_window_source
+        if has_native_window:
+            send_message(proc, {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": native_window_uri,
+                        "languageId": "mog",
+                        "version": 1,
+                        "text": native_window_source
+                    }
                 }
-            }
-        })
-        native_window_diagnostics = read_until(
-            proc,
-            lambda msg: msg.get("method") == "textDocument/publishDiagnostics" and
-            msg.get("params", {}).get("uri") == native_window_uri,
-        )
-        if native_window_diagnostics["params"]["diagnostics"]:
-            raise AssertionError(
-                f"native window sample should stay diagnostics-free: {native_window_diagnostics['params']['diagnostics']}")
+            })
+            native_window_diagnostics = read_until(
+                proc,
+                lambda msg: msg.get("method") == "textDocument/publishDiagnostics" and
+                msg.get("params", {}).get("uri") == native_window_uri,
+            )
+            if native_window_diagnostics["params"]["diagnostics"]:
+                raise AssertionError(
+                    f"native window sample should stay diagnostics-free: {native_window_diagnostics['params']['diagnostics']}")
         send_message(proc, {
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -1678,26 +1684,27 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             raise AssertionError(
                 f"unexpected native package member hover payload: {native_member_hover['result']}")
 
-        send_message(proc, {
-            "jsonrpc": "2.0",
-            "id": 8.265,
-            "method": "textDocument/hover",
-            "params": {
-                "textDocument": {
-                    "uri": native_window_uri
-                },
-                "position": {
-                    "line": 2,
-                    "character": 14
+        if has_native_window:
+            send_message(proc, {
+                "jsonrpc": "2.0",
+                "id": 8.265,
+                "method": "textDocument/hover",
+                "params": {
+                    "textDocument": {
+                        "uri": native_window_uri
+                    },
+                    "position": {
+                        "line": 2,
+                        "character": 14
+                    }
                 }
-            }
-        })
-        native_window_hover = read_until(proc, lambda msg: msg.get("id") == 8.265)
-        native_window_hover_value = native_window_hover["result"]["contents"]["value"]
-        if native_window_hover_value != \
-                "**function**\n\n```mog\nfn fillRect(win Window, x i64, y i64, width i64, height i64, r i64, g i64, b i64) void\n```\n\nDraw a filled RGB rectangle.":
-            raise AssertionError(
-                f"unexpected native window hover payload: {native_window_hover['result']}")
+            })
+            native_window_hover = read_until(proc, lambda msg: msg.get("id") == 8.265)
+            native_window_hover_value = native_window_hover["result"]["contents"]["value"]
+            if native_window_hover_value != \
+                    "**function**\n\n```mog\nfn fillRect(win Window, x i64, y i64, width i64, height i64, r i64, g i64, b i64) void\n```\n\nDraw a filled RGB rectangle.":
+                raise AssertionError(
+                    f"unexpected native window hover payload: {native_window_hover['result']}")
 
         send_message(proc, {
             "jsonrpc": "2.0",
@@ -2089,32 +2096,33 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         if builtin_signature_help["result"]["signatures"][0]["label"] != "fn sqrt(f64) f64":
             raise AssertionError(f"unexpected builtin signature label: {builtin_signature_help['result']}")
 
-        send_message(proc, {
-            "jsonrpc": "2.0",
-            "id": 11.551,
-            "method": "textDocument/signatureHelp",
-            "params": {
-                "textDocument": {
-                    "uri": native_window_uri
-                },
-                "position": {
-                    "line": 2,
-                    "character": 31
+        if has_native_window:
+            send_message(proc, {
+                "jsonrpc": "2.0",
+                "id": 11.551,
+                "method": "textDocument/signatureHelp",
+                "params": {
+                    "textDocument": {
+                        "uri": native_window_uri
+                    },
+                    "position": {
+                        "line": 2,
+                        "character": 31
+                    }
                 }
-            }
-        })
-        native_window_signature_help = read_until(
-            proc, lambda msg: msg.get("id") == 11.551)
-        native_window_signature = \
-            native_window_signature_help["result"]["signatures"][0]
-        if native_window_signature["label"] != \
-                "fn fillRect(win Window, x i64, y i64, width i64, height i64, r i64, g i64, b i64) void":
-            raise AssertionError(
-                f"unexpected native window signature label: {native_window_signature_help['result']}")
-        if native_window_signature["parameters"][0]["label"] != "win Window" or \
-                native_window_signature["parameters"][1]["label"] != "x i64":
-            raise AssertionError(
-                f"unexpected native window signature parameters: {native_window_signature_help['result']}")
+            })
+            native_window_signature_help = read_until(
+                proc, lambda msg: msg.get("id") == 11.551)
+            native_window_signature = \
+                native_window_signature_help["result"]["signatures"][0]
+            if native_window_signature["label"] != \
+                    "fn fillRect(win Window, x i64, y i64, width i64, height i64, r i64, g i64, b i64) void":
+                raise AssertionError(
+                    f"unexpected native window signature label: {native_window_signature_help['result']}")
+            if native_window_signature["parameters"][0]["label"] != "win Window" or \
+                    native_window_signature["parameters"][1]["label"] != "x i64":
+                raise AssertionError(
+                    f"unexpected native window signature parameters: {native_window_signature_help['result']}")
 
         send_message(proc, {
             "jsonrpc": "2.0",
