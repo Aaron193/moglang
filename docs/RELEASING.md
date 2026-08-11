@@ -36,6 +36,12 @@ Before either release:
 
 ## Runtime release
 
+Mog uses semantic versioning:
+
+- Patch: backward-compatible runtime or tooling improvements.
+- Minor: backwards-compatible language or tooling feature.
+- Major: breaking language, CLI, or package compatibility change.
+
 Update `MOG_VERSION`, the runtime version declaration, and `CHANGELOG.md`, then
 create the tag on the exact reviewed commit:
 
