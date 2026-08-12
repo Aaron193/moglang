@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7
+
+- Correct Windows LSP test framing during cross-platform release validation.
+
 ## 0.1.6
 
 - Fix macOS VS Code executable detection and supply Python for Windows LSP
