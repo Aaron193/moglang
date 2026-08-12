@@ -4,7 +4,21 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const AdmZip = require("adm-zip");
-const { runTests } = require("@vscode/test-electron");
+const { downloadAndUnzipVSCode, runTests } = require("@vscode/test-electron");
+
+async function downloadedVSCodeExecutable() {
+  const executable = await downloadAndUnzipVSCode();
+  if (process.platform !== "darwin" || fs.existsSync(executable)) return executable;
+
+  // Newer macOS VS Code archives name the app binary `Code`, while older
+  // test-electron releases derive the legacy `Electron` path.
+  const appContents = path.dirname(executable);
+  for (const name of ["Code", "Visual Studio Code", "Electron"]) {
+    const candidate = path.join(appContents, name);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  throw new Error(`Downloaded VS Code executable not found below ${appContents}`);
+}
 
 async function main() {
   const vsixArgument = process.argv.findIndex((value) => value === "--vsix");
@@ -37,6 +51,7 @@ async function main() {
   const extensions = fs.mkdtempSync(path.join(os.tmpdir(), "mog-vscode-extensions-"));
   try {
     await runTests({
+      vscodeExecutablePath: await downloadedVSCodeExecutable(),
       extensionDevelopmentPath,
       extensionTestsPath,
       launchArgs: [

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6
+
+- Fix macOS VS Code executable detection and supply Python for Windows LSP
+  release verification.
+
 ## 0.1.5
 
 - Skip optional window-package navigation assertions when that platform's
