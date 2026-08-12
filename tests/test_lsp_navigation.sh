@@ -48,7 +48,9 @@ def read_message(proc):
         line = proc.stdout.readline()
         if not line:
             raise RuntimeError("unexpected EOF from mog-lsp")
-        if line == b"\r\n":
+        # Windows text-mode stdout expands the server's CRLF framing to
+        # CRCRLF. Treat every whitespace-only line as the header terminator.
+        if not line.strip():
             break
         decoded = line.decode("utf-8").strip()
         key, value = decoded.split(":", 1)
