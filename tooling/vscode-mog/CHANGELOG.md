@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.8
+
+- Fix Windows file-URI comparison in import diagnostic release verification.
+
 ## 0.1.7
 
 - Correct Windows LSP test framing during cross-platform release validation.

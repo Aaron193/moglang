@@ -64,11 +64,19 @@ def read_until(proc, predicate):
 
 
 def canonical_file_uri(uri):
-    """Resolve equivalent macOS /var and /private/var file URI spellings."""
+    """Normalize local file URIs across macOS and Windows URI spellings."""
     parsed = urlparse(uri)
     if parsed.scheme != "file":
         raise AssertionError(f"expected file URI, got {uri!r}")
-    return pathlib.Path(unquote(parsed.path)).resolve().as_uri()
+    decoded = unquote(parsed.path or parsed.netloc)
+    # The server percent-encodes Windows drive paths, while this test's
+    # handwritten input URI is unescaped. Do not use pathlib here: under
+    # MSYS, a drive path is otherwise interpreted relative to the test cwd.
+    if len(decoded) >= 2 and decoded[1] == ":":
+        return decoded.replace("\\", "/").lower()
+    if len(decoded) >= 3 and decoded[0] == "/" and decoded[2] == ":":
+        return decoded[1:].replace("\\", "/").lower()
+    return pathlib.Path(decoded).resolve().as_posix()
 
 
 workspace = pathlib.Path(tempfile.mkdtemp(prefix="mog_lsp_import_diag_"))
