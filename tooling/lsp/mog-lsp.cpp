@@ -657,8 +657,20 @@ void writeMessage(std::ostream& output, const std::string& payload) {
 }
 
 std::string pathToFileUri(const std::string& path) {
+    std::string normalizedPath = path;
+#ifdef _WIN32
+    std::replace(normalizedPath.begin(), normalizedPath.end(), '\\', '/');
+    // RFC 8089 requires an empty authority before a drive-letter path.
+    // `file:///C:/...` is understood by VS Code, while `file://C%3A/...`
+    // treats the drive as a host name.
+    const bool hasDriveLetter = normalizedPath.size() >= 2 &&
+        std::isalpha(static_cast<unsigned char>(normalizedPath[0])) &&
+        normalizedPath[1] == ':';
+    std::string uri = hasDriveLetter ? "file:///" : "file://";
+#else
     std::string uri = "file://";
-    for (unsigned char ch : path) {
+#endif
+    for (unsigned char ch : normalizedPath) {
         const bool unreserved =
             (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
             (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.' ||
@@ -696,6 +708,15 @@ std::string decodeUriPath(std::string_view uri) {
     }
 
     std::string_view encodedPath = uri.substr(prefix.size());
+#ifdef _WIN32
+    // Accept the standard `file:///C:/...` spelling as well as the legacy
+    // `file://C:/...` form that earlier Mog tooling emitted.
+    if (encodedPath.size() >= 3 && encodedPath[0] == '/' &&
+        std::isalpha(static_cast<unsigned char>(encodedPath[1])) &&
+        encodedPath[2] == ':') {
+        encodedPath.remove_prefix(1);
+    }
+#endif
     std::string path;
     path.reserve(encodedPath.size());
     for (size_t index = 0; index < encodedPath.size(); ++index) {

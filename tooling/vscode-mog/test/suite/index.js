@@ -35,6 +35,7 @@ async function run() {
     assert.ok(commands.includes(command), `${command} is registered`);
   }
 
+  try {
   if (process.env.MOG_SERVER_PATH) {
     const instance = await waitUntil(() => {
       const current = api.manager.activeInstance();
@@ -91,6 +92,12 @@ async function run() {
     const configuration = vscode.workspace.getConfiguration("mog", uri);
     await configuration.update("serverPath", process.env.MOG_SERVER_PATH, vscode.ConfigurationTarget.WorkspaceFolder);
     await waitUntil(() => api.manager.activeInstance()?.state === "ready");
+  }
+  } finally {
+    // The test runner needs all language-client child processes stopped before
+    // VS Code exits. Otherwise an Extension Host can remain alive indefinitely
+    // on hosted Linux and macOS runners.
+    await api.manager.dispose();
   }
 }
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.10
+
+- Correct Windows file-URI emission and make cross-platform release checks
+  bounded and reliable.
+
 ## 0.1.9
 
 - Normalize MSYS temporary-file paths during Windows import-diagnostic release
