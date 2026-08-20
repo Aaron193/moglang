@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.9
+
+- Normalize MSYS temporary-file paths during Windows import-diagnostic release
+  verification.
+
 ## 0.1.8
 
 - Fix Windows file-URI comparison in import diagnostic release verification.
