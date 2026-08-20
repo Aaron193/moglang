@@ -49,7 +49,17 @@ async function main() {
   }
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), "mog-vscode-user-"));
   const extensions = fs.mkdtempSync(path.join(os.tmpdir(), "mog-vscode-extensions-"));
+  const extensionTestTimeoutMs = Number(process.env.MOG_EXTENSION_TEST_TIMEOUT_MS || 180_000);
+  let timeout;
   try {
+    timeout = setTimeout(() => {
+      console.error(`Extension Host test exceeded ${extensionTestTimeoutMs} ms; stopping VS Code.`);
+      // @vscode/test-electron handles SIGINT by closing its child process. If
+      // that fails, the second timer makes the CI step fail promptly instead
+      // of consuming the workflow's full six-hour job limit.
+      process.emit("SIGINT");
+      setTimeout(() => process.exit(1), 10_000).unref();
+    }, extensionTestTimeoutMs);
     await runTests({
       vscodeExecutablePath: await downloadedVSCodeExecutable(),
       extensionDevelopmentPath,
@@ -64,6 +74,7 @@ async function main() {
       ]
     });
   } finally {
+    clearTimeout(timeout);
     fs.rmSync(userData, { recursive: true, force: true });
     fs.rmSync(extensions, { recursive: true, force: true });
     if (temporaryRoot) fs.rmSync(temporaryRoot, { recursive: true, force: true });

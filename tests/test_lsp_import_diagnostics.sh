@@ -63,38 +63,19 @@ def read_until(proc, predicate):
             return message
 
 
-def canonical_file_uri(uri):
-    """Normalize local file URIs across macOS and Windows URI spellings."""
+def fixture_file_identity(uri, fixture_directory):
+    """Return a path relative to this test's unique temporary directory."""
     parsed = urlparse(uri)
     if parsed.scheme != "file":
         raise AssertionError(f"expected file URI, got {uri!r}")
-    decoded = unquote(parsed.path or parsed.netloc)
-    # GitHub's Windows runner executes this script in MSYS.  Its Python
-    # temporary directory is commonly expressed as /tmp/... while the native
-    # LSP executable reports that same location with an absolute drive path.
-    # Ask MSYS to canonicalize either spelling before comparing it.  This is
-    # intentionally conditional so native Windows, Linux, and macOS need no
-    # MSYS-specific dependency.
-    cygpath = shutil.which("cygpath")
-    if cygpath:
-        converted = subprocess.run(
-            [cygpath, "-m", decoded],
-            check=False,
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-        if converted:
-            return converted.replace("\\", "/").lower()
-
-    # The server percent-encodes Windows drive paths, while this test's
-    # handwritten input URI is unescaped. Do not use pathlib here: under
-    # non-MSYS Windows, a drive path is otherwise interpreted relative to the
-    # test cwd.
-    if len(decoded) >= 2 and decoded[1] == ":":
-        return decoded.replace("\\", "/").lower()
-    if len(decoded) >= 3 and decoded[0] == "/" and decoded[2] == ":":
-        return decoded[1:].replace("\\", "/").lower()
-    return pathlib.Path(decoded).resolve().as_posix()
+    normalized = unquote(parsed.path or parsed.netloc).replace("\\", "/")
+    marker = f"/{fixture_directory.lower()}/"
+    offset = normalized.lower().rfind(marker)
+    if offset < 0:
+        raise AssertionError(
+            f"expected URI {uri!r} to identify fixture directory {fixture_directory!r}"
+        )
+    return normalized[offset:].lower()
 
 
 workspace = pathlib.Path(tempfile.mkdtemp(prefix="mog_lsp_import_diag_"))
@@ -157,7 +138,7 @@ try:
     related = importer_diag.get("relatedInformation", [])
     if not related:
         raise AssertionError(f"expected related information for importer diagnostic: {importer_diag}")
-    if canonical_file_uri(related[0]["location"]["uri"]) != canonical_file_uri(dep_uri):
+    if fixture_file_identity(related[0]["location"]["uri"], workspace.name) != fixture_file_identity(dep_uri, workspace.name):
         raise AssertionError(f"expected related information to target imported file: {related}")
 
     send_message(proc, {

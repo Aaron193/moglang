@@ -86,6 +86,7 @@ jobs:
     needs: [context, validate]
     name: Package ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
