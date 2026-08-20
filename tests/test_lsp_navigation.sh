@@ -25,6 +25,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 lsp_bin = sys.argv[1]
 repo_root = Path(sys.argv[2]).resolve()
@@ -66,6 +67,19 @@ def read_until(proc, predicate):
         message = read_message(proc)
         if predicate(message):
             return message
+
+
+def same_file_uri(left, right):
+    """Compare equivalent local file URI spellings across Windows clients."""
+    def normalize(uri):
+        parsed = urlparse(uri)
+        if parsed.scheme != "file":
+            return uri
+        path = unquote(parsed.path or parsed.netloc).replace("\\", "/")
+        if len(path) >= 3 and path[0] == "/" and path[2] == ":":
+            path = path[1:]
+        return path.lower() if len(path) >= 2 and path[1] == ":" else path
+    return normalize(left) == normalize(right)
 
 
 def decode_semantic_tokens(payload, token_types, token_modifiers):
@@ -904,7 +918,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         definition = read_until(proc, lambda msg: msg.get("id") == 3)
         result = definition["result"]
-        if result["uri"] != uri:
+        if not same_file_uri(result["uri"], uri):
             raise AssertionError("definition should stay within the same file")
         if result["range"]["start"]["line"] != 4 or \
                 result["range"]["start"]["character"] != 6:
@@ -1747,7 +1761,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         member_definition = read_until(proc, lambda msg: msg.get("id") == 9)
         member_result = member_definition["result"]
-        if member_result["uri"] != member_uri:
+        if not same_file_uri(member_result["uri"], member_uri):
             raise AssertionError("member definition should stay in the same module")
         if member_result["range"]["start"]["line"] != 3 or \
                 member_result["range"]["start"]["character"] != 7:
@@ -1769,7 +1783,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         imported_member_definition = read_until(proc, lambda msg: msg.get("id") == 9.1)
         imported_member_result = imported_member_definition["result"]
-        if imported_member_result["uri"] != imported_nav_state_uri:
+        if not same_file_uri(imported_member_result["uri"], imported_nav_state_uri):
             raise AssertionError(
                 f"imported member definition should jump to the imported module: {imported_member_result}")
         if imported_member_result["range"]["start"]["line"] != 1 or \
@@ -1799,15 +1813,15 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         if len(field_declaration_result) != 3:
             raise AssertionError(
                 f"field declaration definition should include declaration and references: {field_declaration_result}")
-        if field_declaration_result[0]["uri"] != member_uri or \
+        if not same_file_uri(field_declaration_result[0]["uri"], member_uri) or \
                 field_declaration_result[0]["range"]["start"]["line"] != 1:
             raise AssertionError(
                 f"field declaration definition should start at the declaration: {field_declaration_result}")
-        if field_declaration_result[1]["uri"] != member_uri or \
+        if not same_file_uri(field_declaration_result[1]["uri"], member_uri) or \
                 field_declaration_result[1]["range"]["start"]["line"] != 4:
             raise AssertionError(
                 f"field declaration definition should include this.field usage: {field_declaration_result}")
-        if field_declaration_result[2]["uri"] != member_uri or \
+        if not same_file_uri(field_declaration_result[2]["uri"], member_uri) or \
                 field_declaration_result[2]["range"]["start"]["line"] != 8:
             raise AssertionError(
                 f"field declaration definition should include object.field usage: {field_declaration_result}")
@@ -1828,7 +1842,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         type_definition = read_until(proc, lambda msg: msg.get("id") == 9.5)
         type_result = type_definition["result"]
-        if type_result["uri"] != type_definition_uri:
+        if not same_file_uri(type_result["uri"], type_definition_uri):
             raise AssertionError("type definition should stay in the same module")
         if type_result["range"]["start"]["line"] != 0 or \
                 type_result["range"]["start"]["character"] != 5:
@@ -1856,15 +1870,15 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         if len(type_declaration_result) != 3:
             raise AssertionError(
                 f"type declaration definition should include declaration and references: {type_declaration_result}")
-        if type_declaration_result[0]["uri"] != type_definition_uri or \
+        if not same_file_uri(type_declaration_result[0]["uri"], type_definition_uri) or \
                 type_declaration_result[0]["range"]["start"]["line"] != 0:
             raise AssertionError(
                 f"type declaration definition should start at the declaration: {type_declaration_result}")
-        if type_declaration_result[1]["uri"] != type_definition_uri or \
+        if not same_file_uri(type_declaration_result[1]["uri"], type_definition_uri) or \
                 type_declaration_result[1]["range"]["start"]["line"] != 3:
             raise AssertionError(
                 f"type declaration definition should include type references: {type_declaration_result}")
-        if type_declaration_result[2]["uri"] != type_definition_uri or \
+        if not same_file_uri(type_declaration_result[2]["uri"], type_definition_uri) or \
                 type_declaration_result[2]["range"]["start"]["line"] != 4:
             raise AssertionError(
                 f"type declaration definition should include generic type references: {type_declaration_result}")
@@ -1885,7 +1899,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         constructor_type_definition = read_until(proc, lambda msg: msg.get("id") == 9.7)
         constructor_type_result = constructor_type_definition["result"]
-        if constructor_type_result["uri"] != constructor_type_uri:
+        if not same_file_uri(constructor_type_result["uri"], constructor_type_uri):
             raise AssertionError("constructor generic type definition should stay in the same module")
         if constructor_type_result["range"]["start"]["line"] != 0 or \
                 constructor_type_result["range"]["start"]["character"] != 5:
@@ -1908,7 +1922,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         cross_definition = read_until(proc, lambda msg: msg.get("id") == 10)
         cross_result = cross_definition["result"]
-        if cross_result["uri"] != module_uri:
+        if not same_file_uri(cross_result["uri"], module_uri):
             raise AssertionError("import definition should jump to the imported module")
         if cross_result["range"]["start"]["line"] != 3 or \
                 cross_result["range"]["start"]["character"] != 6:
@@ -1930,7 +1944,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         import_path_definition = read_until(proc, lambda msg: msg.get("id") == 10.25)
         import_path_result = import_path_definition["result"]
-        if import_path_result["uri"] != module_uri:
+        if not same_file_uri(import_path_result["uri"], module_uri):
             raise AssertionError(
                 f"import path definition should jump to imported source file: {import_path_result}")
         if import_path_result["range"]["start"]["line"] != 0 or \
@@ -2181,7 +2195,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         workspace_names = [item["name"] for item in workspace_symbols["result"]]
         if workspace_names != ["Answer"]:
             raise AssertionError(f"unexpected workspace symbols: {workspace_symbols['result']}")
-        if workspace_symbols["result"][0]["location"]["uri"] != module_uri:
+        if not same_file_uri(workspace_symbols["result"][0]["location"]["uri"], module_uri):
             raise AssertionError("workspace symbol should resolve to the defining module")
 
         send_message(proc, {

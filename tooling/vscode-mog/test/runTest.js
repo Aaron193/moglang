@@ -6,8 +6,10 @@ const path = require("node:path");
 const AdmZip = require("adm-zip");
 const { downloadAndUnzipVSCode, runTests } = require("@vscode/test-electron");
 
+const VSCODE_TEST_VERSION = process.env.MOG_VSCODE_TEST_VERSION || "1.85.2";
+
 async function downloadedVSCodeExecutable() {
-  const executable = await downloadAndUnzipVSCode();
+  const executable = await downloadAndUnzipVSCode(VSCODE_TEST_VERSION);
   if (process.platform !== "darwin" || fs.existsSync(executable)) return executable;
 
   // Newer macOS VS Code archives name the app binary `Code`, while older
@@ -66,7 +68,6 @@ async function main() {
       extensionTestsPath,
       launchArgs: [
         workspacePath,
-        "--disable-extensions",
         "--user-data-dir",
         userData,
         "--extensions-dir",
