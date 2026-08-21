@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cerrno>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -17,6 +18,11 @@
 #include <utility>
 #include <variant>
 #include <vector>
+
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 #include "PackageManager.hpp"
 #include "PackageRegistry.hpp"
@@ -2733,6 +2739,15 @@ std::vector<std::string> defaultPackageSearchPaths(const char* executablePath) {
 
 int main(int argc, char** argv) {
     (void)argc;
+#ifdef _WIN32
+    // The LSP transport defines its own CRLF framing. Windows CRT text mode
+    // would expand each '\n' again and emit CRCRLF, corrupting the protocol.
+    if (_setmode(_fileno(stdin), _O_BINARY) == -1 ||
+        _setmode(_fileno(stdout), _O_BINARY) == -1) {
+        std::cerr << "Failed to configure binary LSP transport." << std::endl;
+        return 1;
+    }
+#endif
     MogLspServer server(defaultPackageSearchPaths(argv[0]));
     return server.run();
 }
