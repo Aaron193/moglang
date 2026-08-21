@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.12
+
+- Preserve bundled server executability in installed-artifact tests, exercise
+  the packaged server directly, and avoid blocking activation on recovery UI.
+- Normalize Windows file URI keys in rename workspace edits and make
+  multi-target Marketplace publication safe to retry.
+
 ## 0.1.11
 
 - Pin Extension Host release tests to the supported VS Code baseline and

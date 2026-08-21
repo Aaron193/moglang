@@ -120,11 +120,17 @@ class ServerInstance {
     const actions = invalidExplicit
       ? ["Select Server", "Use Automatic Discovery", "Open Log"]
       : ["Select Server", "Restart", "Open Log"];
-    const choice = await vscode.window.showErrorMessage(`Mog: ${message}`, ...actions);
-    if (choice === "Select Server") await this.manager.selectServer(this);
-    if (choice === "Use Automatic Discovery") await this.start({ allowFallback: true });
-    if (choice === "Restart") await this.restart();
-    if (choice === "Open Log") this.manager.output.show(true);
+    // Do not make extension activation depend on an interactive notification.
+    // In headless hosts no user can answer it, and activation would never settle.
+    void (async () => {
+      const choice = await vscode.window.showErrorMessage(`Mog: ${message}`, ...actions);
+      if (choice === "Select Server") await this.manager.selectServer(this);
+      if (choice === "Use Automatic Discovery") await this.start({ allowFallback: true });
+      if (choice === "Restart") await this.restart();
+      if (choice === "Open Log") this.manager.output.show(true);
+    })().catch((error) => {
+      this.manager.log(`Error handling language server recovery action: ${error.message || error}`);
+    });
   }
 
   async onClosed(closedClient) {

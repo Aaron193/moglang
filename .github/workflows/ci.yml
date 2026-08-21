@@ -59,6 +59,11 @@ jobs:
           cp ../../build/mog-lsp runtime/linux-x64/mog-lsp
           npm run package -- --target linux-x64 --out ../../dist/vscode-mog-ci-linux-x64.vsix
           bash ../../scripts/validate_vsix.sh ../../dist/vscode-mog-ci-linux-x64.vsix linux-x64
+      - name: Test packaged extension artifact
+        working-directory: tooling/vscode-mog
+        env:
+          MOG_TEST_VSIX: ${{ github.workspace }}/dist/vscode-mog-ci-linux-x64.vsix
+        run: xvfb-run -a npm run test:extension -- --vsix "$MOG_TEST_VSIX"
       - name: Upload tested VSIX
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
