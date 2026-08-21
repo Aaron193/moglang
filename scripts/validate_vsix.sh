@@ -22,6 +22,10 @@ if [[ ! -f "$server" ]]; then
     echo "VSIX does not contain runtime/$target/$server_name" >&2
     exit 1
 fi
+if [[ "$target" != win32-* && ! -x "$server" ]]; then
+    echo "VSIX language server is not stored as executable: runtime/$target/$server_name" >&2
+    exit 1
+fi
 chmod +x "$server"
 
 if find "$extension_dir" -type f \

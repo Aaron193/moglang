@@ -125,7 +125,12 @@ def find_semantic_token(tokens, line, character, token_type):
 
 def changes_for_uri(workspace_edit, uri):
     changes = workspace_edit.get("changes", {})
-    return changes.get(uri, [])
+    return [
+        edit
+        for change_uri, edits in changes.items()
+        if same_file_uri(change_uri, uri)
+        for edit in edits
+    ]
 
 
 source = "\n".join([

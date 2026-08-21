@@ -8,6 +8,28 @@ const { downloadAndUnzipVSCode, runTests } = require("@vscode/test-electron");
 
 const VSCODE_TEST_VERSION = process.env.MOG_VSCODE_TEST_VERSION || "1.85.2";
 
+function platformTarget(platform = process.platform, arch = process.arch) {
+  const platformName = { darwin: "darwin", linux: "linux", win32: "win32" }[platform];
+  const architecture = { arm: "armhf", arm64: "arm64", x64: "x64" }[arch];
+  if (!platformName || !architecture) {
+    throw new Error(`Unsupported VSIX test platform: ${platform}-${arch}`);
+  }
+  return `${platformName}-${architecture}`;
+}
+
+function preparePackagedExtension(extensionPath, platform = process.platform, arch = process.arch) {
+  const target = platformTarget(platform, arch);
+  const executable = platform === "win32" ? "mog-lsp.exe" : "mog-lsp";
+  const serverPath = path.join(extensionPath, "runtime", target, executable);
+  if (!fs.statSync(serverPath, { throwIfNoEntry: false })?.isFile()) {
+    throw new Error(`Packaged language server not found: ${serverPath}`);
+  }
+  // adm-zip does not restore Unix permission bits from VSIX entries. Restore
+  // the executable bit so this extraction behaves like a real VS Code install.
+  if (platform !== "win32") fs.chmodSync(serverPath, 0o755);
+  return serverPath;
+}
+
 async function downloadedVSCodeExecutable() {
   const executable = await downloadAndUnzipVSCode(VSCODE_TEST_VERSION);
   if (process.platform !== "darwin" || fs.existsSync(executable)) return executable;
@@ -40,12 +62,15 @@ async function main() {
     if (`${packagedManifest.publisher}.${packagedManifest.name}` !== "moglang.vscode-mog") {
       throw new Error(`Unexpected extension artifact: ${packagedManifest.publisher}.${packagedManifest.name}`);
     }
+    preparePackagedExtension(extensionDevelopmentPath);
   }
   const extensionTestsPath = path.resolve(__dirname, "suite", "index");
   const workspacePath = path.resolve(__dirname, "fixtures", "multi-root.code-workspace");
   const defaultServer = path.resolve(__dirname, "..", "..", "..", "build", "mog-lsp");
-  const serverPath = process.env.MOG_LSP_PATH || defaultServer;
-  if (fs.existsSync(serverPath)) {
+  // Packaged-artifact tests must discover the bundled server from the VSIX.
+  // A development override would accidentally test the checkout's build.
+  const serverPath = process.env.MOG_LSP_PATH || (vsixPath ? undefined : defaultServer);
+  if (serverPath && fs.existsSync(serverPath)) {
     process.env.MOG_LSP_DEVELOPMENT = "1";
     process.env.MOG_SERVER_PATH = serverPath;
   }
@@ -82,7 +107,11 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { main, platformTarget, preparePackagedExtension };

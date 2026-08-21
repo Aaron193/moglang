@@ -220,7 +220,7 @@ jobs:
             prerelease=()
             [[ "$PRERELEASE" == true ]] && prerelease=(--pre-release)
             ./tooling/vscode-mog/node_modules/.bin/vsce publish \
-              "${prerelease[@]}" --packagePath "$package"
+              "${prerelease[@]}" --skip-duplicate --packagePath "$package"
           done
       - name: Publish immutable GitHub release assets
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2

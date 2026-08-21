@@ -36,12 +36,16 @@ async function run() {
   }
 
   try {
-  if (process.env.MOG_SERVER_PATH) {
     const instance = await waitUntil(() => {
       const current = api.manager.activeInstance();
       return current?.state === "ready" ? current : null;
     });
-    assert.equal(instance.selection.path, path.resolve(process.env.MOG_SERVER_PATH));
+    if (process.env.MOG_SERVER_PATH) {
+      assert.equal(instance.selection.path, path.resolve(process.env.MOG_SERVER_PATH));
+    } else {
+      assert.equal(instance.selection.source, "bundled server");
+      assert.ok(instance.selection.path.startsWith(extension.extensionPath));
+    }
     await waitUntil(() => {
       const instances = [...api.manager.instances.values()];
       return instances.length === 2 && instances.every((candidate) => candidate.state === "ready");
@@ -88,11 +92,6 @@ async function run() {
       return current.length ? current : null;
     });
     assert.ok(diagnostics.some((diagnostic) => diagnostic.severity === vscode.DiagnosticSeverity.Error));
-
-    const configuration = vscode.workspace.getConfiguration("mog", uri);
-    await configuration.update("serverPath", process.env.MOG_SERVER_PATH, vscode.ConfigurationTarget.WorkspaceFolder);
-    await waitUntil(() => api.manager.activeInstance()?.state === "ready");
-  }
   } finally {
     // The test runner needs all language-client child processes stopped before
     // VS Code exits. Otherwise an Extension Host can remain alive indefinitely
