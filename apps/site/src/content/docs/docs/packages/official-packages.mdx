@@ -92,7 +92,7 @@ the canonical module path. For example:
 mog add github.com/moglang/json@v0.2.0
 ```
 
-```rust
+```mog
 const json = @import("github.com/moglang/json")
 var value json.Json = json.parse("{\"language\":\"Mog\"}")
 print(json.stringify(value))

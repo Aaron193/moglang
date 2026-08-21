@@ -7,6 +7,7 @@
     "start": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
     "check": "ASTRO_TELEMETRY_DISABLED=1 astro check",
     "build": "ASTRO_TELEMETRY_DISABLED=1 astro build",
+    "test:highlighting": "node --test test/mog-highlighting.test.mjs",
     "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
     "astro": "ASTRO_TELEMETRY_DISABLED=1 astro"
   },
@@ -17,6 +18,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.8",
+    "expressive-code": "^0.41.7",
     "typescript": "^5.9.3"
   }
 }

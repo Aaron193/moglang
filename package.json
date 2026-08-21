@@ -8,6 +8,7 @@
     "site:dev": "npm run dev --workspace apps/site",
     "site:build": "npm run build --workspace apps/site",
     "site:preview": "npm run preview --workspace apps/site",
-    "site:check": "npm run check --workspace apps/site"
+    "site:check": "npm run check --workspace apps/site",
+    "site:test": "npm run test:highlighting --workspace apps/site"
   }
 }

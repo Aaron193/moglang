@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/site.yml"
       - "apps/site/**"
+      - "tooling/vscode-mog/syntaxes/mog.tmLanguage.json"
       - "package.json"
       - "package-lock.json"
   push:
@@ -13,6 +14,7 @@ on:
     paths:
       - ".github/workflows/site.yml"
       - "apps/site/**"
+      - "tooling/vscode-mog/syntaxes/mog.tmLanguage.json"
       - "package.json"
       - "package-lock.json"
 
@@ -32,4 +34,5 @@ jobs:
 
       - run: npm install
       - run: npm run site:check
+      - run: npm run site:test
       - run: npm run site:build

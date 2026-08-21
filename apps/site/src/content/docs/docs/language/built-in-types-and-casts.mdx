@@ -18,7 +18,7 @@ collection, function, user-defined, and nullable types.
 An integer literal without a suffix is `i32`; a decimal literal without a
 suffix is `f64`. Add a suffix when the exact representation matters:
 
-```rust
+```mog
 var byte u8 = 255u8
 var count i64 = 1000i64
 var index usize = 4usize
@@ -32,7 +32,7 @@ var precise f64 = 0.5f64
 
 Use `as` for conversions that should be visible in source:
 
-```rust
+```mog
 var large i64 = 42i64
 var small i32 = large as i32
 var ratio f64 = small as f64
@@ -52,7 +52,7 @@ and is available in source signatures, including package API declarations. Use
 it for interop points that genuinely accept heterogeneous Mog values; prefer a
 specific type everywhere else so the checker can protect callers.
 
-```rust
+```mog
 fn Describe(value any) str {
   return type(value) + ": " + str(value)
 }

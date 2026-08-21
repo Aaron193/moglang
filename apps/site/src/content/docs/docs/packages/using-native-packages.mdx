@@ -85,7 +85,7 @@ mog run --package-path /path/to/packages app.mog
 
 Packages can expose opaque handle types through `package.api.mog`.
 
-```rust
+```mog
 const counter = @import("counter")
 
 const first counter.Counter = counter.create(10i64)

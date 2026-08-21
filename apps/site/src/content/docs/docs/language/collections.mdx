@@ -10,7 +10,7 @@ Mog currently ships built-in arrays, sets, and dictionaries. The tests under
 
 Array literals use square brackets.
 
-```rust
+```mog
 var values Array<i32> = [1, 2, 3]
 print(values[0])
 
@@ -31,7 +31,7 @@ compound assignment on indexed elements are also supported.
 
 Sets support constructor-style creation and membership operations.
 
-```rust
+```mog
 var ids Set<i32> = Set(1, 2, 2, 3)
 print(ids.size())
 print(ids.has(2))
@@ -48,7 +48,7 @@ print(ids.difference(more))
 Set methods are `add`, `remove`, `has`, `clear`, `isEmpty`, `size`, `toArray`,
 `union`, `intersect`, and `difference`. Set values can be iterated directly:
 
-```rust
+```mog
 for (var item i32 : ids) {
   print(item)
 }
@@ -58,7 +58,7 @@ for (var item i32 : ids) {
 
 Dictionaries use key/value literals with braces.
 
-```rust
+```mog
 var scores Dict<str, i32> = {"alice": 7, "bob": 9}
 print(scores["alice"])
 
@@ -80,7 +80,7 @@ as `.keys()` instead.
 
 Collections are parameterized with angle-bracket type arguments:
 
-```rust
+```mog
 var nums Array<i32> = []
 var seen Set<str> = Set()
 var players Dict<usize, i32> = Dict()
@@ -92,7 +92,7 @@ The codebase also uses nested collection types such as `Dict<Array<i32>, i32>`.
 
 Local inference works well when the target type is already clear:
 
-```rust
+```mog
 var nums Array<i32> = [1, 2, 3]
 var empty Set<str> = Set()
 var mapping Dict<str, i32> = {}
@@ -102,7 +102,7 @@ When the literal alone is ambiguous, keep the explicit collection type.
 
 ## Iteration patterns
 
-```rust
+```mog
 var nums Array<i32> = [1, 2, 3]
 for (var n i32 : nums) {
   print(n)

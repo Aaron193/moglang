@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import { mogShikiOptions } from './mog-language.mjs';
 
 const site = process.env.SITE_URL || 'https://moglang.dev';
 const editBaseUrl = process.env.MOG_SITE_EDIT_BASE_URL;
@@ -13,6 +14,9 @@ export default defineConfig({
 			description:
 				'Mog is a strictly typed, bytecode-compiled programming language with a VM, REPL, native packages, and editor tooling.',
 			tagline: 'A sharp programming language for people who want the toolchain to take them seriously.',
+			expressiveCode: {
+				shiki: mogShikiOptions,
+			},
 			logo: {
 				src: '../../tooling/vscode-mog/images/fileicons/moglang-icon-option-3.svg',
 				alt: 'Mog',

@@ -13,7 +13,7 @@ functions, locals, and output. If `mog --version` does not work yet, follow
 
 Create a file named `hello.mog`:
 
-```rust
+```mog
 fn applyTwice(f fn(i32) i32, value i32) i32 {
   return f(f(value))
 }
@@ -41,7 +41,7 @@ mog run hello.mog
 
 Mog already supports structs, methods, and inferred locals:
 
-```rust
+```mog
 type Counter struct {
   value i32
 

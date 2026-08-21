@@ -11,7 +11,7 @@ numeric families, literal suffixes, and `as` conversions.
 
 ## Expressions
 
-```rust
+```mog
 print((2 + 3) * 4)
 print(10 > 3)
 print(!false && true)
@@ -30,7 +30,7 @@ The current operator surface includes:
 
 Local bindings can be written with explicit types or with local inference.
 
-```rust
+```mog
 var count i32 = 10
 var message = "mog"
 const answer = 42
@@ -45,7 +45,7 @@ is part of the design.
 Inference works well for local values whose initializer already makes the type
 obvious.
 
-```rust
+```mog
 fn buildCounter() Counter {
   var counter = Counter()
   return counter
@@ -62,7 +62,7 @@ Current repo guidance is stricter for public APIs and ambiguous cases:
 
 Bindings and index/member targets support assignment and compound assignment.
 
-```rust
+```mog
 var total i32 = 10
 total += 5
 total <<= 1
@@ -71,7 +71,7 @@ print(total)
 
 Update operators are also available:
 
-```rust
+```mog
 var i i32 = 0
 i++
 ++i
@@ -83,7 +83,7 @@ print(i)
 Bindings are lexical. Inner scopes can read outer names, and nested functions
 can capture them.
 
-```rust
+```mog
 fn outer() i32 {
   var x i32 = 10
 

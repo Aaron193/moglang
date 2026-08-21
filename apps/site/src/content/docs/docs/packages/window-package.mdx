@@ -9,13 +9,13 @@ runtime.
 
 ## Importing the package
 
-```rust
+```mog
 const window = @import("github.com/moglang/window")
 ```
 
 ## Core lifecycle
 
-```rust
+```mog
 const win window.Window =
   window.create("Demo", 800i64, 600i64)
 
@@ -29,7 +29,7 @@ The current API creates windows hidden by default. Visible manual demos call
 
 ## Events and input
 
-```rust
+```mog
 const evt window.Event? = window.pollEvent(win)
 
 if (evt != null) {
@@ -52,7 +52,7 @@ Current input/event helpers include:
 
 The package already exposes a small immediate-mode drawing surface:
 
-```rust
+```mog
 window.clearRgb(win, 32i64, 64i64, 96i64)
 window.fillRect(win, 8i64, 8i64, 24i64, 24i64, 255i64, 0i64, 0i64)
 window.drawText(win, 8i64, 40i64, "Score: 12", 2i64, 255i64, 255i64, 255i64)

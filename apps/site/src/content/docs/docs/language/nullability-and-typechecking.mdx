@@ -10,7 +10,7 @@ the docs should reflect that posture instead of softening it.
 
 Nullable types are written with `?`.
 
-```rust
+```mog
 var maybeScore i32? = 7
 if (maybeScore != null) {
   print("score present")
@@ -19,7 +19,7 @@ if (maybeScore != null) {
 
 You can also assign `null` later:
 
-```rust
+```mog
 type Dog struct {
   fn bark() str {
     return "woof"
@@ -35,7 +35,7 @@ maybeDog = null
 The current type checker expects explicit checks before optional member access
 or optional calls. The repo includes negative tests for both.
 
-```rust
+```mog
 if (maybeDog != null) {
   print("dog present")
 }
