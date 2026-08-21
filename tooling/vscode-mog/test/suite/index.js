@@ -44,7 +44,17 @@ async function run() {
       assert.equal(instance.selection.path, path.resolve(process.env.MOG_SERVER_PATH));
     } else {
       assert.equal(instance.selection.source, "bundled server");
-      assert.ok(instance.selection.path.startsWith(extension.extensionPath));
+      const relativeServerPath = path.relative(
+        path.resolve(extension.extensionPath),
+        path.resolve(instance.selection.path)
+      );
+      assert.ok(
+        relativeServerPath &&
+          relativeServerPath !== ".." &&
+          !relativeServerPath.startsWith(`..${path.sep}`) &&
+          !path.isAbsolute(relativeServerPath),
+        `bundled server must be inside the extension: ${instance.selection.path}`
+      );
     }
     await waitUntil(() => {
       const instances = [...api.manager.instances.values()];
