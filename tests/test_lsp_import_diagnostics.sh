@@ -45,9 +45,7 @@ def read_message(proc):
         line = proc.stdout.readline()
         if not line:
             raise RuntimeError("unexpected EOF from LSP server")
-        # Windows text-mode stdout expands the server's CRLF framing to
-        # CRCRLF. Treat every whitespace-only line as the header terminator.
-        if not line.strip():
+        if line == b"\r\n":
             break
         name, value = line.decode("utf-8").split(":", 1)
         headers[name.strip().lower()] = value.strip()
