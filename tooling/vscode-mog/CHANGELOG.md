@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.16
+
+- Verify bundled-server containment with platform-aware path semantics in the
+  Windows Extension Host test.
+
 ## 0.1.15
 
 - Preserve the Windows runner toolcache PATH inside MSYS2 so Node and npm are
