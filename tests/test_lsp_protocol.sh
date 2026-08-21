@@ -75,7 +75,10 @@ with tempfile.TemporaryDirectory(prefix="mog lsp unicode ") as tmp:
     p.stdin.flush()
     install_failure = until(6)
     assert install_failure["error"]["code"] == -32001, install_failure
-    assert str(broken) in install_failure["error"]["message"], install_failure
+    # MSYS Python uses /tmp/... while the native Windows server reports the
+    # same directory as a drive-qualified path. Verify the stable project
+    # identity without requiring one platform's absolute spelling.
+    assert broken.name in install_failure["error"]["message"], install_failure
 
     # Multiple messages in one write must retain their framing boundaries.
     p.stdin.write(frame({"jsonrpc":"2.0","id":2,"method":"mog/unknown","params":{}}) +

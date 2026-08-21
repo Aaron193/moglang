@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.14
+
+- Compare the project identity rather than platform-specific MSYS and native
+  Windows absolute path spellings in protocol error verification.
+
 ## 0.1.13
 
 - Keep the Windows language server's standard streams in binary mode so its
