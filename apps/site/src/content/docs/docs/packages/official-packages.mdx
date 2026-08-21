@@ -1,0 +1,115 @@
+---
+title: Official Packages
+description: Source, native, and hybrid packages maintained by the Mog project.
+---
+
+import { Card, CardGrid, Aside } from '@astrojs/starlight/components';
+
+The `moglang` organization maintains a growing set of packages separately from
+the runtime. They use canonical `github.com/moglang/...` imports and are
+versioned independently, so check each repository's Releases page when choosing
+a version.
+
+## Portable source packages
+
+These packages are implemented in Mog and do not require a native compiler when
+installed.
+
+<CardGrid>
+	<Card title="encoding" icon="seti:json">
+		Hex, Base64, URL encoding, and checksum helpers.
+		[Repository](https://github.com/moglang/encoding)
+	</Card>
+	<Card title="json" icon="seti:json">
+		JSON parsing, typed value access, and deterministic serialization.
+		[Repository](https://github.com/moglang/json)
+	</Card>
+	<Card title="log" icon="document">
+		Configurable levels, filtering, and named console loggers.
+		[Repository](https://github.com/moglang/log)
+	</Card>
+	<Card title="math" icon="seti:config">
+		Portable numeric constants, bounds helpers, powers, and rounding.
+		[Repository](https://github.com/moglang/math)
+	</Card>
+	<Card title="path" icon="right-arrow">
+		Cross-platform lexical path joining, normalization, and inspection.
+		[Repository](https://github.com/moglang/path)
+	</Card>
+	<Card title="test" icon="approve-check">
+		Assertions, equality checks, null checks, and approximate comparisons.
+		[Repository](https://github.com/moglang/test)
+	</Card>
+</CardGrid>
+
+## Native packages
+
+Native packages bridge Mog to platform services and C/C++ libraries. A Git
+dependency builds them from source; configured registries may provide prebuilt
+artifacts for a supported target.
+
+<CardGrid>
+	<Card title="fs" icon="document">
+		Filesystem reads, writes, directories, copies, renames, and metadata.
+		[Repository](https://github.com/moglang/fs)
+	</Card>
+	<Card title="http" icon="external">
+		Callback-based HTTP and WebSocket servers, including binary payloads and
+		connection-local Mog values.
+		[Repository](https://github.com/moglang/http)
+	</Card>
+	<Card title="random" icon="random">
+		Seeded random generators, secure seeds, integers, booleans, and floats.
+		[Repository](https://github.com/moglang/random)
+	</Card>
+	<Card title="time" icon="information">
+		Monotonic and Unix clocks plus millisecond and second sleeps.
+		[Repository](https://github.com/moglang/time)
+	</Card>
+	<Card title="window" icon="seti:font">
+		SDL2-backed windows, events, keyboard and mouse input, drawing, and text.
+		[Repository](https://github.com/moglang/window) ·
+		[Package guide](/docs/packages/window-package/)
+	</Card>
+</CardGrid>
+
+## Hybrid package
+
+<CardGrid>
+	<Card title="ecs" icon="seti:config">
+		A Mog source facade over a native-performance C++ entity-component system,
+		with schemas, worlds, entities, components, and queries.
+		[Repository](https://github.com/moglang/ecs)
+	</Card>
+</CardGrid>
+
+## Install and import
+
+Choose a tag from the package repository, add it to your project, and import
+the canonical module path. For example:
+
+```bash
+mog add github.com/moglang/json@v0.2.0
+```
+
+```rust
+const json = @import("github.com/moglang/json")
+var value json.Json = json.parse("{\"language\":\"Mog\"}")
+print(json.stringify(value))
+```
+
+`mog add` updates `mog.toml`, resolves the package, installs it, and updates
+`mog.lock`. Commit the lockfile for applications.
+
+<Aside type="note" title="Two different math examples">
+	The official source package is imported as `github.com/moglang/math`. The
+	bare `math` import used in the native-package guide is a small reference
+	package built inside the Mog runtime repository; it is intentionally separate.
+</Aside>
+
+## Package authoring tools
+
+- [Source package template](https://github.com/moglang/package-template)
+- [Native package template](https://github.com/moglang/native-package-template)
+- [Reusable package release actions](https://github.com/moglang/package-actions)
+- [Authoring Native Packages](/docs/packages/authoring-native-packages/)

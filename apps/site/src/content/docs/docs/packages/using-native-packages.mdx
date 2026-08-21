@@ -3,21 +3,69 @@ title: Using Native Packages
 description: Importing native packages, package search paths, opaque handles, and validation workflows.
 ---
 
-Native packages use the same `@import(...)` syntax as source modules.
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-## Importing a package
+Native packages use the same `@import(...)` syntax as source modules, but the
+import resolves package metadata and a compiled shared library rather than a
+single `.mog` source file.
 
-```rust
-const math = @import("math")
-const { addI64, greet, MEANING_OF_LIFE } = @import("math")
+## A complete local example
 
-print(addI64(1i64, 2i64))
-print(MEANING_OF_LIFE)
-print(greet("Turing"))
-```
+The `math` used below is the reference native package at
+`packages/examples/math/` in the Mog runtime repository. `./build.sh` builds it
+into the repository's package output, which is why the bare `"math"` import can
+resolve when running examples from a source checkout.
 
-Bare import names such as `"math"` or `"window"` resolve as packages. Path-like
-imports such as `"./math.mog"` stay source imports.
+<Tabs syncKey="native-math-example">
+	<TabItem label="app.mog">
+	```rust
+	const math = @import("math")
+
+	print(math.addI64(1i64, 2i64))
+	print(math.MEANING_OF_LIFE)
+	print(math.greet("Turing"))
+	```
+	</TabItem>
+	<TabItem label="package.api.mog">
+	```rust
+	package math
+
+	@doc("Reference constant export.")
+	const MEANING_OF_LIFE i64
+
+	@doc("Add two i64 values.")
+	fn addI64(lhs i64, rhs i64) i64
+
+	@doc("Return a greeting for the provided name.")
+	fn greet(name str) str
+	```
+	</TabItem>
+	<TabItem label="mog.toml">
+	```toml
+	kind = "native"
+	import_name = "math"
+	namespace = "examples"
+	name = "math"
+	version = "0.1.0"
+	abi_version = 3
+	mog_runtime = "^0.1.0"
+	```
+	</TabItem>
+</Tabs>
+
+`package.api.mog` is the public Mog-facing contract. The corresponding
+`package.cpp` implements and registers those functions and constants through
+the native package ABI.
+
+<Aside type="note" title="Local reference package, not the official math package">
+	The independently released source package uses the canonical import
+	`github.com/moglang/math`. See [Official Packages](/docs/packages/official-packages/)
+	for that package and the rest of the project-maintained catalog.
+</Aside>
+
+Bare import names such as `"math"` resolve through package metadata. Canonical
+module paths such as `"github.com/moglang/fs"` resolve installed dependencies.
+Path-like imports such as `"./math.mog"` stay source-module imports.
 
 ## Search paths
 
@@ -95,6 +143,6 @@ signature parsing.
 ## Related pages
 
 - [Authoring Native Packages](/docs/packages/authoring-native-packages/)
-- [Window Package](/docs/packages/window-package/)
+- [Official Packages](/docs/packages/official-packages/)
 - [CLI and Debug Flags](/docs/tooling/cli-and-debug-flags/)
 - [Modules and Imports](/docs/language/modules-and-imports/)

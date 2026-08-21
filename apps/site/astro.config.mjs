@@ -61,7 +61,6 @@ export default defineConfig({
 							label: 'Nullability and Type Checking',
 							slug: 'docs/language/nullability-and-typechecking',
 						},
-						{ label: 'Legacy Overview', slug: 'docs/language/functions-types-modules' },
 					],
 				},
 				{
@@ -77,9 +76,9 @@ export default defineConfig({
 					label: 'Packages',
 					items: [
 						{ label: 'Packages Overview', slug: 'docs/packages/imports-native-packages' },
+						{ label: 'Official Packages', slug: 'docs/packages/official-packages' },
 						{ label: 'Using Native Packages', slug: 'docs/packages/using-native-packages' },
 						{ label: 'Authoring Native Packages', slug: 'docs/packages/authoring-native-packages' },
-						{ label: 'Window Package', slug: 'docs/packages/window-package' },
 					],
 				},
 				{

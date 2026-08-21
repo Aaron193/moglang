@@ -11,10 +11,10 @@ offline installs, signed registry metadata, publishing, and advisory audits.
 
 - [Using Native Packages](/docs/packages/using-native-packages/) for package
   imports, search paths, opaque handles, and validation.
+- [Official Packages](/docs/packages/official-packages/) for the complete set of
+  source, native, and hybrid packages maintained in the `moglang` organization.
 - [Authoring Native Packages](/docs/packages/authoring-native-packages/) for
   manifests, `package.api.mog`, and reference package layout.
-- [Window Package](/docs/packages/window-package/) for the first official
-  runtime-maintained package.
 
 ## Import model at a glance
 
@@ -37,11 +37,19 @@ mog install
 const math = @import("github.com/acme/math")
 ```
 
-## Reference packages in this repo
+## Official and reference packages
 
-- [`github.com/moglang/window`](https://github.com/moglang/window)
+Project-maintained packages such as `json`, `http`, `ecs`, and `window` live in
+their own GitHub repositories and are cataloged under
+[Official Packages](/docs/packages/official-packages/).
+
+The runtime repository also contains small packages used to test the compiler,
+loader, and native ABI:
+
 - `packages/examples/math/`
 - `packages/examples/counter/`
 
-Mog and its package ecosystem are still pre-1.0. Commit `mog.lock` for
-applications and use `mog install --locked` in CI when reproducibility matters.
+These reference packages are development fixtures, not substitutes for the
+independently versioned packages in the `moglang` organization. Mog and its
+package ecosystem are still pre-1.0. Commit `mog.lock` for applications and use
+`mog install --locked` in CI when reproducibility matters.
