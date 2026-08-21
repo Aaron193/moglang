@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.15
+
+- Preserve the Windows runner toolcache PATH inside MSYS2 so Node and npm are
+  available during VSIX packaging and Extension Host tests.
+
 ## 0.1.14
 
 - Compare the project identity rather than platform-specific MSYS and native
