@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.11
+
+- Pin Extension Host release tests to the supported VS Code baseline and
+  normalize equivalent Windows file URI spellings in navigation checks.
+
 ## 0.1.10
 
 - Correct Windows file-URI emission and make cross-platform release checks
