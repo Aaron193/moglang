@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.13
+
+- Keep the Windows language server's standard streams in binary mode so its
+  LSP headers retain the required CRLF framing.
+
 ## 0.1.12
 
 - Preserve bundled server executability in installed-artifact tests, exercise
