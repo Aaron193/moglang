@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.17
+
+- Restore the existing Marketplace display name, `Moglang Developer Tools`, so
+  publishing is not rejected by the similar-name policy.
+
 ## 0.1.16
 
 - Verify bundled-server containment with platform-aware path semantics in the
