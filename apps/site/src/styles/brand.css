@@ -1,0 +1,25 @@
+/*
+ * Mog brand configuration
+ *
+ * These are the two base colours from
+ * tooling/vscode-mog/images/fileicons/moglang-icon-option-3.svg.
+ * Keep the matching gradient stops in that SVG in sync when the extension
+ * brand changes. Every website colour below is derived from these tokens.
+ */
+:root {
+	--mog-navy: #111d4f;
+	--mog-navy-light: #263a82;
+	--mog-coral: #ff3f4c;
+	--mog-coral-light: #ff7160;
+
+	--mog-navy-rgb: 17 29 79;
+	--mog-coral-rgb: 255 63 76;
+	--mog-ink: var(--mog-navy);
+	--mog-surface-dark: #0b1230;
+	--mog-surface-deep: #080d24;
+	--mog-surface-light: #f7f8ff;
+	--mog-accent: var(--mog-coral);
+	--mog-accent-strong: #d92d3a;
+	--mog-highlight: var(--mog-coral-light);
+	--mog-shadow: 0 24px 80px rgb(var(--mog-navy-rgb) / 0.18);
+}

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" role="img" aria-labelledby="title desc">
+  <title id="title">MogLang interlocking code mark</title>
+  <desc id="desc">An abstract letter M formed from interlocking navy and coral code brackets.</desc>
+  <defs>
+    <linearGradient id="navy" x1="122" y1="902" x2="596" y2="306" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111D4F"/>
+      <stop offset="1" stop-color="#263A82"/>
+    </linearGradient>
+    <linearGradient id="coral" x1="667" y1="914" x2="1124" y2="340" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF3F4C"/>
+      <stop offset="1" stop-color="#FF7160"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#navy)" d="M436 256 627 438v196L438 464 276 631l145 148v206L67 631 436 256Z"/>
+  <path fill="url(#navy)" d="M465 586 592 703v172l-116 126h-11V586Z"/>
+  <path fill="url(#coral)" d="m819 256 369 375-354 354V779l145-148-162-167-189 170V438l191-182Z"/>
+  <path fill="url(#coral)" d="M790 586 663 703v172l116 126h11V586Z"/>
+</svg>

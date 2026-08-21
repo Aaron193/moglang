@@ -14,11 +14,11 @@ export default defineConfig({
 				'Mog is a strictly typed, bytecode-compiled programming language with a VM, REPL, native packages, and editor tooling.',
 			tagline: 'A sharp programming language for people who want the toolchain to take them seriously.',
 			logo: {
-				src: './src/assets/mog-mark.svg',
+				src: '../../tooling/vscode-mog/images/fileicons/moglang-icon-option-3.svg',
 				alt: 'Mog',
 			},
 			customCss: ['./src/styles/site.css'],
-			favicon: '/favicon.svg',
+			favicon: '/mog-logo.svg',
 			pagefind: true,
 			lastUpdated: true,
 			disable404Route: true,
@@ -28,7 +28,7 @@ export default defineConfig({
 					tag: 'meta',
 					attrs: {
 						name: 'theme-color',
-						content: '#061311',
+						content: '#111D4F',
 					},
 				},
 			],

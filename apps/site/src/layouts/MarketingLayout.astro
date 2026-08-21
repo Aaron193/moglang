@@ -1,5 +1,6 @@
 ---
 import '../styles/site.css';
+import mogLogo from '../../../../tooling/vscode-mog/images/fileicons/moglang-icon-option-3.svg';
 
 interface Props {
 	title: string;
@@ -25,7 +26,7 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 		{
 			isLanding ? (
 				<>
-					<meta id="theme-color-meta" name="theme-color" content="#f7faf7" />
+					<meta id="theme-color-meta" name="theme-color" content="#f7f8ff" />
 					<script is:inline>
 						(() => {
 							const storageKey = 'mog-landing-theme-mode';
@@ -46,7 +47,7 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 									root.style.colorScheme = resolvedTheme;
 
 									if (themeColorMeta) {
-										themeColorMeta.setAttribute('content', resolvedTheme === 'dark' ? '#061311' : '#f7faf7');
+										themeColorMeta.setAttribute('content', resolvedTheme === 'dark' ? '#111D4F' : '#f7f8ff');
 									}
 								},
 								read() {
@@ -70,7 +71,7 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 					</script>
 				</>
 			) : (
-				<meta name="theme-color" content="#061311" />
+				<meta name="theme-color" content="#111D4F" />
 			)
 		}
 		<link rel="canonical" href={canonical} />
@@ -79,13 +80,13 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 		<meta property="og:type" content="website" />
 		<meta property="og:url" content={canonical} />
 		<meta name="twitter:card" content="summary_large_image" />
-		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<link rel="icon" href={mogLogo.src} type="image/svg+xml" />
 	</head>
 	<body class={bodyClass}>
 		<header class="topbar">
 			<div class="topbar__inner">
 				<a class="brand" href="/">
-					<img src="/favicon.svg" alt="Mog" />
+					<img src={mogLogo.src} alt="Mog" />
 					<span>
 						Mog
 						<small>Strict by default. Fast on purpose.</small>
