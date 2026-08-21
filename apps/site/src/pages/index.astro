@@ -1,5 +1,19 @@
 ---
+import { Code } from '@astrojs/starlight/components';
 import MarketingLayout from '../layouts/MarketingLayout.astro';
+
+const heroCode = `type Counter struct {
+  value i32
+
+  fn increment() void {
+    this.value++
+  }
+}
+
+var counter = Counter()
+counter.value = 67
+counter.increment()
+print(counter.value)`;
 ---
 
 <MarketingLayout
@@ -39,23 +53,9 @@ import MarketingLayout from '../layouts/MarketingLayout.astro';
 		<div class="code-panel" aria-label="Mog code sample">
 			<div class="code-panel__top">
 				<div class="code-dots" aria-hidden="true"><span></span><span></span><span></span></div>
-				<span>flappy_core.mog</span>
+				<span>counter.mog</span>
 			</div>
-			<pre><code><span class="kw">fn</span> <span class="fn">makeAdder</span>(base <span class="type">i32</span>) <span class="type">fn(i32) i32</span> &#123;
-  <span class="kw">return</span> <span class="kw">fn</span>(delta <span class="type">i32</span>) =&gt; base + delta
-&#125;
-
-<span class="kw">type</span> <span class="type">Bird</span> struct &#123;
-  velocity <span class="type">f64</span>
-
-  <span class="kw">fn</span> <span class="fn">jump</span>() &#123;
-    this.velocity = -280.0
-  &#125;
-&#125;
-
-<span class="kw">const</span> window = @import(<span class="str">"window"</span>)
-<span class="kw">var</span> addTen = makeAdder(10)
-print(addTen(32))</code></pre>
+			<Code code={heroCode} lang="mog" frame="none" class="hero-code" />
 		</div>
 	</section>
 

@@ -435,20 +435,46 @@ body {
 	color: #d7e4dc;
 }
 
-.code-panel .kw {
-	color: var(--mog-highlight);
+.code-panel .hero-code {
+	position: relative;
+	z-index: 1;
+	--ec-brdRad: 0px;
+	--ec-brdWd: 0px;
+	--ec-brdCol: transparent;
+	--ec-codeBg: transparent;
+	--ec-codeFg: #d7e4dc;
+	--ec-codeFontSize: 0.94rem;
+	--ec-codeLineHt: 1.75;
+	--ec-codePadBlk: 0rem;
+	--ec-codePadInl: 0rem;
+	--ec-gtrBrdWd: 0px;
+	--ec-frm-edBg: transparent;
+	--ec-frm-frameBoxShdCssVal: none;
+	--ec-frm-inlBtnFg: #f7f8ff;
+	--ec-frm-inlBtnBg: #f7f8ff;
+	--ec-frm-inlBtnBrd: rgb(247 248 255 / 0.42);
 }
 
-.code-panel .type {
-	color: var(--mog-accent);
+.code-panel .hero-code pre {
+	border: 0;
+	background: transparent;
 }
 
-.code-panel .fn {
-	color: #ffffff;
+.code-panel .hero-code .copy {
+	display: none;
 }
 
-.code-panel .str {
-	color: #8dc9ff;
+.code-panel .hero-code .ec-line:first-child .code {
+	padding-inline-end: 0;
+}
+
+/* The landing page always uses a dark editor surface, independent of the page theme. */
+.code-panel .hero-code .ec-line span[style^='--'] {
+	color: var(--0, inherit);
+	background-color: var(--0bg, transparent);
+	font-style: var(--0fs, inherit);
+	font-weight: var(--0fw, inherit);
+	text-decoration: var(--0td, inherit);
 }
 
 .feature-band {
