@@ -1,0 +1,38 @@
+---
+title: Release Notes
+description: Runtime and VS Code extension changes, generated from the changelogs shipped in the Mog repository.
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+import ReleaseHistory from '../../../../components/ReleaseHistory.astro';
+
+Mog publishes the runtime and VS Code extension independently. This page is
+generated from their canonical repository changelogs during every site build,
+so a release-note update and its documentation cannot silently drift apart.
+
+<CardGrid>
+	<Card title="Runtime downloads" icon="download">
+		Download tested archives and their SHA-256 checksums from the
+		[GitHub Releases page](https://github.com/moglang/mog/releases).
+	</Card>
+	<Card title="VS Code extension" icon="puzzle">
+		Install **Moglang Developer Tools** from the
+		[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=moglang.vscode-mog).
+	</Card>
+</CardGrid>
+
+## Mog runtime
+
+Runtime releases include `mog`, `mog-lsp`, and checksum data. See
+[Install Mog](/docs/getting-started/install/) for platform and source-build
+instructions.
+
+<ReleaseHistory source="runtime" />
+
+## VS Code extension
+
+The extension packages a tested language server for each supported platform.
+Patch releases often describe release portability and packaging fixes; editor
+capabilities are summarized in [VS Code and LSP](/docs/tooling/vscode-and-lsp/).
+
+<ReleaseHistory source="extension" />

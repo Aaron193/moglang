@@ -30,7 +30,7 @@ The current interpreter searches for packages in:
 You can add extra roots explicitly:
 
 ```bash
-./build/interpreter --package-path /path/to/packages app.mog
+mog run --package-path /path/to/packages app.mog
 ```
 
 ## Opaque package types
@@ -84,8 +84,8 @@ install without rebuilding.
 Validate a package directory against its manifest and compiled shared library:
 
 ```bash
-./build/interpreter validate-package packages/examples/math
-./build/interpreter validate-package packages/examples/counter
+mog validate-package packages/examples/math
+mog validate-package packages/examples/counter
 ```
 
 The current validator checks package ID syntax, reserved `mog` usage,

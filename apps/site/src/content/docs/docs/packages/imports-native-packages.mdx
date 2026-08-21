@@ -4,8 +4,8 @@ description: A map of the package docs, the current import model, and where to g
 ---
 
 Mog uses `@import(...)` for both source modules and native packages. The package
-story is real today, but it is still grounded in the implementation in this
-repository.
+manager supports local, workspace, Git, and registry dependencies with lockfiles,
+offline installs, signed registry metadata, publishing, and advisory audits.
 
 ## Read by task
 
@@ -33,7 +33,7 @@ mog add github.com/acme/math@v1.0.0
 mog install
 ```
 
-```mog
+```rust
 const math = @import("github.com/acme/math")
 ```
 
@@ -43,5 +43,5 @@ const math = @import("github.com/acme/math")
 - `packages/examples/math/`
 - `packages/examples/counter/`
 
-Treat the current docs as documentation of implemented behavior, not as a
-promise that the broader package ecosystem is fully stabilized.
+Mog and its package ecosystem are still pre-1.0. Commit `mog.lock` for
+applications and use `mog install --locked` in CI when reproducibility matters.

@@ -23,12 +23,9 @@ print(values.size())
 print(values.has(3))
 ```
 
-Current docs-worthy behavior already covered by tests:
-
-- indexed read: `values[index]`
-- indexed write: `values[index] = value`
-- compound assignment on indexed elements
-- methods such as `push`, `pop`, `size`, and `has`
+Array methods are `push`, `pop`, `insert`, `remove`, `clear`, `size`,
+`isEmpty`, `first`, `last`, and `has`. Indexed reads, indexed writes, and
+compound assignment on indexed elements are also supported.
 
 ## Sets
 
@@ -41,9 +38,15 @@ print(ids.has(2))
 
 print(ids.add(4))
 print(ids.remove(3))
+
+var more Set<i32> = Set(3, 4, 5)
+print(ids.union(more))
+print(ids.intersect(more))
+print(ids.difference(more))
 ```
 
-Set values can be iterated directly:
+Set methods are `add`, `remove`, `has`, `clear`, `isEmpty`, `size`, `toArray`,
+`union`, `intersect`, and `difference`. Set values can be iterated directly:
 
 ```rust
 for (var item i32 : ids) {
@@ -68,13 +71,10 @@ print(scores.size())
 print(scores.remove("carol"))
 ```
 
-The current dictionary story is:
-
-- bracket access reads and writes values
-- `.get(...)`, `.set(...)`, `.has(...)`, `.remove(...)`, and `.size()` are in use
-- `.keys()` and `.values()` exist and are exercised in the test suite
-- direct foreach over a dictionary is rejected today; iterate a projection such
-  as `.keys()` instead
+Dictionary methods are `get`, `getOr`, `set`, `has`, `remove`, `clear`,
+`isEmpty`, `size`, `keys`, and `values`. Bracket access reads and writes values.
+Direct foreach over a dictionary is rejected today; iterate a projection such
+as `.keys()` instead.
 
 ## Generic types
 

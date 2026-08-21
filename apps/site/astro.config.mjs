@@ -42,7 +42,7 @@ export default defineConfig({
 				{
 					label: 'Getting Started',
 					items: [
-						{ label: 'Install and Build', slug: 'docs/getting-started/install' },
+						{ label: 'Install Mog', slug: 'docs/getting-started/install' },
 						{ label: 'Quickstart', slug: 'docs/getting-started/quickstart' },
 					],
 				},
@@ -51,6 +51,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Language Overview', slug: 'docs/language/basics' },
 						{ label: 'Values and Bindings', slug: 'docs/language/values-and-bindings' },
+						{ label: 'Built-in Types and Casts', slug: 'docs/language/built-in-types-and-casts' },
 						{ label: 'Control Flow', slug: 'docs/language/control-flow' },
 						{ label: 'Collections', slug: 'docs/language/collections' },
 						{ label: 'Functions and Closures', slug: 'docs/language/functions-and-closures' },
@@ -91,6 +92,7 @@ export default defineConfig({
 						{ label: 'Reference Overview', slug: 'docs/reference/syntax-builtins-flags' },
 						{ label: 'Syntax Rules', slug: 'docs/reference/syntax-rules' },
 						{ label: 'Built-in Functions', slug: 'docs/reference/built-in-functions' },
+						{ label: 'Release Notes', slug: 'docs/reference/releases' },
 					],
 				},
 			],

@@ -5,8 +5,9 @@ description: Write and run a first Mog program.
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 
-This walkthrough gets you from a built interpreter to a real `.mog` file with
-functions, locals, and output.
+This walkthrough gets you from an installed runtime to a real `.mog` file with
+functions, locals, and output. If `mog --version` does not work yet, follow
+[Install Mog](/docs/getting-started/install/) first.
 
 ## First Program
 
@@ -25,7 +26,7 @@ print(applyTwice(addOne, 40))
 Run it:
 
 ```bash
-./build/interpreter hello.mog
+mog run hello.mog
 ```
 
 ## What This Shows

@@ -1,41 +1,75 @@
 ---
 title: Built-in Functions
-description: The runtime-provided native functions that are available without importing a package.
+description: Runtime functions and collection constructors available without importing a package.
 ---
 
-Mog currently exposes a small built-in native function set:
+These functions are registered by the runtime and type checker, so they are
+available without `@import(...)`.
 
-- `clock()`
-- `sqrt(x)`
-- `len(x)`
-- `type(x)`
-- `str(x)`
-- `num(x)`
-- `print(x)`
+## Runtime and conversion
 
-## Notes on the current surface
+| Function | Returns | Purpose |
+| --- | --- | --- |
+| `clock()` | `f64` | Current process clock value |
+| `len(value)` | `i64` | Length of a string or collection |
+| `type(value)` | `str` | Runtime type name |
+| `str(value)` | `str` | String representation |
+| `toString(value)` | `str` | Alias-style string conversion |
+| `num(value)` | `f64` | Convert a number or numeric string to `f64` |
+| `error(message)` | `void` | Raise a runtime error with a string message |
 
-- `print(...)` is part of the normal language experience and is surfaced through
-  tooling/completion, even though the README’s built-in list focuses on the
-  native helpers.
-- Conversion-style helpers such as `str(x)` and `num(x)` are useful in small
-  scripts and REPL checks.
-- Collection code in the repo also relies heavily on methods such as `.size()`,
-  `.has(...)`, `.get(...)`, and `.set(...)`, but those are collection methods,
-  not global built-ins.
+`print(expression)` is a language statement rather than an ordinary function,
+but it is used with call-like syntax and is surfaced by editor tooling.
 
-## Quick example
+## Numeric helpers
+
+| Function | Returns |
+| --- | --- |
+| `sqrt(value)` | `f64` |
+| `abs(value)` | `f64` |
+| `floor(value)` | `f64` |
+| `ceil(value)` | `f64` |
+| `pow(base, exponent)` | `f64` |
+| `parseInt(text)` | `i64` |
+| `parseUInt(text)` | `u64` |
+| `parseFloat(text)` | `f64` |
+
+The parsing functions require the entire string to be a valid value and raise a
+runtime error for invalid input.
+
+## Byte-oriented string helpers
+
+| Function | Returns | Purpose |
+| --- | --- | --- |
+| `charCodeAt(text, index)` | `i64` | Unsigned byte at a zero-based index |
+| `charFromCode(code)` | `str` | One-byte string for a value from 0 through 255 |
+| `slice(text, start, end)` | `str` | Bytes in the half-open range `[start, end)` |
+
+These operations use byte offsets, not Unicode code-point or grapheme indexes.
+Invalid codes and out-of-range bounds raise a runtime error.
 
 ```rust
-print(sqrt(9))
-print(len("mog"))
-print(type(42))
-print(str(7))
-print(num("12"))
+print(charCodeAt("Mog", 0i64))
+print(charFromCode(77i64))
+print(slice("Mog language", 0i64, 3i64))
+```
+
+## Collection constructors
+
+- `Array(values...)` creates an array from zero or more values.
+- `Dict()` creates an empty dictionary.
+- `Set(values...)` creates a set and removes duplicate values.
+
+Prefer a type annotation for an empty or otherwise ambiguous collection:
+
+```rust
+var values Array<i32> = Array()
+var lookup Dict<str, i32> = Dict()
+var unique Set<i32> = Set(1, 2, 2)
 ```
 
 ## Related pages
 
-- [Values and Bindings](/docs/language/values-and-bindings/)
+- [Built-in Types and Casts](/docs/language/built-in-types-and-casts/)
 - [Collections](/docs/language/collections/)
 - [REPL](/docs/tooling/repl/)

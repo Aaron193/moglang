@@ -17,8 +17,8 @@ import MarketingLayout from '../layouts/MarketingLayout.astro';
 				clarity without softness.
 			</p>
 			<div class="hero-actions">
-				<a class="primary" href="/docs/getting-started/quickstart/">Read the Quickstart</a>
-				<a class="secondary" href="/docs/reference/syntax-rules/">Browse the Reference</a>
+				<a class="primary" href="/docs/getting-started/install/">Install Mog</a>
+				<a class="secondary" href="/docs/getting-started/quickstart/">Read the Quickstart</a>
 			</div>
 			<div class="hero-metrics">
 				<div class="metric-card">
@@ -80,46 +80,45 @@ print(addTen(32))</code></pre>
 			<span class="eyebrow">Packages + Tooling</span>
 			<h3>Imports, native packages, and editor support</h3>
 			<p>
-				Use `@import(...)` for modules and native packages, build with `mog.toml`, and work with
-				VS Code language support plus an in-repo LSP implementation.
+				Use `@import(...)` for modules and native packages, manage projects with `mog.toml`, and
+				install the official VS Code extension with a bundled language server.
 			</p>
 		</article>
 	</section>
 
 	<section class="content-section">
 		<div class="section-header">
-			<span class="eyebrow">What Ships In V1</span>
-			<h2>A landing page for the pitch, and docs that stay close to the code.</h2>
+			<span class="eyebrow">A Complete Toolchain</span>
+			<h2>Start with a release archive. Keep the compiler, packages, and editor in sync.</h2>
 			<p>
-				The public site is one Astro app. The landing page handles positioning and narrative. The
-				docs run on Starlight so you get search, navigation, Markdown authoring, and static output
-				without building a documentation framework from nothing.
+				Mog runtime releases contain both the command-line tool and the matching language server.
+				The Marketplace extension bundles a tested server for supported platforms, while source
+				builds keep every part of the toolchain available to contributors.
 			</p>
 		</div>
 		<div class="stack-grid">
 			<article class="stack-card">
-				<h3>Why this approach</h3>
+				<h3>Install and run</h3>
 				<p>
-					Most documentation sites use a framework or platform instead of custom-building docs UI.
-					For Mog, Astro + Starlight gives you a modern docs experience while leaving the landing
-					page fully customizable.
+					Download a tested archive for Linux x64, Apple Silicon macOS, or Windows x64, then put
+					its <code>bin</code> directory on your path.
 				</p>
 				<ul>
-					<li>Static output suitable for Vercel, Netlify, or any CDN</li>
-					<li>In-repo Markdown and MDX content with searchable builds</li>
-					<li>Design control without recreating docs navigation from scratch</li>
+					<li>Run projects with <code>mog run app.mog</code></li>
+					<li>Manage dependencies with <code>mog add</code> and <code>mog install</code></li>
+					<li>Verify runtime and native ABI versions with <code>mog --version</code></li>
 				</ul>
 			</article>
 			<article class="stack-card">
-				<h3>What the stack looks like</h3>
+				<h3>Work in VS Code</h3>
 				<p>
-					The repo now acts as a real monorepo: the language runtime stays in C++ and the website
-					lives under <code>apps/site</code>.
+					Moglang Developer Tools provides language-aware editing backed by the same frontend used
+					by the compiler.
 				</p>
 				<ul>
-					<li><code>npm</code> workspaces at the repo root</li>
-					<li><code>Astro</code> for custom pages and static delivery</li>
-					<li><code>Starlight</code> for docs, sidebar, search, and content collections</li>
+					<li>Completion, hover, diagnostics, and formatting</li>
+					<li>Definitions, references, rename, and workspace symbols</li>
+					<li>Import-aware navigation for source and native packages</li>
 				</ul>
 			</article>
 		</div>
@@ -137,7 +136,7 @@ print(addTen(32))</code></pre>
 		<div class="docs-grid">
 			<article class="docs-card">
 				<h3>Getting Started</h3>
-				<p>Build the interpreter, run your first file, and understand the current project shape.</p>
+				<p>Install a release or build from source, then run your first Mog program.</p>
 			</article>
 			<article class="docs-card">
 				<h3>Language Guides</h3>
@@ -156,41 +155,41 @@ print(addTen(32))</code></pre>
 
 	<section class="content-section">
 		<div class="section-header">
-			<span class="eyebrow">Repository Highlights</span>
-			<h2>The site points directly at the real capabilities already present in the repo.</h2>
+			<span class="eyebrow">Release Notes</span>
+			<h2>Runtime and editor changes, kept close to their source.</h2>
 			<p>
-				This avoids fake product copy. The landing narrative is tied to features that exist today:
-				type checking, native packages, example programs, benchmark scripts, and editor tooling.
+				The runtime and VS Code extension release independently. The documentation renders both
+				canonical changelogs, making compatibility work and new capabilities easy to discover.
 			</p>
 		</div>
 		<div class="example-grid">
 			<article class="docs-card">
-				<h3>Examples and demos</h3>
+				<h3>Runtime releases</h3>
 				<p>
-					Explore manual examples under <code>examples/</code>, including visible window demos and a
-					playable Flappy Bird clone powered by the official <code>window</code> package.
+					Tested archives include <code>mog</code> and <code>mog-lsp</code>, with SHA-256 checksums
+					published beside immutable GitHub release assets.
 				</p>
 			</article>
 			<article class="docs-card">
-				<h3>Package story</h3>
+				<h3>Extension releases</h3>
 				<p>
-					Mog supports package manifests, lockfiles, native package APIs, and resolution through
-					<code>@import(...)</code> for both modules and native packages.
+					Platform-specific VSIX packages are tested before publishing to the Visual Studio
+					Marketplace and GitHub Releases.
 				</p>
 			</article>
 		</div>
 		<div class="cta-banner">
 			<div>
 				<span class="eyebrow">Start Here</span>
-				<h2>Read the docs, then tune the voice.</h2>
+				<h2>Install Mog, write a program, and let the tooling do its job.</h2>
 				<p>
-					The structure is now in place for a polished public site. Next iterations can deepen the
-					reference, add versioned docs, and refine the brand voice without reworking the stack.
+					The quickstart covers the syntax in a few minutes. The language guides and reference are
+					there when you need the exact rule.
 				</p>
 			</div>
 			<div class="hero-actions">
-				<a class="primary" href="/docs/">Open Docs</a>
-				<a class="secondary" href="/manifesto/">Read the Manifesto</a>
+				<a class="primary" href="/docs/getting-started/install/">Install Mog</a>
+				<a class="secondary" href="/docs/reference/releases/">Read Release Notes</a>
 			</div>
 		</div>
 	</section>

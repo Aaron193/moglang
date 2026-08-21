@@ -1,0 +1,100 @@
+---
+import runtimeChangelog from '../../../../CHANGELOG.md?raw';
+import extensionChangelog from '../../../../tooling/vscode-mog/CHANGELOG.md?raw';
+
+interface Props {
+	source: 'runtime' | 'extension';
+}
+
+interface Release {
+	version: string;
+	items: string[];
+}
+
+const { source } = Astro.props;
+const markdown = source === 'runtime' ? runtimeChangelog : extensionChangelog;
+const releases: Release[] = [];
+let current: Release | undefined;
+
+for (const line of markdown.split('\n')) {
+	const heading = line.match(/^##\s+(.+)$/);
+	if (heading) {
+		current = { version: heading[1].trim(), items: [] };
+		releases.push(current);
+		continue;
+	}
+
+	const bullet = line.match(/^-\s+(.+)$/);
+	if (bullet && current) {
+		current.items.push(bullet[1].trim());
+		continue;
+	}
+
+	const continuation = line.match(/^\s{2,}(.+)$/);
+	if (continuation && current?.items.length) {
+		current.items[current.items.length - 1] += ` ${continuation[1].trim()}`;
+	}
+}
+
+const inlineParts = (value: string) =>
+	value.split(/(`[^`]+`)/g).filter(Boolean).map((part) => ({
+		code: part.startsWith('`') && part.endsWith('`'),
+		text: part.startsWith('`') && part.endsWith('`') ? part.slice(1, -1) : part,
+	}));
+---
+
+<div class="release-history">
+	{releases.map((release, index) => (
+		<section class="release-card">
+			<div class="release-card__heading">
+				<h3>v{release.version}</h3>
+				{index === 0 && <span>Latest documented</span>}
+			</div>
+			<ul>
+				{release.items.map((item) => (
+					<li>{inlineParts(item).map((part) => part.code ? <code>{part.text}</code> : part.text)}</li>
+				))}
+			</ul>
+		</section>
+	))}
+</div>
+
+<style>
+	.release-history {
+		display: grid;
+		gap: 1rem;
+		margin-block: 1rem 2rem;
+	}
+
+	.release-card {
+		border: 1px solid var(--sl-color-hairline);
+		border-radius: 0.75rem;
+		padding: 1rem 1.1rem;
+		background: color-mix(in srgb, var(--sl-color-bg) 92%, var(--sl-color-accent-low));
+	}
+
+	.release-card__heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.release-card h3 {
+		margin: 0;
+		font-size: 1.05rem;
+	}
+
+	.release-card__heading span {
+		border-radius: 999px;
+		padding: 0.2rem 0.55rem;
+		background: var(--sl-color-accent-low);
+		color: var(--sl-color-accent-high);
+		font-size: 0.72rem;
+		font-weight: 600;
+	}
+
+	.release-card ul {
+		margin-bottom: 0;
+	}
+</style>

@@ -1,80 +1,148 @@
 ---
-title: Install and Build
-description: Build Mog from source and understand the current toolchain layout.
+title: Install Mog
+description: Install a tested Mog release, add the official VS Code extension, or build the toolchain from source.
 ---
 
-import { Steps, FileTree } from '@astrojs/starlight/components';
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-Mog is currently built from source from this repository. The implementation
-targets GCC or Clang because the VM uses computed-goto dispatch.
+The fastest path is a tested runtime archive from GitHub. Each archive contains
+both the `mog` command and the matching `mog-lsp` language server.
 
-## Prerequisites
-
-- A Unix-like environment with `bash`
-- `cmake`
-- GCC or Clang
-- Optional: SDL2 if you want to build and run the visible `window` demos
-
-## Workspace Shape
-
-<FileTree>
-	- README.md
-	- build.sh
-	- src/
-		- main.cpp
-		- Compiler.cpp
-		- VirtualMachine.cpp
-	- examples/
-	- packages/
-	- tests/
-	- apps/
-		- site/
-</FileTree>
-
-## Build Commands
+## Install a release
 
 <Steps>
-1. Build the default release binary:
+1. Open [Mog Releases](https://github.com/moglang/mog/releases) and choose the
+   latest runtime release.
+
+2. Download the archive for your platform and the accompanying `SHA256SUMS`
+   file. Runtime CI currently builds archives for:
+
+   | Platform | Architecture |
+   | --- | --- |
+   | Linux | x86-64 |
+   | macOS | Apple Silicon (arm64) |
+   | Windows | x86-64 |
+
+3. Verify the archive checksum, extract it, and move or add its `bin` directory
+   to your `PATH`.
+
+   <Tabs>
+     <TabItem label="Linux">
+     ```bash
+     sha256sum mog-*.tar.gz
+     tar -xzf mog-*.tar.gz
+     ```
+     </TabItem>
+     <TabItem label="macOS">
+     ```bash
+     shasum -a 256 mog-*.tar.gz
+     tar -xzf mog-*.tar.gz
+     ```
+     </TabItem>
+     <TabItem label="Windows">
+     ```powershell
+     Get-FileHash .\mog-*.zip -Algorithm SHA256
+     Expand-Archive .\mog-*.zip
+     ```
+     Add the extracted `bin` directory to your user `Path`.
+     </TabItem>
+   </Tabs>
+
+   Compare the printed digest with the matching entry in `SHA256SUMS` before
+   using the extracted binaries.
+
+4. Confirm that the runtime is available:
 
    ```bash
-   ./build.sh
-   ```
-
-2. Build a debug binary with sanitizers when needed:
-
-   ```bash
-   ./build.sh --debug --asan
-   ./build.sh --debug --ubsan
-   ./build.sh --debug --asan --ubsan
-   ```
-
-3. Build a profiling-friendly optimized binary:
-
-   ```bash
-   ./build.sh --release --profiling
+   mog --version
+   # mog 0.1.6 (native ABI 3)
    ```
 </Steps>
 
-## Important Notes
+<Aside type="note" title="Release support matrix">
+	If your platform is not listed, build from source below. Release archives are
+	self-contained with respect to OpenSSL, but native packages can have their own
+	system-library requirements.
+</Aside>
 
-- Sanitizer builds cannot be combined with `--lto`, `--pgo-generate`, or `--pgo-use`.
-- `./build.sh` configures CMake and builds the interpreter plus test binaries and packages.
-- If SDL2 is not installed, the build can still succeed, but the optional `window` package and visible window demos will be unavailable.
+## Install the VS Code extension
 
-## Run the Interpreter
+Install [Moglang Developer Tools](https://marketplace.visualstudio.com/items?itemName=moglang.vscode-mog)
+from the Visual Studio Marketplace, or search that exact name in VS Code's
+Extensions view. Platform-specific Marketplace packages already contain a
+tested `mog-lsp`; you do not have to configure a server path after a normal
+Marketplace install.
+
+See [VS Code and LSP](/docs/tooling/vscode-and-lsp/) for features, server
+discovery, settings, and troubleshooting.
+
+## Build from source
+
+Source builds require CMake 3.10 or newer, a C++17 GCC or Clang compiler,
+OpenSSL development files, and `bash`. SDL2 development files are optional and
+only needed for the official `window` package and its demos.
+
+<Tabs>
+	<TabItem label="Ubuntu/Debian">
+	```bash
+	sudo apt-get install build-essential cmake libssl-dev
+	# Optional window package support:
+	sudo apt-get install libsdl2-dev
+	```
+	</TabItem>
+	<TabItem label="macOS">
+	```bash
+	xcode-select --install
+	brew install cmake openssl@3
+	# Optional window package support:
+	brew install sdl2
+	```
+	</TabItem>
+	<TabItem label="Windows (MSYS2)">
+	```bash
+	pacman -S mingw-w64-x86_64-cmake mingw-w64-x86_64-gcc \
+	  mingw-w64-x86_64-openssl mingw-w64-x86_64-ninja
+	```
+	Run the remaining commands from the matching MinGW64 shell.
+	</TabItem>
+</Tabs>
+
+Clone the repository and build the default release configuration:
 
 ```bash
-./build/interpreter path/to/program.mog
+git clone https://github.com/moglang/mog.git
+cd mog
+./build.sh
 ```
 
-Add extra native package roots if you need them:
+The source tree currently produces `build/interpreter`, `build/mog`, and
+`build/mog-lsp`. Use `build/mog` for the public command-line interface; the
+`interpreter` name remains available for repository development and legacy
+scripts.
+
+Useful development configurations include:
 
 ```bash
-./build/interpreter --package-path /path/to/packages path/to/program.mog
+./build.sh --debug --asan
+./build.sh --debug --ubsan
+./build.sh --debug --asan --ubsan
+./build.sh --release --profiling
 ```
 
-Start the REPL by running the binary without a source file:
+Sanitizer builds cannot be combined with `--lto`, `--pgo-generate`, or
+`--pgo-use`.
+
+## Run Mog
 
 ```bash
-./build/interpreter
+mog run path/to/program.mog
 ```
+
+From a source checkout:
+
+```bash
+./build/mog run path/to/program.mog
+```
+
+Running `mog` with no arguments starts the REPL. Use `mog --help` for the full
+project, package, registry, cache, and runtime command list.

@@ -1,62 +1,92 @@
 ---
 title: VS Code and LSP
-description: The in-repo VS Code extension, the `mog-lsp` binary, and the editor features already covered by tests.
+description: Install and use the official Mog extension, its bundled language server, and recovery tools.
 ---
 
-The repo ships both a VS Code extension and an in-repo language server.
+The official **Moglang Developer Tools** extension pairs language syntax and
+snippets with the `mog-lsp` server.
 
-## VS Code extension
+## Install from the Marketplace
 
-The extension lives under `tooling/vscode-mog/`.
+Install the extension from the
+[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=moglang.vscode-mog),
+or search for **Moglang Developer Tools** in VS Code's Extensions view.
 
-Current extension-facing features include:
+Platform-specific packages for Linux x64, Apple Silicon macOS, and Windows x64
+include a tested language server. The extension does not download executables
+at activation time and does not collect telemetry.
 
-- `.mog` language registration
-- syntax highlighting
-- snippets
-- diagnostics
-- a bundled language icon
+## Editor features
 
-The extension also supports a `mog.serverPath` setting for pointing VS Code at a
-specific `mog-lsp` executable.
+The shipped extension and language server provide:
 
-## Language server binary
+- syntax highlighting, snippets, bracket/comment behavior, and a `.mog` file icon
+- diagnostics, completion, and hover information
+- go to definition, references, rename, and workspace symbols
+- document formatting and semantic highlighting
+- import-aware navigation and package API documentation
 
-Build the repo, then use the generated `mog-lsp` binary from `build/mog-lsp`.
+For source declarations, a contiguous `//` comment group or `/* ... */` comment
+immediately above a declaration appears when hovering its references. A blank
+line detaches the comment.
 
-## Capabilities already exercised in the repo
+Package `package.api.mog` files also drive hover documentation from `@doc(...)`,
+navigation to opaque package types, and readable imported signatures.
 
-The LSP and tooling regression tests cover real editor functionality, including:
+## Server discovery
 
-- formatting
-- go to definition
-- find references
-- hover
-- completion
-- semantic tokens
-- document symbols
-- import-aware navigation
-- package-aware type and API navigation
+Normally, the bundled server starts automatically. For source checkouts and
+generic development VSIX files, discovery checks these locations in order:
 
-That is enough surface area to document Mog as having serious editor tooling,
-not just syntax coloring.
+1. the explicit `mog.serverPath` setting
+2. the server bundled with the extension
+3. an installed Mog runtime selected with `mog.runtimePath`
+4. the active project's build directory
+5. each workspace folder's build directory
+6. `mog-lsp` on `PATH`
 
-For source declarations, a contiguous `//` comment group or a `/* ... */`
-comment immediately above the declaration is shown when hovering any reference
-to it. A blank line between the comment and declaration keeps the comment
-detached.
+Relative settings resolve from the relevant workspace folder. An invalid
+explicit override is reported instead of being silently ignored.
 
-## Why `package.api.mog` matters
+## Commands and troubleshooting
 
-Package API declaration files are not only runtime metadata. They also feed the
-editor experience:
+Open the Command Palette and run:
 
-- hover documentation from `@doc(...)`
-- navigation to opaque package types
-- readable imported signatures
+- **Mog: Show Language Server Status** to see the executable, working directory,
+  server version, tooling protocol, and current state
+- **Mog: Open Language Server Log** to inspect every discovery candidate and
+  rejection
+- **Mog: Select Language Server** to validate and save an executable override
+- **Mog: Restart Language Server** after rebuilding or changing configuration
+- **Mog: Install Project Dependencies** to run package installation with explicit
+  consent and visible progress
+
+If a relocated CMake build is selected, its cached source path may be invalid.
+Remove that dedicated build directory, configure it again from the current
+checkout, rebuild `mog-lsp`, and restart the server. Repeated server crashes are
+bounded and remain visible instead of causing an endless restart loop.
+
+## Extension development
+
+From the repository root:
+
+```bash
+npm --prefix tooling/vscode-mog ci
+npm --prefix tooling/vscode-mog run compile
+./build.sh
+```
+
+Use the repository's **Mog: Extension Development Host** launch configuration.
+It opens an isolated development host with a development-only server path and
+does not alter personal VS Code settings.
+
+```bash
+npm --prefix tooling/vscode-mog run check
+npm --prefix tooling/vscode-mog run test:extension
+```
 
 ## Related pages
 
+- [Install Mog](/docs/getting-started/install/)
 - [Authoring Native Packages](/docs/packages/authoring-native-packages/)
-- [CLI and Debug Flags](/docs/tooling/cli-and-debug-flags/)
-- [Example Programs](/docs/examples/)
+- [Release Notes](/docs/reference/releases/)

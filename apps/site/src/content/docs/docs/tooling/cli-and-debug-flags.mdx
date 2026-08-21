@@ -28,13 +28,13 @@ Sanitizers cannot be combined with `--lto`, `--pgo-generate`, or `--pgo-use`.
 ## Running code
 
 ```bash
-./build/interpreter path/to/program.mog
+mog run path/to/program.mog
 ```
 
 Add extra package roots when needed:
 
 ```bash
-./build/interpreter --package-path /path/to/packages app.mog
+mog run --package-path /path/to/packages app.mog
 ```
 
 Check the installed runtime and native package ABI before diagnosing package
@@ -83,10 +83,23 @@ Current package-management commands include:
 - `remove`
 - `install`
 - `update`
+- `test`
+- `build`
+- `run`
+- `cache ...`
 - `publish`
 - `audit`
 - `registry ...`
 - `validate-package`
+
+`mog test` and `mog build` run the corresponding root entry from the
+`[scripts]` table in `mog.toml`, installing development and build dependencies
+first. `mog run` installs normal dependencies when needed before executing the
+program. Use `--locked` for reproducible lockfile-only resolution and
+`--offline` to prohibit network access.
+
+Cache commands include `cache status`, `cache path <user|project|registry|git>`,
+and `cache prune`; pass `--dry-run` to preview pruning.
 
 For package-managed native dependencies, `mog install`, `mog update`, and
 `mog run` also accept:
@@ -157,6 +170,6 @@ flag today.
 
 ## Related pages
 
-- [Install and Build](/docs/getting-started/install/)
+- [Install Mog](/docs/getting-started/install/)
 - [Using Native Packages](/docs/packages/using-native-packages/)
 - [REPL](/docs/tooling/repl/)
