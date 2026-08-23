@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.10)
 # Set VCPKG_ROOT to the path of your vcpkg installation
 # set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
 
-# Override this from a release build, for example: -DMOG_VERSION=0.1.6
-set(MOG_VERSION "0.1.6" CACHE STRING "Version of the Mog distribution")
+# Override this from a release build, for example: -DMOG_VERSION=0.1.7
+set(MOG_VERSION "0.1.7" CACHE STRING "Version of the Mog distribution")
 set(MOG_TOOLING_PROTOCOL_VERSION "1.0" CACHE STRING
     "Mog editor tooling protocol version")
 project(mog VERSION ${MOG_VERSION})

@@ -8,7 +8,7 @@
 #include "PackageRegistry.hpp"
 
 #ifndef MOG_RUNTIME_VERSION
-#define MOG_RUNTIME_VERSION "0.1.6"
+#define MOG_RUNTIME_VERSION "0.1.7"
 #endif
 
 struct ProjectRegistryConfig {

@@ -118,6 +118,7 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-openssl
             mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-python
       - name: Verify release runner architecture
         run: test "$(uname -m)" = "${{ matrix.architecture }}"
       - name: Configure

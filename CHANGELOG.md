@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7
+
+- Install Python on the Windows runtime release runner so packaged `mog-lsp`
+  smoke validation can complete before archives are published.
+
 ## 0.1.6
 
 - Add Host API v2 so native packages can retain Mog values and invoke Mog
