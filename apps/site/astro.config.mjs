@@ -15,7 +15,9 @@ const editBaseUrl = process.env.MOG_SITE_EDIT_BASE_URL;
  * as `/docs/getting-started/install/` are authored as literal HTML paths.
  */
 function prefixRootRelativeLinks() {
+	/** @param {any} tree */
 	return (tree) => {
+		/** @param {any} node */
 		const visit = (node) => {
 			if (node.type === 'link' && node.url.startsWith('/')) {
 				node.url = `${basePath}${node.url}`;
