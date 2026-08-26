@@ -4,12 +4,36 @@ import starlight from '@astrojs/starlight';
 import { mogShikiOptions } from './mog-language.mjs';
 
 const site = process.env.SITE_URL || 'https://moglang.dev';
-const base = process.env.BASE_PATH || undefined;
+const basePath = process.env.BASE_PATH?.replace(/\/+$/, '') || '';
+const base = basePath || undefined;
 const editBaseUrl = process.env.MOG_SITE_EDIT_BASE_URL;
+
+/**
+ * Prefix root-relative Markdown links with the deployment base path.
+ *
+ * Astro applies `base` to generated routes and assets, but Markdown links such
+ * as `/docs/getting-started/install/` are authored as literal HTML paths.
+ */
+function prefixRootRelativeLinks() {
+	return (tree) => {
+		const visit = (node) => {
+			if (node.type === 'link' && node.url.startsWith('/')) {
+				node.url = `${basePath}${node.url}`;
+			}
+
+			for (const child of node.children || []) visit(child);
+		};
+
+		visit(tree);
+	};
+}
 
 export default defineConfig({
 	site,
 	base,
+	markdown: {
+		remarkPlugins: [prefixRootRelativeLinks],
+	},
 	integrations: [
 		starlight({
 			title: 'Mog',
