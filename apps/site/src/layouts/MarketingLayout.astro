@@ -11,7 +11,8 @@ interface Props {
 
 const { title, description, path = '/', variant = 'default' } = Astro.props;
 const site = Astro.site ?? new URL('https://moglang.dev');
-const canonical = new URL(path, site).toString();
+const base = import.meta.env.BASE_URL;
+const canonical = new URL(`${base}${path.replace(/^\//, '')}`, site).toString();
 const isLanding = variant === 'landing';
 const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(Boolean).join(' ');
 ---
@@ -85,7 +86,7 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 	<body class={bodyClass}>
 		<header class="topbar">
 			<div class="topbar__inner">
-				<a class="brand" href="/">
+				<a class="brand" href={base}>
 					<img src={mogLogo.src} alt="Mog" />
 					<span>
 						Mog
@@ -93,10 +94,10 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 					</span>
 				</a>
 				<nav class="topnav" aria-label="Primary">
-					<a href="/docs/">Docs</a>
-					<a href="/manifesto/">Manifesto</a>
-					<a href="/docs/reference/releases/">Releases</a>
-					<a class="cta" href="/docs/getting-started/install/">Install Mog</a>
+					<a href={`${base}docs/`}>Docs</a>
+					<a href={`${base}manifesto/`}>Manifesto</a>
+					<a href={`${base}docs/reference/releases/`}>Releases</a>
+					<a class="cta" href={`${base}docs/getting-started/install/`}>Install Mog</a>
 					{
 						isLanding && (
 							<label class="theme-select" data-theme-icon="system">
@@ -139,9 +140,9 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 			<div class="footer__inner">
 				<p>Mog is a bytecode-compiled language project implemented in C++ with official docs in Astro + Starlight.</p>
 				<div class="footer__links">
-					<a href="/docs/">Docs</a>
-					<a href="/manifesto/">Manifesto</a>
-					<a href="/docs/reference/releases/">Releases</a>
+					<a href={`${base}docs/`}>Docs</a>
+					<a href={`${base}manifesto/`}>Manifesto</a>
+					<a href={`${base}docs/reference/releases/`}>Releases</a>
 					<a href="https://github.com/moglang/mog">GitHub</a>
 				</div>
 			</div>

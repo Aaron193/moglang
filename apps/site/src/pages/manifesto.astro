@@ -1,5 +1,7 @@
 ---
 import MarketingLayout from '../layouts/MarketingLayout.astro';
+
+const base = import.meta.env.BASE_URL;
 ---
 
 <MarketingLayout
@@ -214,8 +216,8 @@ import MarketingLayout from '../layouts/MarketingLayout.astro';
 				<p>Use the official docs for build instructions, language basics, tooling, packages, and reference material.</p>
 			</div>
 			<div class="hero-actions">
-				<a class="primary" href="/docs/">Open the Docs</a>
-				<a class="secondary" href="/docs/getting-started/install/">Install Mog</a>
+				<a class="primary" href={`${base}docs/`}>Open the Docs</a>
+				<a class="secondary" href={`${base}docs/getting-started/install/`}>Install Mog</a>
 			</div>
 		</div>
 	</section>

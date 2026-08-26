@@ -17,12 +17,19 @@ on:
       - "tooling/vscode-mog/syntaxes/mog.tmLanguage.json"
       - "package.json"
       - "package-lock.json"
+  workflow_dispatch:
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pages: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -32,7 +39,32 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm install
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      - run: npm ci
       - run: npm run site:check
       - run: npm run site:test
       - run: npm run site:build
+        env:
+          SITE_URL: ${{ steps.pages.outputs.origin }}
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/site/dist
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

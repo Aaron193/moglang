@@ -16,6 +16,11 @@ Run these from the repository root:
 
 - `SITE_URL` sets the canonical site URL used for sitemap and metadata.
 - `MOG_SITE_EDIT_BASE_URL` enables Starlight edit links for docs pages.
+- `BASE_PATH` sets the deployment subpath. The GitHub Pages workflow supplies this automatically.
+
+## Deployment
+
+Pushes to `main` that change the site or its build inputs publish `apps/site/dist` to GitHub Pages. In the repository settings, set **Pages** to **GitHub Actions** as the source before the first deployment.
 
 ## Structure
 

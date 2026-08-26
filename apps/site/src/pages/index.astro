@@ -14,6 +14,7 @@ var counter = Counter()
 counter.value = 67
 counter.increment()
 print(counter.value)`;
+const base = import.meta.env.BASE_URL;
 ---
 
 <MarketingLayout
@@ -31,8 +32,8 @@ print(counter.value)`;
 				clarity without softness.
 			</p>
 			<div class="hero-actions">
-				<a class="primary" href="/docs/getting-started/install/">Install Mog</a>
-				<a class="secondary" href="/docs/getting-started/quickstart/">Read the Quickstart</a>
+				<a class="primary" href={`${base}docs/getting-started/install/`}>Install Mog</a>
+				<a class="secondary" href={`${base}docs/getting-started/quickstart/`}>Read the Quickstart</a>
 			</div>
 			<div class="hero-metrics">
 				<div class="metric-card">
@@ -188,8 +189,8 @@ print(counter.value)`;
 				</p>
 			</div>
 			<div class="hero-actions">
-				<a class="primary" href="/docs/getting-started/install/">Install Mog</a>
-				<a class="secondary" href="/docs/reference/releases/">Read Release Notes</a>
+				<a class="primary" href={`${base}docs/getting-started/install/`}>Install Mog</a>
+				<a class="secondary" href={`${base}docs/reference/releases/`}>Read Release Notes</a>
 			</div>
 		</div>
 	</section>

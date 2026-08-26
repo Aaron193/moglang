@@ -4,10 +4,12 @@ import starlight from '@astrojs/starlight';
 import { mogShikiOptions } from './mog-language.mjs';
 
 const site = process.env.SITE_URL || 'https://moglang.dev';
+const base = process.env.BASE_PATH || undefined;
 const editBaseUrl = process.env.MOG_SITE_EDIT_BASE_URL;
 
 export default defineConfig({
 	site,
+	base,
 	integrations: [
 		starlight({
 			title: 'Mog',
