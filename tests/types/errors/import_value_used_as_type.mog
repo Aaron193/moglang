@@ -1,3 +1,0 @@
-const { Add } = @import("../../modules/math.mog")
-
-var bad Add = 1

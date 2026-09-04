@@ -1,6 +1,6 @@
 ---
 title: Syntax Rules
-description: The syntax constraints and edge-case rules that matter most when writing Mog today.
+description: The syntax constraints and edge-case rules that matter most when writing Kelvra today.
 ---
 
 This page focuses on rules that are easy to forget and worth documenting
@@ -12,7 +12,7 @@ Semicolons are not part of normal statement syntax.
 
 They are only used as separators inside classic `for (...)` clauses:
 
-```mog
+```kelvra
 for (var i i32 = 0; i < 3; i += 1) {
   print(i)
 }
@@ -26,14 +26,14 @@ expression they continue.
 
 Valid shape:
 
-```mog
+```kelvra
 print(1 +
   2)
 ```
 
 Invalid shape:
 
-```mog
+```kelvra
 print(1
   + 2)
 ```
@@ -53,7 +53,7 @@ Trailing commas in call argument lists are currently not supported.
 ## Imports
 
 Import paths must be string literals. For source modules, include the full
-filename such as `./math.mog`.
+filename such as `./math.kel`.
 
 ## Export visibility
 

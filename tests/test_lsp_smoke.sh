@@ -3,17 +3,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LSP_BIN="${1:-$PROJECT_ROOT/build/mog-lsp}"
+LSP_BIN="${1:-$PROJECT_ROOT/build/kelvra-lsp}"
 if [[ -d "$LSP_BIN" ]]; then
-    if [[ -x "$LSP_BIN/mog-lsp.exe" ]]; then
-        LSP_BIN="$LSP_BIN/mog-lsp.exe"
+    if [[ -x "$LSP_BIN/kelvra-lsp.exe" ]]; then
+        LSP_BIN="$LSP_BIN/kelvra-lsp.exe"
     else
-        LSP_BIN="$LSP_BIN/mog-lsp"
+        LSP_BIN="$LSP_BIN/kelvra-lsp"
     fi
 fi
 if [[ ! -x "$LSP_BIN" ]]; then
     echo "LSP binary not found at $LSP_BIN" >&2
-    echo "Usage: $0 /path/to/mog-lsp-or-build-directory" >&2
+    echo "Usage: $0 /path/to/kelvra-lsp-or-build-directory" >&2
     exit 1
 fi
 
@@ -46,11 +46,11 @@ send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
 reply = receive()
 assert reply["id"] == 1 and "capabilities" in reply["result"], reply
 assert reply["result"]["capabilities"]["positionEncoding"] == "utf-16", reply
-assert reply["result"]["mog"]["toolingProtocolVersion"], reply
+assert reply["result"]["kelvra"]["toolingProtocolVersion"], reply
 send({"jsonrpc": "2.0", "id": 2, "method": "shutdown", "params": {}})
 assert receive().get("id") == 2
 send({"jsonrpc": "2.0", "method": "exit", "params": {}})
 proc.stdin.close()
 assert proc.wait(timeout=10) == 0
-print("[PASS] mog-lsp initialize/shutdown smoke")
+print("[PASS] kelvra-lsp initialize/shutdown smoke")
 PY

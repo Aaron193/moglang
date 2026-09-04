@@ -1,0 +1,81 @@
+const host = @import("host_api")
+
+fn makeCounter() host.Persistent {
+    var total i64 = 10i64
+    return host.retainCallable(fn(value i64) i64 {
+        total = total + value
+        return total
+    })
+}
+
+const counter host.Persistent = makeCounter()
+
+// Allocate enough dead GC objects to force collection after the closure's
+// last ordinary Kelvra reference has left scope.
+var allocationIndex i64 = 0i64
+while (allocationIndex < 50000i64) {
+    const garbage str = "persistent-root-gc-stress-" + str(allocationIndex)
+    allocationIndex = allocationIndex + 1i64
+}
+
+print(host.invoke(counter, 1i64))
+print(host.invoke(counter, 2i64))
+
+type Accumulator struct {
+    value i64
+
+    fn add(amount i64) i64 {
+        this.value = this.value + amount
+        return this.value
+    }
+}
+
+const accumulator Accumulator = Accumulator()
+accumulator.value = 20i64
+const bound host.Persistent = host.retainCallable(accumulator.add)
+print(host.invoke(bound, 2i64))
+
+const fallible host.Persistent = host.retainCallable(fn(value i64) i64 {
+    if (value == 0i64) {
+        error("expected callback failure")
+    }
+    return value + 5i64
+})
+print(host.tryInvoke(fallible, 0i64))
+print(host.invoke(fallible, 7i64))
+
+const inner host.Persistent = host.retainCallable(fn(value i64) => value * 2i64)
+const outer host.Persistent = host.retainCallable(
+    fn(value i64) => host.invoke(inner, value) + 1i64
+)
+print(host.invoke(outer, 5i64))
+
+print(host.invokeBytes(fn(value Array<u8>) Array<u8> {
+    return value
+}, [0u8, 127u8, 255u8]))
+
+const handleValue host.Persistent = host.retainAny("handle identity")
+const echoedHandle host.Persistent = host.invokeHandle(
+    fn(value host.Persistent) host.Persistent { return value },
+    handleValue
+)
+print(echoedHandle == handleValue)
+
+const textValue host.Persistent = host.retainAny("rooted text")
+print(host.getAny(textValue) == "rooted text")
+const nullValue host.Persistent = host.retainAny(null)
+print(host.getAny(nullValue) == null)
+const arrayValue Array<i64> = [1i64, 2i64, 3i64]
+const rootedArray host.Persistent = host.retainAny(arrayValue)
+print(host.getAny(rootedArray) == arrayValue)
+const objectValue Accumulator = Accumulator()
+objectValue.value = 99i64
+const rootedObject host.Persistent = host.retainAny(objectValue)
+print(host.getAny(rootedObject) == objectValue)
+print(host.foreignThreadRejected(objectValue))
+
+host.release(counter)
+host.release(bound)
+host.release(fallible)
+host.release(inner)
+host.release(outer)

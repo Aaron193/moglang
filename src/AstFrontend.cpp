@@ -473,7 +473,7 @@ bool buildImportedModuleInterface(const ImportTarget& importTarget,
                 importSpan,
                 importTarget.apiPath.empty()
                     ? "Native package '" + importTarget.displayName +
-                          "' is missing package.api.mog."
+                          "' is missing package.api.kel."
                     : apiError,
                 "import.native_package_api"});
             cachedNode.diagnostics = outDiagnostics;

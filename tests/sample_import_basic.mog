@@ -1,4 +1,0 @@
-const math = @import("./modules/math.mog")
-
-print(math.PI)
-print(math.Add(1, 2))

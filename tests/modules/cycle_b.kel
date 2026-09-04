@@ -1,0 +1,3 @@
+const a = @import("./cycle_a.kel")
+
+const B i32 = a.A + 1

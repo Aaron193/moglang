@@ -1,7 +1,7 @@
 # Package CI, Versioning, and Releases
 
 This is the release policy for the independently versioned packages in the
-`moglang` GitHub organization. Package repositories keep their implementation,
+`kelvralang` GitHub organization. Package repositories keep their implementation,
 tests, and workflows locally; this document is the shared explanation of how
 those workflows are expected to behave.
 
@@ -17,22 +17,22 @@ stable branch-protection check even when the compatibility matrix changes.
 
 The workflow verifies that:
 
-- `mog.toml` has a version and a supported license declaration;
-- `LICENSE`, `README.md`, `CHANGELOG.md`, `package.api.mog`, and
-  `tests/main.mog` are present and consistent;
+- `kelvra.toml` has a version and a supported license declaration;
+- `LICENSE`, `README.md`, `CHANGELOG.md`, `package.api.kel`, and
+  `tests/main.kel` are present and consistent;
 - the changelog contains an entry for the manifest version;
 - a tag such as `v0.2.0` matches manifest version `0.2.0` exactly;
-- the package passes `mog validate-package`;
+- the package passes `kelvra validate-package`;
 - its public test program succeeds from a separate consumer project; and
 - fixtures under `tests/errors/` fail as intended.
 
-Source packages are tested on Ubuntu with both Mog `v0.1.4`, the current
-compatibility floor, and Mog `main`. Native packages also build with strict
+Source packages are tested against the Kelvra `v0.2.0` compatibility floor and
+Kelvra `main` after the initial 0.2.0 release bootstrap. Native packages also build with strict
 compiler warnings and test these target/runtime combinations:
 
 | Target | Runtime ref |
 | --- | --- |
-| Linux x86_64 | `v0.1.4` and `main` |
+| Linux x86_64 | `v0.2.0` and `main` |
 | Linux ARM64 | `main` |
 | macOS ARM64 | `main` |
 
@@ -45,27 +45,27 @@ runtime changes that would break a package.
 
 ## Version fields have separate meanings
 
-Packages use semantic versioning independently from Mog itself:
+Packages use semantic versioning independently from Kelvra itself:
 
 - Patch: backwards-compatible bug, documentation, or packaging fix.
 - Minor: backwards-compatible API or feature addition.
 - Major: breaking API, behavior, package identity, or native ABI change.
 
 Before `1.0.0`, incompatible API changes normally increment the minor version.
-Mog applies standard pre-1.0 caret boundaries: `^0.1.4` accepts versions from
-`0.1.4` up to, but not including, `0.2.0`; `^0.0.4` accepts only compatible
+Kelvra applies standard pre-1.0 caret boundaries: `^0.2.0` accepts versions from
+`0.2.0` up to, but not including, `0.3.0`; `^0.0.4` accepts only compatible
 `0.0.4` patch releases.
 
 Do not confuse these manifest fields:
 
 - `version` is the version of the package.
-- `mog_runtime` is the compatible Mog toolchain range. Raise it only when the
+- `kelvra_runtime` is the compatible Kelvra toolchain range. Raise it only when the
   package actually stops working with the existing floor.
 - `native_abi` is the loader ABI for native packages. It must match the ABI
-  printed by `mog --version`.
+  printed by `kelvra --version`.
 
 Package and runtime versions do not need to match. If a package raises its
-`mog_runtime` floor, release the required Mog runtime first, then release the
+`kelvra_runtime` floor, release the required Kelvra runtime first, then release the
 package.
 
 ## Preparing a package release
@@ -73,10 +73,10 @@ package.
 Make the following changes together in one pull request:
 
 1. Choose the next semantic version.
-2. Set `version` in `mog.toml` without a leading `v`.
+2. Set `version` in `kelvra.toml` without a leading `v`.
 3. Add a matching `## X.Y.Z` entry to `CHANGELOG.md`.
-4. Update `package.api.mog`, implementation, examples, and tests as needed.
-5. Update `mog_runtime`, `native_abi`, targets, or system dependencies only when
+4. Update `package.api.kel`, implementation, examples, and tests as needed.
+5. Update `kelvra_runtime`, `native_abi`, targets, or system dependencies only when
    compatibility actually changed.
 6. Wait for the required `validate` check and every matrix job to pass.
 7. Merge the pull request before creating the tag.
@@ -85,11 +85,11 @@ For example, a manifest release version is written as:
 
 ```toml
 version = "0.2.0"
-mog_runtime = "^0.1.4"
+kelvra_runtime = "^0.2.0"
 ```
 
 The corresponding Git tag is `v0.2.0`. The release workflow rejects a tag that
-does not exactly match `mog.toml`, and Mog rejects a Git dependency when its
+does not exactly match `kelvra.toml`, and Kelvra rejects a Git dependency when its
 selected tag disagrees with the package manifest.
 
 ## Tagging and GitHub Releases
@@ -106,7 +106,7 @@ git push origin v0.2.0
 Pushing a `v*` tag starts the package release workflow. A normal push to `main`
 never creates a release.
 
-For a source package, the workflow validates the package with Mog `main`, runs
+For a source package, the workflow validates the package with Kelvra `main`, runs
 its tests, creates a source archive, generates `SHA256SUMS`, and attaches both
 to a GitHub Release.
 
@@ -133,47 +133,47 @@ A Git dependency selects the Git tag in the project manifest:
 
 ```toml
 [dependencies]
-"github.com/moglang/encoding" = { version = "v0.2.0" }
+"github.com/kelvralang/encoding" = { version = "v0.2.0" }
 ```
 
 The source code imports the canonical module path, not the local installation
 directory and not the GitHub Release archive name:
 
-```mog
-const encoding = @import("github.com/moglang/encoding")
+```kelvra
+const encoding = @import("github.com/kelvralang/encoding")
 ```
 
-Users then install and run through their own Mog executable:
+Users then install and run through their own Kelvra executable:
 
 ```bash
-mog --version
-mog install
-mog run app.mog
+kelvra --version
+kelvra install
+kelvra run app.kel
 ```
 
-Commit `mog.lock` for applications and use `mog install --locked` in CI so the
+Commit `kelvra.lock` for applications and use `kelvra install --locked` in CI so the
 same package tag and content are installed reproducibly.
 
 Git dependencies for native packages build from source and therefore require
 the declared compiler, CMake, and system libraries. The target archives on a
-GitHub Release are convenience artifacts; Mog does not automatically treat
+GitHub Release are convenience artifacts; Kelvra does not automatically treat
 them as registry packages.
 
-## GitHub Releases versus a Mog registry
+## GitHub Releases versus a Kelvra registry
 
 The tag workflows publish GitHub Release assets and checksums. They do not:
 
-- publish or promote a package in a configured Mog registry;
+- publish or promote a package in a configured Kelvra registry;
 - sign a registry index or native registry artifact;
 - manage registry credentials; or
 - publish the VS Code extension.
 
-Prebuilt native installation requires a separate `mog publish` operation for
+Prebuilt native installation requires a separate `kelvra publish` operation for
 each target against a configured registry, with the deployment's credentials
 and signing key. Keep those secrets outside the repository. For example:
 
 ```bash
-mog publish --registry official \
+kelvra publish --registry official \
   --target linux-x86_64-gnu \
   --native-artifact-dir ./dist/linux-x86_64-gnu \
   --signing-key ./keys/release.toml .

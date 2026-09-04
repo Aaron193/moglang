@@ -546,7 +546,7 @@ bool packageValueToValue(VirtualMachine& vm, const ExprPackageValue& value,
             }
 
             // Host callback results expose native handles as borrowed handle
-            // metadata. If a package forwards that result back to Mog, retain
+            // metadata. If a package forwards that result back to Kelvra, retain
             // the original GC object instead of creating a second owner for
             // the same finalizer payload.
             const auto reuseMatchingHandle = [&](const Value& candidate) {
@@ -1673,21 +1673,21 @@ bool VirtualMachine::resolvePackageValue(const ExprPackageValue& value,
     }
     if (!m_hostApiState ||
         std::this_thread::get_id() != m_hostApiState->ownerThread) {
-        outError = "Mog value reference used from a foreign thread.";
+        outError = "Kelvra value reference used from a foreign thread.";
         return false;
     }
     for (const auto& borrowed : m_hostApiState->borrowedValues) {
         if (borrowed.get() == value.as.ref_value) {
             if (borrowed->owner != this ||
                 borrowed->ownerThread != m_hostApiState->ownerThread) {
-                outError = "Mog value reference belongs to a different VM.";
+                outError = "Kelvra value reference belongs to a different VM.";
                 return false;
             }
             outValue = borrowed->value;
             return true;
         }
     }
-    outError = "Mog value reference is no longer valid.";
+    outError = "Kelvra value reference is no longer valid.";
     return false;
 }
 
@@ -1714,13 +1714,13 @@ bool VirtualMachine::hostRetainValue(void* context,
     }
     if (std::this_thread::get_id() != vm->m_hostApiState->ownerThread) {
         setHostError(*vm->m_hostApiState,
-                     "Cannot retain a Mog value from a foreign thread.",
+                     "Cannot retain a Kelvra value from a foreign thread.",
                      outError);
         return false;
     }
     if (vm->m_hostApiState->activeNativeCalls == 0) {
         setHostError(*vm->m_hostApiState,
-                     "Cannot retain a Mog value through an inactive or different VM.",
+                     "Cannot retain a Kelvra value through an inactive or different VM.",
                      outError);
         return false;
     }
@@ -1763,14 +1763,14 @@ bool VirtualMachine::hostGetValue(void* context,
         std::this_thread::get_id() != vm->m_hostApiState->ownerThread) {
         if (vm->m_hostApiState) {
             setHostError(*vm->m_hostApiState,
-                         "Cannot retrieve a Mog value from a foreign thread.",
+                         "Cannot retrieve a Kelvra value from a foreign thread.",
                          outError);
         }
         return false;
     }
     if (vm->m_hostApiState->activeNativeCalls == 0) {
         setHostError(*vm->m_hostApiState,
-                     "Cannot retrieve a Mog value through an inactive or different VM.",
+                     "Cannot retrieve a Kelvra value through an inactive or different VM.",
                      outError);
         return false;
     }
@@ -1778,7 +1778,7 @@ bool VirtualMachine::hostGetValue(void* context,
     if (found == vm->m_hostApiState->persistentValues.end() ||
         found->second->owner != vm) {
         setHostError(*vm->m_hostApiState,
-                     "Persistent Mog value belongs to a different VM or was released.",
+                     "Persistent Kelvra value belongs to a different VM or was released.",
                      outError);
         return false;
     }
@@ -1800,14 +1800,14 @@ bool VirtualMachine::hostInvokeValue(void* context,
         std::this_thread::get_id() != vm->m_hostApiState->ownerThread) {
         if (vm->m_hostApiState) {
             setHostError(*vm->m_hostApiState,
-                         "Cannot invoke a Mog value from a foreign thread.",
+                         "Cannot invoke a Kelvra value from a foreign thread.",
                          outError);
         }
         return false;
     }
     if (vm->m_hostApiState->activeNativeCalls == 0) {
         setHostError(*vm->m_hostApiState,
-                     "Cannot invoke a Mog value through an inactive or different VM.",
+                     "Cannot invoke a Kelvra value through an inactive or different VM.",
                      outError);
         return false;
     }
@@ -1815,7 +1815,7 @@ bool VirtualMachine::hostInvokeValue(void* context,
     if (found == vm->m_hostApiState->persistentValues.end() ||
         found->second->owner != vm) {
         setHostError(*vm->m_hostApiState,
-                     "Persistent Mog callable belongs to a different VM or was released.",
+                     "Persistent Kelvra callable belongs to a different VM or was released.",
                      outError);
         return false;
     }
@@ -1824,19 +1824,19 @@ bool VirtualMachine::hostInvokeValue(void* context,
           callable.isBoundMethod() || callable.isNative() ||
           callable.isNativeBound())) {
         setHostError(*vm->m_hostApiState,
-                     "Persistent Mog value is not callable.", outError);
+                     "Persistent Kelvra value is not callable.", outError);
         return false;
     }
     if (argc > 255) {
         setHostError(*vm->m_hostApiState,
-                     "Mog callbacks accept at most 255 arguments.", outError);
+                     "Kelvra callbacks accept at most 255 arguments.", outError);
         return false;
     }
 
     const size_t savedStackSize = vm->m_stack.size();
     if (savedStackSize + argc + 1 > STACK_SIZE) {
         setHostError(*vm->m_hostApiState,
-                     "Insufficient VM stack space for Mog callback.", outError);
+                     "Insufficient VM stack space for Kelvra callback.", outError);
         return false;
     }
     const size_t savedFrameCount = vm->m_frameCount;
@@ -1855,7 +1855,7 @@ bool VirtualMachine::hostInvokeValue(void* context,
             --vm->m_callbackNestingDepth;
             vm->m_capturedRuntimeError = previousCapturedError;
             setHostError(*vm->m_hostApiState,
-                         "Invalid Mog callback argument: " + conversionError,
+                         "Invalid Kelvra callback argument: " + conversionError,
                          outError);
             return false;
         }
@@ -1888,7 +1888,7 @@ bool VirtualMachine::hostInvokeValue(void* context,
 
     if (status != Status::OK) {
         if (callbackError.empty()) {
-            callbackError = "Mog callback failed.";
+            callbackError = "Kelvra callback failed.";
         }
         setHostError(*vm->m_hostApiState, std::move(callbackError), outError);
         return false;

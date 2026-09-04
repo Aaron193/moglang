@@ -1,0 +1,3 @@
+const { Add } = @import("../../modules/math.kel")
+
+var bad Add = 1

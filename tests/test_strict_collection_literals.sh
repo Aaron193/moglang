@@ -43,10 +43,10 @@ run_expect_output() {
 failed=0
 
 run_expect_output \
-    "$SCRIPT_DIR/sample_collection_print.mog" \
+    "$SCRIPT_DIR/sample_collection_print.kel" \
     $'[[1, 2], [3, 4]]\n{"a": 1, "b": 2, "c": 9}\n[a, b, c]\n[1, 2, 9]\nSet(3, 1, 2)\n[5]' || failed=1
 
-run_expect_output "$SCRIPT_DIR/sample_flappy_core.mog" "ok" || failed=1
+run_expect_output "$SCRIPT_DIR/sample_flappy_core.kel" "ok" || failed=1
 
 if [[ $failed -ne 0 ]]; then
     exit 1

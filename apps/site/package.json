@@ -1,5 +1,5 @@
 {
-  "name": "@mog/site",
+  "name": "@kelvra/site",
   "type": "module",
   "version": "0.0.1",
   "scripts": {
@@ -7,7 +7,7 @@
     "start": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
     "check": "ASTRO_TELEMETRY_DISABLED=1 astro check",
     "build": "ASTRO_TELEMETRY_DISABLED=1 astro build",
-    "test:highlighting": "node --test test/mog-highlighting.test.mjs",
+    "test:highlighting": "node --test test/kelvra-highlighting.test.mjs",
     "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
     "astro": "ASTRO_TELEMETRY_DISABLED=1 astro"
   },

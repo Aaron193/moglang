@@ -5,7 +5,7 @@ on:
     paths:
       - ".github/workflows/site.yml"
       - "apps/site/**"
-      - "tooling/vscode-mog/syntaxes/mog.tmLanguage.json"
+      - "tooling/vscode-kelvra/syntaxes/kelvra.tmLanguage.json"
       - "package.json"
       - "package-lock.json"
   push:
@@ -14,7 +14,7 @@ on:
     paths:
       - ".github/workflows/site.yml"
       - "apps/site/**"
-      - "tooling/vscode-mog/syntaxes/mog.tmLanguage.json"
+      - "tooling/vscode-kelvra/syntaxes/kelvra.tmLanguage.json"
       - "package.json"
       - "package-lock.json"
   workflow_dispatch:

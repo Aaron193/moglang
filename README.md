@@ -1,8 +1,12 @@
-# Mog Programming Language
+# Kelvra Programming Language
 
-Mog is a bytecode-compiled, stack-based programming language implemented in
+Kelvra is a bytecode-compiled, stack-based programming language implemented in
 C++. It is strictly typed by default, with a compiler, VM, REPL, native package
 system, and editor tooling in the same repository.
+
+This project was previously named Mog. The rename is intentionally breaking;
+see [Migrating from Mog to Kelvra](docs/MIGRATING_TO_KELVRA.md) for the complete
+file, command, package, and tooling mapping.
 
 ## Supported Language Features
 
@@ -109,8 +113,8 @@ if (maybeScore != null) {
 Modules and aliasing:
 
 ```rust
-const math = @import("./math.mog")
-const { Add as sum } = @import("./math.mog")
+const math = @import("./math.kel")
+const { Add as sum } = @import("./math.kel")
 
 print(math.PI)
 print(sum(10, 5))
@@ -173,19 +177,19 @@ GCC or Clang is required to build the project.
 ## Run
 
 ```bash
-./build/interpreter path/to/program.mog
+./build/interpreter path/to/program.kel
 ```
 
 Add extra native package roots if needed:
 
 ```bash
-./build/interpreter --package-path /path/to/packages path/to/program.mog
+./build/interpreter --package-path /path/to/packages path/to/program.kel
 ```
 
 Inspect frontend phase timings while compiling:
 
 ```bash
-./build/interpreter --frontend-timings path/to/program.mog
+./build/interpreter --frontend-timings path/to/program.kel
 ```
 
 The timing summary reports parse, symbol collection, import resolution, bind,
@@ -195,7 +199,7 @@ time.
 Emit the same frontend metrics as JSON:
 
 ```bash
-./build/interpreter --frontend-timings-json path/to/program.mog
+./build/interpreter --frontend-timings-json path/to/program.kel
 ```
 
 Or start REPL:
@@ -214,8 +218,8 @@ The visible `window` demos require SDL2 to be present so the optional
 package is built:
 
 ```bash
-./build/interpreter examples/window_open.mog
-./build/interpreter examples/window_events.mog
+./build/interpreter examples/window_open.kel
+./build/interpreter examples/window_events.kel
 ```
 
 ## Tests
@@ -249,14 +253,14 @@ Run additional suites:
 
 ## VS Code
 
-The VS Code extension lives under `tooling/vscode-mog`.
+The VS Code extension lives under `tooling/vscode-kelvra`.
 
 For extension or language-server development, open this repository root and run
-the **Mog: Extension Development Host** launch configuration. It builds an
+the **Kelvra: Extension Development Host** launch configuration. It builds an
 isolated debug server and opens a representative workspace without changing
 personal settings. See [the tooling development guide](docs/TOOLING_DEVELOPMENT.md).
 
-`.mog` files now declare a Mog language icon through the extension manifest, so
+`.kel` files now declare a Kelvra language icon through the extension manifest, so
 Explorer and tabs can show the bundled icon when the active file icon theme
 supports language default icons. Themes such as `Minimal` may still show the
 generic file icon because the extension does not override the user's full file
@@ -294,13 +298,13 @@ Compare two interpreter binaries (A/B):
   --warmup 1
 ```
 
-Compare Mog benchmarks against the Python equivalents:
+Compare Kelvra benchmarks against the Python equivalents:
 
 ```bash
 ./benchmarks/compare_benchmarks.sh \
   --interpreter-a ./build/interpreter \
-  --filter-a 'benchmarks/bench_*.mog' \
-  --label-a mog \
+  --filter-a 'benchmarks/bench_*.kel' \
+  --label-a kelvra \
   --interpreter-b python3 \
   --filter-b 'benchmarks/python/bench_*.py' \
   --label-b python \
@@ -311,8 +315,8 @@ Compare Mog benchmarks against the Python equivalents:
 Measure frontend compile-time only with the dedicated helper:
 
 ```bash
-./build/frontend_benchmark tests/sample_var.mog
-./build/frontend_benchmark --json tests/sample_var.mog
+./build/frontend_benchmark tests/sample_var.kel
+./build/frontend_benchmark --json tests/sample_var.kel
 ./benchmarks/compare_frontend_benchmarks.sh --iterations 7 --warmup 1
 ```
 
@@ -327,7 +331,7 @@ runtime work:
 
 ```bash
 ./benchmarks/compare_benchmarks.sh \
-  --filter 'benchmarks/bench_feature_mix.mog' \
+  --filter 'benchmarks/bench_feature_mix.kel' \
   --iterations 7 \
   --warmup 1
 ```
@@ -341,8 +345,8 @@ Build an optimized binary with debug symbols and frame pointers:
 Profile a program or benchmark:
 
 ```bash
-./scripts/profile_callgrind.sh benchmarks/bench_feature_mix.mog
-./scripts/profile_callgrind.sh --inclusive --tree benchmarks/bench_fibonacci.mog
+./scripts/profile_callgrind.sh benchmarks/bench_feature_mix.kel
+./scripts/profile_callgrind.sh --inclusive --tree benchmarks/bench_fibonacci.kel
 ```
 
 Re-annotate an existing Callgrind output without rerunning the program:
@@ -359,10 +363,10 @@ callgrind_annotate --auto=yes build/callgrind/<profile>.out
 
 Recommended profiling targets:
 
-- `benchmarks/bench_feature_mix.mog` as the default general-runtime baseline
-- `benchmarks/bench_fibonacci.mog` for call overhead and dispatch-heavy recursion
-- `benchmarks/bench_sort.mog` and `benchmarks/bench_matrix.mog` for arithmetic and container traffic
-- `benchmarks/bench_class_member_access.mog` when focusing on property/method dispatch
+- `benchmarks/bench_feature_mix.kel` as the default general-runtime baseline
+- `benchmarks/bench_fibonacci.kel` for call overhead and dispatch-heavy recursion
+- `benchmarks/bench_sort.kel` and `benchmarks/bench_matrix.kel` for arithmetic and container traffic
+- `benchmarks/bench_class_member_access.kel` when focusing on property/method dispatch
 
 Notes:
 
@@ -372,7 +376,7 @@ Notes:
 - Linux `perf` is lower overhead, but it only works on machines where perf events are enabled. On such a machine, use:
 
 ```bash
-perf record -g -- ./build/interpreter benchmarks/bench_feature_mix.mog
+perf record -g -- ./build/interpreter benchmarks/bench_feature_mix.kel
 perf report
 ```
 
@@ -389,7 +393,7 @@ type Vector struct {}
 Namespace import:
 
 ```expr
-const math = @import("./math.mog")
+const math = @import("./math.kel")
 print(math.PI)
 print(math.Add(1, 2))
 ```
@@ -408,8 +412,8 @@ outer: while (true) {
 Named import and aliasing:
 
 ```expr
-const { Add, PI } = @import("./math.mog")
-const { Add as sum } = @import("./math.mog")
+const { Add, PI } = @import("./math.kel")
+const { Add as sum } = @import("./math.kel")
 ```
 
 Notes:
@@ -427,10 +431,10 @@ const nativeMath = @import("math")
 const { addI64, greet } = @import("math")
 ```
 
-Path-like imports such as `./math.mog` stay source-module imports. Bare import
+Path-like imports such as `./math.kel` stay source-module imports. Bare import
 names such as `"math"` or `"window"` resolve as package imports.
 
-Package resolution looks for a project root `mog.toml` and `mog.lock` first,
+Package resolution looks for a project root `kelvra.toml` and `kelvra.lock` first,
 then falls back to scanning package roots. The interpreter searches for native
 packages in:
 
@@ -457,13 +461,13 @@ const c counter.Counter = counter.create(10i64)
 print(counter.read(c))
 ```
 
-Official external packages use canonical `github.com/moglang/...` module paths
+Official external packages use canonical `github.com/kelvralang/...` module paths
 and are installed separately from the runtime. For example:
 
 Headless smoke usage for tests:
 
 ```expr
-const window = @import("github.com/moglang/window")
+const window = @import("github.com/kelvralang/window")
 
 const win window.Window =
     window.create("Demo", 800i64, 600i64)
@@ -481,7 +485,7 @@ For simple realtime graphics, `window` also exposes:
 - `KEY_SPACE`
 - `KEY_ESCAPE`
 
-See `examples/flappy_bird.mog` for a playable rectangle-rendered demo built
+See `examples/flappy_bird.kel` for a playable rectangle-rendered demo built
 entirely in the language on top of those primitives.
 
 Visible manual demos live under `examples/` and call `window.show(win)` after
@@ -498,15 +502,15 @@ Check the installed runtime and native package ABI before resolving package
 compatibility issues:
 
 ```bash
-mog --version
-# mog 0.1.7 (native ABI 3)
+kelvra --version
+# kelvra 0.1.7 (native ABI 3)
 ```
 
 For the full package-manager guide, including dependency sources, registries,
 publishing, signing, policy, audit, native artifacts, and current post-V1
 scope, see `docs/PACKAGE_SYSTEM.md`.
 
-Packages can declare authoring metadata in `mog.toml`:
+Packages can declare authoring metadata in `kelvra.toml`:
 
 ```toml
 kind = "native"
@@ -519,13 +523,13 @@ description = "Reference namespaced math package."
 dependencies = []
 ```
 
-Projects mark their root with `mog.toml` and pin package resolution in
-`mog.lock`. Native and source packages can also ship a `package.api.mog` file
+Projects mark their root with `kelvra.toml` and pin package resolution in
+`kelvra.lock`. Native and source packages can also ship a `package.api.kel` file
 for editor navigation, readable package API docs, and public opaque type
 declarations.
 
 Projects can also declare published registries and target-specific native
-toolchains, plus install policy controls, in `mog.toml`:
+toolchains, plus install policy controls, in `kelvra.toml`:
 
 ```toml
 kind = "project"
@@ -555,13 +559,13 @@ env = { "PKG_CONFIG_PATH" = "/opt/sdk/lib/pkgconfig" }
 window = { package = "github:window", version = "^0.1.0", registry = "official" }
 ```
 
-For native source-build fallback, Mog uses `--cmake-toolchain` first. If that
+For native source-build fallback, Kelvra uses `--cmake-toolchain` first. If that
 flag is not provided for a non-host target, it then checks
 `[native.toolchains."<target>"]` in the project manifest. Today that section
 supports `cmake_toolchain`, `generator`, `build_type`, `configure_args`,
 `build_args`, and `env`.
 
-When `[policy]` is present, Mog enforces it during `install` and install-aware
+When `[policy]` is present, Kelvra enforces it during `install` and install-aware
 `run` workflows. `allowed_registries` restricts registry-sourced dependencies,
 `allowed_native_namespaces` restricts native packages regardless of source, and
 `require_locked_in_ci = true` requires `--locked` whenever the `CI`
@@ -584,24 +588,24 @@ This downloads `registry-public-key.v1` from the hosted registry root and
 stores the trusted key in the user registry profile.
 
 Hosted registries can optionally advertise `registry-service.v1` from the
-registry root. When present, Mog publishes artifacts to content-addressed
+registry root. When present, Kelvra publishes artifacts to content-addressed
 `blobs/sha256/<digest>` paths and rewrites `index.toml` with conditional
 `ETag`/`If-Match` updates to avoid blind index overwrites. If the service file
-is absent, Mog falls back to the legacy hosted `index.toml` + artifact `PUT`
+is absent, Kelvra falls back to the legacy hosted `index.toml` + artifact `PUT`
 workflow for compatibility.
 
 Registry publishing can sign `registry.v4` indexes and detached artifact
 signatures with a `registry-key.v1` file:
 
 ```bash
-git clone https://github.com/moglang/window.git
+git clone https://github.com/kelvralang/window.git
 cd window
-../mog/build/interpreter publish --signing-key ../keys/release.toml .
-../mog/build/interpreter publish --target linux-arm64-gnu --native-artifact-dir ./dist/window-bundle .
+../kelvra/build/interpreter publish --signing-key ../keys/release.toml .
+../kelvra/build/interpreter publish --target linux-arm64-gnu --native-artifact-dir ./dist/window-bundle .
 ```
 
-When signed registry artifacts are installed, Mog pins `artifact_signature`
-and `registry_key_id` in both `mog.lock` and `.mog/install/registry.toml` so
+When signed registry artifacts are installed, Kelvra pins `artifact_signature`
+and `registry_key_id` in both `kelvra.lock` and `.kelvra/install/registry.toml` so
 locked reinstalls continue to verify the selected artifact without refetching
 registry metadata.
 
@@ -612,10 +616,10 @@ Lockfile-based vulnerability checks are also available:
 ./build/interpreter audit --offline
 ```
 
-The official Window package lives in [github.com/moglang/window](https://github.com/moglang/window).
-Its GitHub release workflow publishes convenience archives; Git-based MOG
+The official Window package lives in [github.com/kelvralang/window](https://github.com/kelvralang/window).
+Its GitHub release workflow publishes convenience archives; Git-based KELVRA
 dependencies build from source. Signed prebuilt installation requires publishing
-those artifacts through a configured MOG registry.
+those artifacts through a configured KELVRA registry.
 
 Validate a package directory against its manifest and compiled shared library:
 
@@ -624,12 +628,12 @@ Validate a package directory against its manifest and compiled shared library:
 ./build/interpreter validate-package packages/examples/counter
 ```
 
-The validator checks package ID syntax, reserved `mog` usage, manifest/ABI
+The validator checks package ID syntax, reserved `kelvra` usage, manifest/ABI
 compatibility, registration metadata, and exported native signature parsing.
 
 ## Installation and editor support
 
-A release installs two executables: `mog` runs source files and `mog-lsp` provides the Language Server Protocol service. Build a distributable archive with:
+A release installs two executables: `kelvra` runs source files and `kelvra-lsp` provides the Language Server Protocol service. Build a distributable archive with:
 
 ```bash
 cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
@@ -638,9 +642,9 @@ cpack --config build/release/CPackConfig.cmake -B dist
 ```
 
 After extracting the archive, add its `bin` directory to `PATH`; users can then
-run `mog app.mog`. Public target-specific VS Code packages bundle their tested
-`mog-lsp`, so Marketplace users do not need to configure a server path. Runtime
-and development-build discovery remain as fallbacks, and `mog.serverPath` is an
+run `kelvra app.kel`. Public target-specific VS Code packages bundle their tested
+`kelvra-lsp`, so Marketplace users do not need to configure a server path. Runtime
+and development-build discovery remain as fallbacks, and `kelvra.serverPath` is an
 advanced explicit override. The extension supplies syntax highlighting,
 snippets, completion, hover, diagnostics, formatting, navigation, references,
 and rename.

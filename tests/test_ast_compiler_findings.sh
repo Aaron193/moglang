@@ -142,47 +142,47 @@ run_expect_disassembly_contains() {
 failed=0
 
 run_expect_compile_error_contains \
-    "$FINDINGS_DIR/fail_numeric_overflow_signed.mog" \
+    "$FINDINGS_DIR/fail_numeric_overflow_signed.kel" \
     "numeric literal" || failed=1
 run_expect_compile_error_contains \
-    "$FINDINGS_DIR/fail_numeric_overflow_unsigned.mog" \
+    "$FINDINGS_DIR/fail_numeric_overflow_unsigned.kel" \
     "numeric literal" || failed=1
 run_expect_compile_error_contains \
-    "$FINDINGS_DIR/fail_numeric_overflow_float.mog" \
+    "$FINDINGS_DIR/fail_numeric_overflow_float.kel" \
     "numeric literal" || failed=1
 
 run_expect_disassembly_contains \
-    "$FINDINGS_DIR/fail_cast_downcast_runtime.mog" \
+    "$FINDINGS_DIR/fail_cast_downcast_runtime.kel" \
     "CHECK_INSTANCE_TYPE" || failed=1
 
 run_expect_runtime_error_contains \
-    "$FINDINGS_DIR/fail_cast_downcast_runtime.mog" \
+    "$FINDINGS_DIR/fail_cast_downcast_runtime.kel" \
     "Type error: expected instance of 'Dog'" || failed=1
 
 run_expect_success_output \
-    "$FINDINGS_DIR/sample_cast_downcast_runtime_ok.mog" \
+    "$FINDINGS_DIR/sample_cast_downcast_runtime_ok.kel" \
     "ok" || failed=1
 
 run_expect_compile_error_contains \
-    "$FINDINGS_DIR/fail_strict_line_top_level.mog" \
+    "$FINDINGS_DIR/fail_strict_line_top_level.kel" \
     "AST frontend failed to parse source" \
     "1:1" || failed=1
 run_expect_compile_error_contains \
-    "$FINDINGS_DIR/fail_import_non_string_arg.mog" \
+    "$FINDINGS_DIR/fail_import_non_string_arg.kel" \
     "Expected string literal but found '@'\\." \
     "1:23" || failed=1
 
 run_expect_compile_error_contains \
-    "$FINDINGS_DIR/fail_label_on_non_loop.mog" \
+    "$FINDINGS_DIR/fail_label_on_non_loop.kel" \
     "Labels may only be attached to 'while' or 'for' statements" \
     "1:1" || failed=1
 
 run_expect_success_output \
-    "$SCRIPT_DIR/sample_break_continue.mog" \
+    "$SCRIPT_DIR/sample_break_continue.kel" \
     $'2\n1\n3\n4\n10\n12' || failed=1
 
 run_expect_disassembly_contains \
-    "$FINDINGS_DIR/sample_constructor_field_slot.mog" \
+    "$FINDINGS_DIR/sample_constructor_field_slot.kel" \
     "GET_FIELD_SLOT" \
     "GET_PROPERTY" || failed=1
 

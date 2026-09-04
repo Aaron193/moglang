@@ -1,4 +1,0 @@
-const { Add, PI } = @import("./modules/math.mog")
-
-print(PI)
-print(Add(3, 4))

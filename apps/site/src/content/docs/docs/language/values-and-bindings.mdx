@@ -1,9 +1,9 @@
 ---
 title: Values and Bindings
-description: Expressions, local bindings, inference, and assignment in Mog today.
+description: Expressions, local bindings, inference, and assignment in Kelvra today.
 ---
 
-Mog keeps the expression model small on purpose. The language supports typed
+Kelvra keeps the expression model small on purpose. The language supports typed
 integers and floats, booleans, `null`, strings, grouping, arithmetic,
 comparison, logical operators, and bitwise operators. See
 [Built-in Types and Casts](/docs/language/built-in-types-and-casts/) for the
@@ -11,7 +11,7 @@ numeric families, literal suffixes, and `as` conversions.
 
 ## Expressions
 
-```mog
+```kelvra
 print((2 + 3) * 4)
 print(10 > 3)
 print(!false && true)
@@ -30,9 +30,9 @@ The current operator surface includes:
 
 Local bindings can be written with explicit types or with local inference.
 
-```mog
+```kelvra
 var count i32 = 10
-var message = "mog"
+var message = "kelvra"
 const answer = 42
 const enabled bool = true
 ```
@@ -45,7 +45,7 @@ is part of the design.
 Inference works well for local values whose initializer already makes the type
 obvious.
 
-```mog
+```kelvra
 fn buildCounter() Counter {
   var counter = Counter()
   return counter
@@ -62,7 +62,7 @@ Current repo guidance is stricter for public APIs and ambiguous cases:
 
 Bindings and index/member targets support assignment and compound assignment.
 
-```mog
+```kelvra
 var total i32 = 10
 total += 5
 total <<= 1
@@ -71,7 +71,7 @@ print(total)
 
 Update operators are also available:
 
-```mog
+```kelvra
 var i i32 = 0
 i++
 ++i
@@ -83,7 +83,7 @@ print(i)
 Bindings are lexical. Inner scopes can read outer names, and nested functions
 can capture them.
 
-```mog
+```kelvra
 fn outer() i32 {
   var x i32 = 10
 

@@ -22,10 +22,10 @@ constexpr const char* kPackageLibraryFileName = "package.dylib";
 constexpr const char* kPackageLibraryFileName = "package.so";
 #endif
 
-constexpr const char* kProjectManifestFileName = "mog.toml";
-constexpr const char* kProjectLockFileName = "mog.lock";
-constexpr const char* kProjectInstallRegistryFileName = ".mog/install/registry.toml";
-constexpr const char* kPackageApiFileName = "package.api.mog";
+constexpr const char* kProjectManifestFileName = "kelvra.toml";
+constexpr const char* kProjectLockFileName = "kelvra.lock";
+constexpr const char* kProjectInstallRegistryFileName = ".kelvra/install/registry.toml";
+constexpr const char* kPackageApiFileName = "package.api.kel";
 
 enum class TomlSectionKind {
     NONE,
@@ -346,7 +346,7 @@ bool resolveEntryPaths(const std::string& projectRoot,
 
     if (entry.kind == "source") {
         if (entry.entryPath.empty()) {
-            entry.entryPath = (packageDir / "src" / "main.mog").string();
+            entry.entryPath = (packageDir / "src" / "main.kel").string();
         } else {
             entry.entryPath = canonicalOrLexical(std::filesystem::path(projectRoot) /
                                                  entry.entryPath);
@@ -523,8 +523,8 @@ bool loadLockfileEntries(const std::filesystem::path& lockfilePath,
             current.description = parsed;
         } else if (key == "license") {
             current.license = parsed;
-        } else if (key == "mog_runtime") {
-            current.mogRuntime = parsed;
+        } else if (key == "kelvra_runtime") {
+            current.kelvraRuntime = parsed;
         } else if (key == "source_type") {
             current.sourceType = parsed;
         } else if (key == "source_path") {
@@ -596,7 +596,7 @@ bool loadPackageManifestEntry(const std::filesystem::path& packageDir,
     outEntry.kind = manifest.kind.empty() ? "native" : manifest.kind;
     outEntry.description = manifest.description;
     outEntry.license = manifest.license;
-    outEntry.mogRuntime = manifest.mogRuntime;
+    outEntry.kelvraRuntime = manifest.kelvraRuntime;
     outEntry.dependencyIds.clear();
     for (const auto& dependency : manifest.dependencies) {
         outEntry.dependencyIds.push_back(dependency.packageId);
@@ -1297,7 +1297,7 @@ bool loadProjectPackageRegistry(const std::string& projectRoot,
             }
         } else {
             outError = "Project package install metadata is missing at '" +
-                       installRegistryPath.string() + "'. Run 'mog install'.";
+                       installRegistryPath.string() + "'. Run 'kelvra install'.";
             return false;
         }
     }
@@ -1321,7 +1321,7 @@ bool loadProjectLockfile(const std::string& projectRoot,
         std::filesystem::path(projectRoot) / kProjectLockFileName;
     if (!fileExists(lockfilePath.string())) {
         outError = "Project lockfile is missing at '" + lockfilePath.string() +
-                   "'. Run 'mog install' first.";
+                   "'. Run 'kelvra install' first.";
         return false;
     }
 
@@ -1394,7 +1394,7 @@ bool resolvePackageRegistryEntry(
 
     if (isRemoteModule) {
         outError = "Package '" + std::string(rawSpecifier) +
-                   "' is not installed. Run 'mog install'.";
+                   "' is not installed. Run 'kelvra install'.";
         return false;
     }
 

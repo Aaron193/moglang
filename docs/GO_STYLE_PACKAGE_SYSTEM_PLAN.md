@@ -2,14 +2,14 @@
 
 ## Goal
 
-Make Mog packages usable without custom package infrastructure.
+Make Kelvra packages usable without custom package infrastructure.
 
 The target user experience is:
 
-```mog
+```kelvra
 const math = @import("github.com/aaron193/math")
 const vec = @import("gitlab.com/acme/vec")
-const local = @import("./local.mog")
+const local = @import("./local.kel")
 ```
 
 The compiler and package manager should treat hosted Git repositories as the
@@ -21,28 +21,28 @@ default distribution mechanism:
 4. Cache the resolved source locally.
 5. Read the package manifest.
 6. Build source or native artifacts as needed.
-7. Record exact commits in `mog.lock`.
+7. Record exact commits in `kelvra.lock`.
 
 Registries should become optional. A project should be able to depend on public
 GitHub, GitLab, Codeberg, Bitbucket, or self-hosted Git repositories without any
-Mog-operated server.
+Kelvra-operated server.
 
 ## Current State
 
-Mog already has important pieces:
+Kelvra already has important pieces:
 
 - Git dependencies exist in `DependencySpec`.
-- `mog add --git <url> --tag|--branch|--rev` clones repositories.
+- `kelvra add --git <url> --tag|--branch|--rev` clones repositories.
 - Git checkouts are cached under the Git cache root.
-- `mog.lock` records resolved package entries.
-- `mog install` materializes dependencies into `.mog/install/packages`.
-- Runtime and tooling resolve packages through `.mog/install/registry.toml`.
+- `kelvra.lock` records resolved package entries.
+- `kelvra install` materializes dependencies into `.kelvra/install/packages`.
+- Runtime and tooling resolve packages through `.kelvra/install/registry.toml`.
 
 The missing Go-style behavior is import-path-driven resolution.
 
 Currently:
 
-- Package imports may use canonical Git module paths such as `@import("github.com/moglang/window")`; installed aliases such as `window` remain available for ergonomic projects.
+- Package imports may use canonical Git module paths such as `@import("github.com/kelvralang/window")`; installed aliases such as `window` remain available for ergonomic projects.
 - `resolvePackageRegistryEntry` rejects names containing `:`.
 - Imports do not derive a repository URL.
 - Published package specs still require a configured registry.
@@ -54,7 +54,7 @@ Use repository import paths as package identity for external source packages.
 
 Example:
 
-```mog
+```kelvra
 const math = @import("github.com/aaron193/math")
 ```
 
@@ -64,14 +64,14 @@ This import path should mean:
 - default Git URL: `https://github.com/aaron193/math.git`
 - package identity: `github.com/aaron193/math`
 - lock identity: resolved commit hash plus selected version/ref
-- local materialization path: `.mog/install/packages/github.com/aaron193/math`
+- local materialization path: `.kelvra/install/packages/github.com/aaron193/math`
 
 Native packages can use the same identity model, but they still need a manifest
 and a supported build strategy.
 
 ## Manifest Model
 
-Keep `mog.toml`, but add first-class import-path metadata.
+Keep `kelvra.toml`, but add first-class import-path metadata.
 
 Package manifest example:
 
@@ -79,7 +79,7 @@ Package manifest example:
 kind = "source"
 module = "github.com/aaron193/math"
 version = "0.1.0"
-entry = "src/main.mog"
+entry = "src/main.kel"
 ```
 
 Native package example:
@@ -89,7 +89,7 @@ kind = "native"
 module = "github.com/acme/window"
 version = "0.1.0"
 abi_version = 3
-mog_runtime = "^0.1.0"
+kelvra_runtime = "^0.1.0"
 
 [native]
 entry = "package"
@@ -117,7 +117,7 @@ Replace the current binary split of "source path import" vs "bare package
 import" with four import classes:
 
 1. Local source module:
-   `./foo.mog`, `../foo.mog`, `/abs/foo.mog`
+   `./foo.kel`, `../foo.kel`, `/abs/foo.kel`
 
 2. Standard package:
    `std/math`, `std/io`, or another reserved standard-library prefix
@@ -239,7 +239,7 @@ Files to change:
 
 ## Install Behavior
 
-`mog install` should resolve all remote module imports from `mog.toml`.
+`kelvra install` should resolve all remote module imports from `kelvra.toml`.
 
 Algorithm:
 
@@ -251,18 +251,18 @@ Algorithm:
    - tag if `version` or `tag` is present
    - branch if `branch` is present
    - default branch only for explicit development mode
-5. Read `mog.toml` from repo root or subdir.
+5. Read `kelvra.toml` from repo root or subdir.
 6. Verify `module` matches the imported module path or subpath.
 7. Resolve transitive dependencies from that package manifest.
-8. Materialize packages into `.mog/install/packages`.
-9. Write `.mog/install/registry.toml`.
-10. Write `mog.lock` with exact commits.
+8. Materialize packages into `.kelvra/install/packages`.
+9. Write `.kelvra/install/registry.toml`.
+10. Write `kelvra.lock` with exact commits.
 
 Important rule:
 
 Do not let ordinary reproducible installs float on a remote default branch.
 If the user imports a package without a version, resolve once, pin the commit
-in `mog.lock`, and require `mog update` to move it.
+in `kelvra.lock`, and require `kelvra update` to move it.
 
 ## Lockfile Format
 
@@ -278,8 +278,8 @@ git = "https://github.com/acme/math.git"
 git_tag = "v1.0.0"
 git_commit = "40c199..."
 kind = "source"
-package_dir = ".mog/install/packages/github.com/acme/math"
-entry = ".mog/install/packages/github.com/acme/math/src/main.mog"
+package_dir = ".kelvra/install/packages/github.com/acme/math"
+entry = ".kelvra/install/packages/github.com/acme/math/src/main.kel"
 ```
 
 For subpackages:
@@ -306,15 +306,15 @@ activity.
 
 Compile-time behavior:
 
-1. `@import("./x.mog")` resolves as a local source file.
-2. `@import("github.com/acme/math")` checks `.mog/install/registry.toml`.
+1. `@import("./x.kel")` resolves as a local source file.
+2. `@import("github.com/acme/math")` checks `.kelvra/install/registry.toml`.
 3. If missing, report:
 
 ```text
-Package 'github.com/acme/math' is not installed. Run 'mog install'.
+Package 'github.com/acme/math' is not installed. Run 'kelvra install'.
 ```
 
-4. `mog run app.mog` may call `ensureProjectPackagesInstalled` before compile,
+4. `kelvra run app.kel` may call `ensureProjectPackagesInstalled` before compile,
    as it already does.
 
 Files to change:
@@ -354,29 +354,29 @@ Keep the existing commands, but make Git-style usage the primary path.
 Add dependency:
 
 ```bash
-mog add github.com/acme/math@v1.0.0
-mog add github.com/acme/math --branch main
-mog add github.com/acme/math --rev 40c199
+kelvra add github.com/acme/math@v1.0.0
+kelvra add github.com/acme/math --branch main
+kelvra add github.com/acme/math --rev 40c199
 ```
 
 Run:
 
 ```bash
-mog run app.mog
+kelvra run app.kel
 ```
 
 Install:
 
 ```bash
-mog install
-mog install --locked
-mog update github.com/acme/math
+kelvra install
+kelvra install --locked
+kelvra update github.com/acme/math
 ```
 
 Compatibility:
 
-- Keep `mog add --git ...` as explicit advanced mode.
-- Keep `mog add acme/http@^1.2.0 --registry internal` for registry users.
+- Keep `kelvra add --git ...` as explicit advanced mode.
+- Keep `kelvra add acme/http@^1.2.0 --registry internal` for registry users.
 - Update help text to describe remote module imports first.
 
 Files to change:
@@ -406,7 +406,7 @@ V2:
 
 - Fetch tags.
 - Select latest semver tag satisfying `^` or `~`.
-- Pin the selected tag and commit in `mog.lock`.
+- Pin the selected tag and commit in `kelvra.lock`.
 
 ## Native Packages
 
@@ -418,7 +418,7 @@ Go-style V1 native behavior:
 - Clone source from Git.
 - Build locally with CMake using the existing native build path.
 - Cache the built artifact.
-- Pin source commit in `mog.lock`.
+- Pin source commit in `kelvra.lock`.
 
 Keep registry prebuilt support as optional:
 
@@ -436,7 +436,7 @@ Minimum rules:
 
 - Never execute package build scripts except the declared native build flow.
 - Reject package manifests whose `module` does not match the import path.
-- Pin every remote dependency to a commit in `mog.lock`.
+- Pin every remote dependency to a commit in `kelvra.lock`.
 - `--locked` must fail if the manifest requires a remote package not present in
   the lockfile.
 - `--offline` must use only cached Git checkouts and resolved commit snapshots.
@@ -496,24 +496,24 @@ behavior is not changed yet.
 ### Phase 2: Git Module Dependencies
 
 - Let `[dependencies]` keys be full module paths.
-- Teach `mog add github.com/acme/math@v1.0.0` to derive Git metadata.
+- Teach `kelvra add github.com/acme/math@v1.0.0` to derive Git metadata.
 - Reuse `ensureGitDependencySource` for module-shaped dependencies.
-- Write `module`, `repo_root`, `subdir`, and `git_commit` into `mog.lock`.
+- Write `module`, `repo_root`, `subdir`, and `git_commit` into `kelvra.lock`.
 
 Outcome:
 
-Projects can install Git-hosted packages declared in `mog.toml`.
+Projects can install Git-hosted packages declared in `kelvra.toml`.
 
 ### Phase 3: Import Resolution
 
 - Teach `resolvePackageRegistryEntry` to match by full module path.
 - Keep bare-name matching for compatibility.
-- Update diagnostics to say `mog install` when a remote module is missing.
+- Update diagnostics to say `kelvra install` when a remote module is missing.
 - Update LSP package lookup to use the same resolver.
 
 Outcome:
 
-`@import("github.com/acme/math")` works after `mog install`.
+`@import("github.com/acme/math")` works after `kelvra install`.
 
 ### Phase 4: Transitive Dependencies
 
@@ -553,11 +553,11 @@ Do not remove the existing registry system immediately.
 
 Keep these working:
 
-- `@import("github.com/moglang/window")`
+- `@import("github.com/kelvralang/window")`
 - `--package-path`
 - local `packages/` discovery
 - `[registries.*]`
-- `mog publish`
+- `kelvra publish`
 - signed registry indexes
 - prebuilt native registry artifacts
 
@@ -571,7 +571,7 @@ But change the default recommendation:
 
 The biggest design risk is import-path identity.
 
-If Mog lets package manifests declare a module that does not match the import
+If Kelvra lets package manifests declare a module that does not match the import
 path, dependency graphs become confusing and cache poisoning becomes easier.
 Make module mismatch a hard error.
 
@@ -590,16 +590,16 @@ must be direct about missing CMake, SDL2, toolchains, or target artifacts.
 
 Build this narrow vertical slice first:
 
-```mog
+```kelvra
 const math = @import("github.com/example/math")
 ```
 
 With:
 
 ```bash
-mog add github.com/example/math@v0.1.0
-mog install
-mog run app.mog
+kelvra add github.com/example/math@v0.1.0
+kelvra install
+kelvra run app.kel
 ```
 
 Scope:

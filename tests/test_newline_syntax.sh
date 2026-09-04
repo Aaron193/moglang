@@ -74,40 +74,40 @@ run_expect_compile_error() {
 
 failed=0
 
-run_expect_output "$NEWLINE_DIR/sample_newline_call_suffix.mog" "3" || failed=1
-run_expect_output "$NEWLINE_DIR/sample_newline_index_suffix.mog" "2" || failed=1
-run_expect_output "$NEWLINE_DIR/sample_newline_member_suffix.mog" "7" || failed=1
-run_expect_output "$NEWLINE_DIR/sample_newline_operator_rhs.mog" "3" || failed=1
-run_expect_output "$NEWLINE_DIR/sample_newline_call_suffix_folded_arg.mog" "42" || failed=1
-run_expect_output "$NEWLINE_DIR/sample_newline_lambda_body.mog" "42" || failed=1
-run_expect_output "$NEWLINE_DIR/sample_newline_prefix_statement.mog" $'2\n3' || failed=1
-run_expect_output "$NEWLINE_DIR/sample_newline_print_grouped_arg.mog" "3" || failed=1
+run_expect_output "$NEWLINE_DIR/sample_newline_call_suffix.kel" "3" || failed=1
+run_expect_output "$NEWLINE_DIR/sample_newline_index_suffix.kel" "2" || failed=1
+run_expect_output "$NEWLINE_DIR/sample_newline_member_suffix.kel" "7" || failed=1
+run_expect_output "$NEWLINE_DIR/sample_newline_operator_rhs.kel" "3" || failed=1
+run_expect_output "$NEWLINE_DIR/sample_newline_call_suffix_folded_arg.kel" "42" || failed=1
+run_expect_output "$NEWLINE_DIR/sample_newline_lambda_body.kel" "42" || failed=1
+run_expect_output "$NEWLINE_DIR/sample_newline_prefix_statement.kel" $'2\n3' || failed=1
+run_expect_output "$NEWLINE_DIR/sample_newline_print_grouped_arg.kel" "3" || failed=1
 
 for file in \
-    "$NEWLINE_DIR/fail_newline_call_break.mog" \
-    "$NEWLINE_DIR/fail_newline_index_break.mog" \
-    "$NEWLINE_DIR/fail_newline_member_break.mog" \
-    "$NEWLINE_DIR/fail_newline_operator_break.mog" \
-    "$NEWLINE_DIR/fail_newline_cast_break.mog" \
-    "$NEWLINE_DIR/fail_newline_lambda_arrow_break.mog"
+    "$NEWLINE_DIR/fail_newline_call_break.kel" \
+    "$NEWLINE_DIR/fail_newline_index_break.kel" \
+    "$NEWLINE_DIR/fail_newline_member_break.kel" \
+    "$NEWLINE_DIR/fail_newline_operator_break.kel" \
+    "$NEWLINE_DIR/fail_newline_cast_break.kel" \
+    "$NEWLINE_DIR/fail_newline_lambda_arrow_break.kel"
 do
     case "$(basename "$file")" in
-        fail_newline_call_break.mog)
+        fail_newline_call_break.kel)
             expected="Continuation token '(' must stay on the previous line."
             ;;
-        fail_newline_index_break.mog)
+        fail_newline_index_break.kel)
             expected="Continuation token '[' must stay on the previous line."
             ;;
-        fail_newline_member_break.mog)
+        fail_newline_member_break.kel)
             expected="Continuation token '.' must stay on the previous line."
             ;;
-        fail_newline_operator_break.mog)
+        fail_newline_operator_break.kel)
             expected="Continuation token '+' must stay on the previous line."
             ;;
-        fail_newline_cast_break.mog)
+        fail_newline_cast_break.kel)
             expected="Continuation token 'as' must stay on the previous line."
             ;;
-        fail_newline_lambda_arrow_break.mog)
+        fail_newline_lambda_arrow_break.kel)
             expected="Continuation token '=>' must stay on the previous line."
             ;;
     esac
@@ -116,7 +116,7 @@ do
 done
 
 run_expect_compile_error \
-    "$NEWLINE_DIR/fail_newline_trailing_comma_call.mog" \
+    "$NEWLINE_DIR/fail_newline_trailing_comma_call.kel" \
     "Expected expression." || failed=1
 
 if [[ $failed -ne 0 ]]; then

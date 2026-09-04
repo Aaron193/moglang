@@ -1,0 +1,3 @@
+const { B } = @import("./nested_b.kel")
+
+const A i32 = B + 1

@@ -1,5 +1,5 @@
 {
-  "name": "mog-lang",
+  "name": "kelvra-lang",
   "private": true,
   "workspaces": [
     "apps/site"

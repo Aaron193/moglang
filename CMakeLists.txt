@@ -4,16 +4,16 @@ cmake_minimum_required(VERSION 3.10)
 # Set VCPKG_ROOT to the path of your vcpkg installation
 # set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
 
-# Override this from a release build, for example: -DMOG_VERSION=0.1.7
-set(MOG_VERSION "0.1.7" CACHE STRING "Version of the Mog distribution")
-set(MOG_TOOLING_PROTOCOL_VERSION "1.0" CACHE STRING
-    "Mog editor tooling protocol version")
-project(mog VERSION ${MOG_VERSION})
+# Override this from a release build, for example: -DKELVRA_VERSION=0.2.0
+set(KELVRA_VERSION "0.2.0" CACHE STRING "Version of the Kelvra distribution")
+set(KELVRA_TOOLING_PROTOCOL_VERSION "1.0" CACHE STRING
+    "Kelvra editor tooling protocol version")
+project(kelvra VERSION ${KELVRA_VERSION})
 
-option(MOG_STATIC_OPENSSL
-       "Link OpenSSL statically so packaged Mog executables are self-contained"
+option(KELVRA_STATIC_OPENSSL
+       "Link OpenSSL statically so packaged Kelvra executables are self-contained"
        ON)
-if(MOG_STATIC_OPENSSL)
+if(KELVRA_STATIC_OPENSSL)
     set(OPENSSL_USE_STATIC_LIBS TRUE)
 endif()
 find_package(OpenSSL REQUIRED)
@@ -69,7 +69,7 @@ target_include_directories(interpreter_core
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src"
            "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_compile_definitions(interpreter_core
-    PUBLIC MOG_RUNTIME_VERSION="${MOG_VERSION}")
+    PUBLIC KELVRA_RUNTIME_VERSION="${KELVRA_VERSION}")
 target_link_libraries(interpreter_core PUBLIC OpenSSL::Crypto)
 
 add_executable(interpreter
@@ -80,11 +80,11 @@ target_include_directories(interpreter PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
 
 # Keep `interpreter` for existing developer scripts while publishing the
 # user-facing CLI under the language name.
-add_executable(mog
+add_executable(kelvra
     src/main.cpp
 )
-target_link_libraries(mog PRIVATE interpreter_core)
-target_include_directories(mog PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_link_libraries(kelvra PRIVATE interpreter_core)
+target_include_directories(kelvra PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 add_executable(ast_parser_smoke
     tests/ast_parser_smoke.cpp
@@ -134,22 +134,22 @@ target_include_directories(host_api_v2_cross_vm_regression
 )
 target_link_libraries(host_api_v2_cross_vm_regression PRIVATE interpreter_core)
 
-add_executable(mog-lsp
-    tooling/lsp/mog-lsp.cpp
+add_executable(kelvra-lsp
+    tooling/lsp/kelvra-lsp.cpp
 )
-target_include_directories(mog-lsp
+target_include_directories(kelvra-lsp
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
-target_compile_definitions(mog-lsp PRIVATE
-    MOG_TOOLING_PROTOCOL_VERSION="${MOG_TOOLING_PROTOCOL_VERSION}")
-target_link_libraries(mog-lsp PRIVATE interpreter_core)
+target_compile_definitions(kelvra-lsp PRIVATE
+    KELVRA_TOOLING_PROTOCOL_VERSION="${KELVRA_TOOLING_PROTOCOL_VERSION}")
+target_link_libraries(kelvra-lsp PRIVATE interpreter_core)
 
 # Marketplace and runtime archives cannot rely on an MSYS2 installation being
 # present on an end user's machine. Keep the MinGW language/runtime support
 # libraries inside the two distributed executables.
 if(MINGW)
-    target_link_options(mog PRIVATE -static -static-libgcc -static-libstdc++)
-    target_link_options(mog-lsp PRIVATE -static -static-libgcc -static-libstdc++)
+    target_link_options(kelvra PRIVATE -static -static-libgcc -static-libstdc++)
+    target_link_options(kelvra-lsp PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
 
 add_library(examples_math_package MODULE
@@ -165,10 +165,10 @@ set_target_properties(examples_math_package PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/math"
 )
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/math")
-configure_file(packages/examples/math/mog.toml
-               packages/examples/math/mog.toml COPYONLY)
-configure_file(packages/examples/math/package.api.mog
-               packages/examples/math/package.api.mog COPYONLY)
+configure_file(packages/examples/math/kelvra.toml
+               packages/examples/math/kelvra.toml COPYONLY)
+configure_file(packages/examples/math/package.api.kel
+               packages/examples/math/package.api.kel COPYONLY)
 
 add_library(examples_mismatch_package MODULE
     packages/examples/mismatch/package.cpp
@@ -183,10 +183,10 @@ set_target_properties(examples_mismatch_package PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/mismatch"
 )
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/mismatch")
-configure_file(packages/examples/mismatch/mog.toml
-               packages/examples/mismatch/mog.toml COPYONLY)
-configure_file(packages/examples/mismatch/package.api.mog
-               packages/examples/mismatch/package.api.mog COPYONLY)
+configure_file(packages/examples/mismatch/kelvra.toml
+               packages/examples/mismatch/kelvra.toml COPYONLY)
+configure_file(packages/examples/mismatch/package.api.kel
+               packages/examples/mismatch/package.api.kel COPYONLY)
 
 add_library(examples_counter_package MODULE
     packages/examples/counter/package.cpp
@@ -201,10 +201,10 @@ set_target_properties(examples_counter_package PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/counter"
 )
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/counter")
-configure_file(packages/examples/counter/mog.toml
-               packages/examples/counter/mog.toml COPYONLY)
-configure_file(packages/examples/counter/package.api.mog
-               packages/examples/counter/package.api.mog COPYONLY)
+configure_file(packages/examples/counter/kelvra.toml
+               packages/examples/counter/kelvra.toml COPYONLY)
+configure_file(packages/examples/counter/package.api.kel
+               packages/examples/counter/package.api.kel COPYONLY)
 
 add_library(examples_host_api_package MODULE
     packages/examples/host_api/package.cpp
@@ -220,10 +220,10 @@ set_target_properties(examples_host_api_package PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/host_api"
 )
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/packages/examples/host_api")
-configure_file(packages/examples/host_api/mog.toml
-               packages/examples/host_api/mog.toml COPYONLY)
-configure_file(packages/examples/host_api/package.api.mog
-               packages/examples/host_api/package.api.mog COPYONLY)
+configure_file(packages/examples/host_api/kelvra.toml
+               packages/examples/host_api/kelvra.toml COPYONLY)
+configure_file(packages/examples/host_api/package.api.kel
+               packages/examples/host_api/package.api.kel COPYONLY)
 
 
 if(ENABLE_VM_TRACE)
@@ -355,22 +355,22 @@ endif()
 set(PROJECT_COMPILE_TARGETS
     interpreter_core
     interpreter
-    mog
+    kelvra
     ast_parser_smoke
     ast_emitter_regression
     ast_frontend_regression
     frontend_benchmark
     frontend_tooling_regression
     host_api_v2_cross_vm_regression
-    mog-lsp
+    kelvra-lsp
     examples_math_package
     examples_mismatch_package
     examples_counter_package
     examples_host_api_package
 )
 
-if(TARGET mog_window_package)
-    list(APPEND PROJECT_COMPILE_TARGETS mog_window_package)
+if(TARGET kelvra_window_package)
+    list(APPEND PROJECT_COMPILE_TARGETS kelvra_window_package)
 endif()
 
 foreach(target_name IN LISTS PROJECT_COMPILE_TARGETS)
@@ -387,30 +387,30 @@ endforeach()
 
 set(PROJECT_LINK_TARGETS
     interpreter
-    mog
+    kelvra
     ast_parser_smoke
     ast_emitter_regression
     ast_frontend_regression
     frontend_benchmark
     frontend_tooling_regression
     host_api_v2_cross_vm_regression
-    mog-lsp
+    kelvra-lsp
     examples_math_package
     examples_mismatch_package
     examples_counter_package
     examples_host_api_package
 )
 
-if(TARGET mog_window_package)
-    list(APPEND PROJECT_LINK_TARGETS mog_window_package)
+if(TARGET kelvra_window_package)
+    list(APPEND PROJECT_LINK_TARGETS kelvra_window_package)
 endif()
 
 # The protocol regression suite exercises native package navigation. Building
 # the language-server target must therefore also produce its local fixture
 # packages in the server-adjacent `packages` tree.
-add_dependencies(mog-lsp examples_math_package examples_counter_package)
-if(TARGET mog_window_package)
-    add_dependencies(mog-lsp mog_window_package)
+add_dependencies(kelvra-lsp examples_math_package examples_counter_package)
+if(TARGET kelvra_window_package)
+    add_dependencies(kelvra-lsp kelvra_window_package)
 endif()
 
 foreach(target_name IN LISTS PROJECT_LINK_TARGETS)
@@ -429,25 +429,25 @@ if(ENABLE_LTO)
                  INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
     set_property(TARGET interpreter PROPERTY
                  INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
-    set_property(TARGET mog PROPERTY
+    set_property(TARGET kelvra PROPERTY
                  INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
-    set_property(TARGET mog-lsp PROPERTY
+    set_property(TARGET kelvra-lsp PROPERTY
                  INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
 endif()
 
 # Distribution layout: `cmake --install` puts both user-facing executables on
 # PATH. CPack then turns the install tree into a release archive.
 include(GNUInstallDirs)
-install(TARGETS mog mog-lsp
+install(TARGETS kelvra kelvra-lsp
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES LICENSE README.md
     DESTINATION "${CMAKE_INSTALL_DOCDIR}")
 
-set(CPACK_PACKAGE_NAME "mog")
-set(CPACK_PACKAGE_VENDOR "Mog Language")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Mog programming language and language server")
+set(CPACK_PACKAGE_NAME "kelvra")
+set(CPACK_PACKAGE_VENDOR "Kelvra Language")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Kelvra programming language and language server")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_GENERATOR "TGZ;ZIP")
-set(CPACK_PACKAGE_FILE_NAME "mog-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+set(CPACK_PACKAGE_FILE_NAME "kelvra-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 include(CPack)

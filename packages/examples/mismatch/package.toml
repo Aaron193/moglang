@@ -3,8 +3,8 @@ name = "mismatch"
 version = "0.1.0"
 license = "MIT"
 abi_version = 3
-mog_runtime = "^0.1.0"
-author = "Mog runtime"
+kelvra_runtime = "^0.1.0"
+author = "Kelvra runtime"
 description = "Intentionally mismatched package metadata for validation tests."
 dependencies = []
 

@@ -3,7 +3,7 @@ title: Packages Overview
 description: A map of the package docs, the current import model, and where to go next.
 ---
 
-Mog uses `@import(...)` for both source modules and native packages. The package
+Kelvra uses `@import(...)` for both source modules and native packages. The package
 manager supports local, workspace, Git, and registry dependencies with lockfiles,
 offline installs, signed registry metadata, publishing, and advisory audits.
 
@@ -12,28 +12,28 @@ offline installs, signed registry metadata, publishing, and advisory audits.
 - [Using Native Packages](/docs/packages/using-native-packages/) for package
   imports, search paths, opaque handles, and validation.
 - [Official Packages](/docs/packages/official-packages/) for the complete set of
-  source, native, and hybrid packages maintained in the `moglang` organization.
+  source, native, and hybrid packages maintained in the `kelvralang` organization.
 - [Authoring Native Packages](/docs/packages/authoring-native-packages/) for
-  manifests, `package.api.mog`, and reference package layout.
+  manifests, `package.api.kel`, and reference package layout.
 
 ## Import model at a glance
 
-- string literal paths such as `"./math.mog"` resolve as source modules
+- string literal paths such as `"./math.kel"` resolve as source modules
 - hosted module paths such as `"github.com/acme/math"` resolve through
   installed Git module metadata
 - bare names such as `"math"` and `"window"` resolve as packages
-- package metadata already exists in `mog.toml`, `mog.lock`, and
-  `package.api.mog`, with legacy `package.toml` still accepted for
+- package metadata already exists in `kelvra.toml`, `kelvra.lock`, and
+  `package.api.kel`, with legacy `package.toml` still accepted for
   compatibility
 
 Add a Git module by tag, then install before importing it:
 
 ```bash
-mog add github.com/acme/math@v1.0.0
-mog install
+kelvra add github.com/acme/math@v1.0.0
+kelvra install
 ```
 
-```mog
+```kelvra
 const math = @import("github.com/acme/math")
 ```
 
@@ -50,6 +50,6 @@ loader, and native ABI:
 - `packages/examples/counter/`
 
 These reference packages are development fixtures, not substitutes for the
-independently versioned packages in the `moglang` organization. Mog and its
-package ecosystem are still pre-1.0. Commit `mog.lock` for applications and use
-`mog install --locked` in CI when reproducibility matters.
+independently versioned packages in the `kelvralang` organization. Kelvra and its
+package ecosystem are still pre-1.0. Commit `kelvra.lock` for applications and use
+`kelvra install --locked` in CI when reproducibility matters.

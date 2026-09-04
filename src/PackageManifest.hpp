@@ -29,7 +29,7 @@ struct PackageManifest {
     std::string license;
     bool publish = true;
     uint32_t abiVersion = 0;
-    std::string mogRuntime;
+    std::string kelvraRuntime;
     std::string author;
     std::vector<std::string> authors;
     std::string description;
@@ -46,7 +46,7 @@ struct PackageManifest {
     std::vector<DependencySpec> buildDependencies;
 };
 
-inline constexpr const char* kPackageManifestFileName = "mog.toml";
+inline constexpr const char* kPackageManifestFileName = "kelvra.toml";
 inline constexpr const char* kLegacyPackageManifestFileName = "package.toml";
 
 std::filesystem::path packageManifestPath(

@@ -1,5 +1,5 @@
 ---
-name: Mog tooling release checklist
+name: Kelvra tooling release checklist
 about: Track a reproducible VS Code extension release
 title: "Release vscode/vX.Y.Z"
 labels: release, tooling

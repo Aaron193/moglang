@@ -1,0 +1,108 @@
+{
+  "name": "vscode-kelvra",
+  "displayName": "Kelvra Developer Tools",
+  "description": "Complete Kelvra language support with completion, navigation, diagnostics, formatting, hover, and rename.",
+  "version": "0.2.0",
+  "publisher": "kelvralang",
+  "license": "GPL-3.0-only",
+  "icon": "images/fileicons/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kelvralang/kelvra"
+  },
+  "bugs": {
+    "url": "https://github.com/kelvralang/kelvra/issues"
+  },
+  "homepage": "https://github.com/kelvralang/kelvra/tree/main/tooling/vscode-kelvra#readme",
+  "keywords": [
+    "kelvra",
+    "kelvralang",
+    "language-server",
+    "lsp",
+    "intellisense"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters",
+    "Linters"
+  ],
+  "activationEvents": [
+    "onLanguage:kelvra"
+  ],
+  "main": "./dist/extension.js",
+  "scripts": {
+    "compile": "esbuild extension.js --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
+    "watch": "npm run compile -- --watch",
+    "lint": "eslint extension.js src test",
+    "check": "npm run compile && node --check extension.js && node --check src/discovery.js && node --check src/compatibility.js && node --check src/client.js && node --check src/lifecycle.js && node --check src/restart.js && npm run lint && npm test",
+    "test": "node --test test/unit/*.test.js",
+    "test:lsp": "bash ../../tests/test_lsp_smoke.sh ${KELVRA_LSP_PATH:-../../build/kelvra-lsp} && bash ../../tests/test_lsp_protocol.sh ${KELVRA_LSP_PATH:-../../build/kelvra-lsp} && bash ../../tests/test_lsp_formatting.sh ${KELVRA_LSP_PATH:-../../build/kelvra-lsp} && bash ../../tests/test_lsp_import_diagnostics.sh ${KELVRA_LSP_PATH:-../../build/kelvra-lsp} && bash ../../tests/test_lsp_navigation.sh ${KELVRA_LSP_PATH:-../../build/kelvra-lsp}",
+    "test:extension": "npm run compile && node ./test/runTest.js",
+    "package": "npm run compile && vsce package --no-dependencies",
+    "publish": "npm run compile && vsce publish --no-dependencies"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.6.2",
+    "adm-zip": "^0.6.0",
+    "esbuild": "^0.25.8",
+    "eslint": "^8.57.1"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "kelvra",
+        "aliases": ["Kelvra", "kelvra"],
+        "extensions": [".kel"],
+        "icon": {
+          "light": "./images/fileicons/icon.png",
+          "dark": "./images/fileicons/icon.png"
+        },
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "kelvra",
+        "scopeName": "source.kel",
+        "path": "./syntaxes/kelvra.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "kelvra",
+        "path": "./snippets/kelvra.code-snippets"
+      }
+    ],
+    "commands": [
+      { "command": "kelvra.showServerStatus", "title": "Kelvra: Show Language Server Status" },
+      { "command": "kelvra.restartServer", "title": "Kelvra: Restart Language Server" },
+      { "command": "kelvra.selectServer", "title": "Kelvra: Select Language Server" },
+      { "command": "kelvra.openServerLog", "title": "Kelvra: Open Language Server Log" },
+      { "command": "kelvra.installProjectDependencies", "title": "Kelvra: Install Project Dependencies" }
+    ],
+    "configuration": {
+      "title": "Kelvra",
+      "properties": {
+        "kelvra.serverPath": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Advanced override for the kelvra-lsp executable. Relative paths resolve from the relevant workspace folder. Invalid overrides do not silently fall back."
+        },
+        "kelvra.runtimePath": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Optional Kelvra runtime executable or installation directory used to locate its matching language server."
+        }
+      }
+    }
+  }
+}

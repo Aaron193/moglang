@@ -1,0 +1,3 @@
+const { Add as sum } = @import("./modules/math.kel")
+
+print(sum(10, 5))

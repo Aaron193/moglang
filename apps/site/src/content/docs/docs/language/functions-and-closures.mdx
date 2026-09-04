@@ -3,12 +3,12 @@ title: Functions and Closures
 description: Named functions, lambdas, function types, recursion, and captured locals.
 ---
 
-Mog already supports named functions, block function literals, expression-bodied
+Kelvra already supports named functions, block function literals, expression-bodied
 lambdas, recursion, and closures with captured variables.
 
 ## Named functions
 
-```mog
+```kelvra
 fn add(left i32, right i32) i32 {
   return left + right
 }
@@ -16,7 +16,7 @@ fn add(left i32, right i32) i32 {
 
 Named functions and methods can omit an explicit `void` return type:
 
-```mog
+```kelvra
 fn logAnswer() {
   print(42)
 }
@@ -26,13 +26,13 @@ fn logAnswer() {
 
 Function types appear directly in signatures and local bindings.
 
-```mog
+```kelvra
 fn applyTwice(f fn(i32) i32, value i32) i32 {
   return f(f(value))
 }
 ```
 
-```mog
+```kelvra
 var addOne fn(i32) i32 = fn(x i32) => x + 1
 ```
 
@@ -40,13 +40,13 @@ var addOne fn(i32) i32 = fn(x i32) => x + 1
 
 Expression-bodied lambdas are the compact form:
 
-```mog
+```kelvra
 var addOne = fn(x i32) => x + 1
 ```
 
 Block function literals are available when you want multiple statements:
 
-```mog
+```kelvra
 var addOne fn(i32) i32 = fn(x) {
   return x + 1
 }
@@ -59,7 +59,7 @@ parameter annotations and return-type mismatches.
 
 Nested functions can capture outer locals.
 
-```mog
+```kelvra
 fn makeAdder(base i32) fn(i32) i32 {
   return fn(delta i32) => base + delta
 }
@@ -78,7 +78,7 @@ exercise recursive execution.
 
 ## Return rules
 
-Mog’s type checker enforces return behavior:
+Kelvra’s type checker enforces return behavior:
 
 - returned values must match the declared return type
 - named functions without a value should omit the return type or use `void`

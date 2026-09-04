@@ -24,51 +24,51 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: tooling/vscode-mog/package-lock.json
+          cache-dependency-path: tooling/vscode-kelvra/package-lock.json
       - name: Install native dependencies
         run: sudo apt-get update && sudo apt-get install -y libssl-dev libsdl2-dev xvfb
       - name: Build the language server that is under test
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --target mog-lsp --parallel
+          cmake --build build --target kelvra-lsp --parallel
       - name: Manifest, grammar, and LSP protocol suites
         run: |
           bash tests/test_vscode_manifest.sh
           bash tests/test_vscode_grammar.sh
-          bash tests/test_lsp_formatting.sh ./build/mog-lsp
-          bash tests/test_lsp_import_diagnostics.sh ./build/mog-lsp
-          bash tests/test_lsp_navigation.sh ./build/mog-lsp
-          bash tests/test_lsp_protocol.sh ./build/mog-lsp
-          bash tests/test_lsp_smoke.sh ./build/mog-lsp
+          bash tests/test_lsp_formatting.sh ./build/kelvra-lsp
+          bash tests/test_lsp_import_diagnostics.sh ./build/kelvra-lsp
+          bash tests/test_lsp_navigation.sh ./build/kelvra-lsp
+          bash tests/test_lsp_protocol.sh ./build/kelvra-lsp
+          bash tests/test_lsp_smoke.sh ./build/kelvra-lsp
       - name: Extension unit checks
-        working-directory: tooling/vscode-mog
+        working-directory: tooling/vscode-kelvra
         run: |
           npm ci
           npm run compile
           npm run check
       - name: Extension Development Host integration suite
-        working-directory: tooling/vscode-mog
+        working-directory: tooling/vscode-kelvra
         env:
-          MOG_LSP_PATH: ${{ github.workspace }}/build/mog-lsp
+          KELVRA_LSP_PATH: ${{ github.workspace }}/build/kelvra-lsp
         run: xvfb-run -a npm run test:extension
       - name: Package and inspect pull-request VSIX
-        working-directory: tooling/vscode-mog
+        working-directory: tooling/vscode-kelvra
         run: |
           npm run compile
           mkdir -p runtime/linux-x64 ../../dist
-          cp ../../build/mog-lsp runtime/linux-x64/mog-lsp
-          npm run package -- --target linux-x64 --out ../../dist/vscode-mog-ci-linux-x64.vsix
-          bash ../../scripts/validate_vsix.sh ../../dist/vscode-mog-ci-linux-x64.vsix linux-x64
+          cp ../../build/kelvra-lsp runtime/linux-x64/kelvra-lsp
+          npm run package -- --target linux-x64 --out ../../dist/vscode-kelvra-ci-linux-x64.vsix
+          bash ../../scripts/validate_vsix.sh ../../dist/vscode-kelvra-ci-linux-x64.vsix linux-x64
       - name: Test packaged extension artifact
-        working-directory: tooling/vscode-mog
+        working-directory: tooling/vscode-kelvra
         env:
-          MOG_TEST_VSIX: ${{ github.workspace }}/dist/vscode-mog-ci-linux-x64.vsix
-        run: xvfb-run -a npm run test:extension -- --vsix "$MOG_TEST_VSIX"
+          KELVRA_TEST_VSIX: ${{ github.workspace }}/dist/vscode-kelvra-ci-linux-x64.vsix
+        run: xvfb-run -a npm run test:extension -- --vsix "$KELVRA_TEST_VSIX"
       - name: Upload tested VSIX
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: vscode-mog-ci-linux-x64
-          path: dist/vscode-mog-ci-linux-x64.vsix
+          name: vscode-kelvra-ci-linux-x64
+          path: dist/vscode-kelvra-ci-linux-x64.vsix
           if-no-files-found: error
       - name: Upload editor test diagnostics
         if: failure()
@@ -77,7 +77,7 @@ jobs:
           name: editor-test-diagnostics
           path: |
             build/Testing/Temporary/**
-            tooling/vscode-mog/.test-logs/**
+            tooling/vscode-kelvra/.test-logs/**
           if-no-files-found: ignore
 
   test:
@@ -87,7 +87,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: moglang/http
+          repository: kelvralang/http
           ref: v0.1.0
           path: integration-packages/http
       - name: Install dependencies
@@ -97,7 +97,7 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
       - name: Verify embedded version
-        run: ./build/mog --version
+        run: ./build/kelvra --version
       - name: Frontend and CLI regressions
         run: |
           ./tests/test_ast_frontend.sh
@@ -120,47 +120,47 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: moglang/encoding
+          repository: kelvralang/encoding
           path: foundation-packages/encoding
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: moglang/fs
+          repository: kelvralang/fs
           path: foundation-packages/fs
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: moglang/json
+          repository: kelvralang/json
           path: foundation-packages/json
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: moglang/log
+          repository: kelvralang/log
           path: foundation-packages/log
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: moglang/math
+          repository: kelvralang/math
           path: foundation-packages/math
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: moglang/path
+          repository: kelvralang/path
           path: foundation-packages/path
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: moglang/random
+          repository: kelvralang/random
           path: foundation-packages/random
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: moglang/test
+          repository: kelvralang/test
           path: foundation-packages/test
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: moglang/time
+          repository: kelvralang/time
           path: foundation-packages/time
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: moglang/window
+          repository: kelvralang/window
           path: foundation-packages/window
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libssl-dev libsdl2-dev
-      - name: Build Mog runtime
+      - name: Build Kelvra runtime
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --parallel

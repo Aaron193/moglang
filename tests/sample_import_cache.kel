@@ -1,0 +1,5 @@
+const first = @import("./modules/cache_target.kel")
+const second = @import("./modules/cache_target.kel")
+
+print(first.VALUE)
+print(second.VALUE)

@@ -2,19 +2,19 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Mog: Extension Development Host",
+      "name": "Kelvra: Extension Development Host",
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/tooling/vscode-mog",
+        "--extensionDevelopmentPath=${workspaceFolder}/tooling/vscode-kelvra",
         "${workspaceFolder}/examples"
       ],
       "env": {
-        "MOG_SERVER_PATH": "${workspaceFolder}/build/tooling-debug",
-        "MOG_LSP_DEVELOPMENT": "1"
+        "KELVRA_SERVER_PATH": "${workspaceFolder}/build/tooling-debug",
+        "KELVRA_LSP_DEVELOPMENT": "1"
       },
-      "preLaunchTask": "Mog: Prepare Tooling Development",
-      "outFiles": ["${workspaceFolder}/tooling/vscode-mog/**/*.js"]
+      "preLaunchTask": "Kelvra: Prepare Tooling Development",
+      "outFiles": ["${workspaceFolder}/tooling/vscode-kelvra/**/*.js"]
     }
   ]
 }

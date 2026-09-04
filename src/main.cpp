@@ -83,10 +83,10 @@ static void printUsage(const char* executable) {
         << "Usage: " << executable << " <command> [options]\n"
         << "Commands:\n"
         << "  version                Print runtime and native ABI versions\n"
-        << "  init [name]            Create a project mog.toml in the current directory\n"
+        << "  init [name]            Create a project kelvra.toml in the current directory\n"
         << "  add <module[@tag]>     Add a package dependency and install it\n"
         << "  remove <alias>         Remove a dependency and install the updated graph\n"
-        << "  install [flags]        Install dependencies using mog.lock when it is current\n"
+        << "  install [flags]        Install dependencies using kelvra.lock when it is current\n"
         << "  update [flags]         Re-resolve dependencies and rewrite install metadata\n"
         << "  test [flags]           Run the root [scripts].test entry with dev dependencies\n"
         << "  build [flags]          Run the root [scripts].build entry with dev dependencies\n"
@@ -128,7 +128,7 @@ static void printUsage(const char* executable) {
         << "  --target <triple> | --target=<triple>\n"
         << "  --native-artifact-dir <dir> | --native-artifact-dir=<dir>\n"
         << "Flags for add:\n"
-        << "  mog add github.com/acme/math@v1.0.0\n"
+        << "  kelvra add github.com/acme/math@v1.0.0\n"
         << "  --path <dir> | --git <url> | --workspace | --registry <alias>\n"
         << "  --alias <name> --package <namespace:name> --version <requirement>\n"
         << "  --rev <rev> | --tag <tag> | --branch <branch>\n"
@@ -583,7 +583,7 @@ static bool resolveProjectScriptPath(const std::string& projectRoot,
         return false;
     }
     if (!hasSourceModuleExtension(rawScriptPath)) {
-        outError = "Project script path must use the .mog extension.";
+        outError = "Project script path must use the .kel extension.";
         return false;
     }
 
@@ -788,7 +788,7 @@ static int runProjectScriptCommand(int argc, char** argv,
         std::string(commandName) == "test" ? manifest.scripts.test
                                             : manifest.scripts.build;
     if (scriptPath.empty()) {
-        std::cerr << commandName << " failed: mog.toml is missing [scripts]."
+        std::cerr << commandName << " failed: kelvra.toml is missing [scripts]."
                   << commandName << std::endl;
         return 1;
     }
@@ -940,16 +940,16 @@ static int runInstallCommand(const std::string& projectRoot,
     if (entries.size() != 1) {
         std::cout << "s";
     }
-    std::cout << " into " << (std::filesystem::path(projectRoot) / ".mog/install")
+    std::cout << " into " << (std::filesystem::path(projectRoot) / ".kelvra/install")
               << std::endl;
     return 0;
 }
 
 static int runInitCommand(int argc, char** argv) {
     std::string projectRoot = currentProjectRoot();
-    std::filesystem::path manifestPath = std::filesystem::path(projectRoot) / "mog.toml";
+    std::filesystem::path manifestPath = std::filesystem::path(projectRoot) / "kelvra.toml";
     if (std::filesystem::exists(manifestPath)) {
-        std::cerr << "mog.toml already exists in " << projectRoot << std::endl;
+        std::cerr << "kelvra.toml already exists in " << projectRoot << std::endl;
         return 1;
     }
 
@@ -1477,7 +1477,7 @@ int main(int argc, char** argv) {
             std::cerr << command << " does not accept arguments." << std::endl;
             return 1;
         }
-        std::cout << "mog " << MOG_RUNTIME_VERSION << " (native ABI "
+        std::cout << "kelvra " << KELVRA_RUNTIME_VERSION << " (native ABI "
                   << EXPR_NATIVE_PACKAGE_ABI_VERSION << ")" << std::endl;
         return 0;
     }

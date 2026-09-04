@@ -42,11 +42,11 @@ run_expect_compile_error() {
 failed=0
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/semicolon_statement.mog" \
+    "$SCRIPT_DIR/types/errors/semicolon_statement.kel" \
     "Semicolons are only allowed inside 'for (...)' clauses." || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/lambda_block_body.mog" \
+    "$SCRIPT_DIR/types/errors/lambda_block_body.kel" \
     "Expression-bodied lambdas do not support block bodies" || failed=1
 
 if [[ $failed -ne 0 ]]; then

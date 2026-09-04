@@ -3,12 +3,12 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LSP_BIN="${1:-$PROJECT_ROOT/build/mog-lsp}"
+LSP_BIN="${1:-$PROJECT_ROOT/build/kelvra-lsp}"
 if [[ -d "$LSP_BIN" ]]; then
-    if [[ -x "$LSP_BIN/mog-lsp.exe" ]]; then
-        LSP_BIN="$LSP_BIN/mog-lsp.exe"
+    if [[ -x "$LSP_BIN/kelvra-lsp.exe" ]]; then
+        LSP_BIN="$LSP_BIN/kelvra-lsp.exe"
     else
-        LSP_BIN="$LSP_BIN/mog-lsp"
+        LSP_BIN="$LSP_BIN/kelvra-lsp"
     fi
 fi
 
@@ -29,7 +29,7 @@ from urllib.parse import unquote, urlparse
 
 lsp_bin = sys.argv[1]
 repo_root = Path(sys.argv[2]).resolve()
-native_window_fixture = Path(lsp_bin).resolve().parent / "packages" / "mog" / "window"
+native_window_fixture = Path(lsp_bin).resolve().parent / "packages" / "kelvra" / "window"
 has_native_window = any(
     (native_window_fixture / filename).is_file()
     for filename in ("package.so", "package.dylib", "package.dll")
@@ -48,7 +48,7 @@ def read_message(proc):
     while True:
         line = proc.stdout.readline()
         if not line:
-            raise RuntimeError("unexpected EOF from mog-lsp")
+            raise RuntimeError("unexpected EOF from kelvra-lsp")
         if line == b"\r\n":
             break
         decoded = line.decode("utf-8").strip()
@@ -142,7 +142,7 @@ source = "\n".join([
     ""
 ])
 
-with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
+with tempfile.TemporaryDirectory(prefix="kelvra_lsp_navigation_") as tmpdir:
     module_source = "\n".join([
         "fn Get() i32 {",
         "    return 42",
@@ -150,31 +150,31 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "const Answer i32 = 42",
         ""
     ])
-    module_path = Path(tmpdir) / "dep.mog"
+    module_path = Path(tmpdir) / "dep.kel"
     module_path.write_text(module_source, encoding="utf-8")
     module_uri = module_path.resolve().as_uri()
 
-    source_path = Path(tmpdir) / "sample.mog"
+    source_path = Path(tmpdir) / "sample.kel"
     source_path.write_text(source, encoding="utf-8")
     uri = source_path.resolve().as_uri()
     import_source = "\n".join([
-        "const { Answer, Get } = @import(\"./dep.mog\")",
+        "const { Answer, Get } = @import(\"./dep.kel\")",
         "print(Get())",
         "print(Answer)",
         ""
     ])
-    import_path = Path(tmpdir) / "import_sample.mog"
+    import_path = Path(tmpdir) / "import_sample.kel"
     import_path.write_text(import_source, encoding="utf-8")
     import_uri = import_path.resolve().as_uri()
     import_path_line = import_source.splitlines()[0]
-    import_path_character = import_path_line.index("./dep.mog") + 2
+    import_path_character = import_path_line.index("./dep.kel") + 2
     import_keyword_character = import_path_line.index("@import") + 2
     alias_import_source = "\n".join([
-        "const { Answer as Alias } = @import(\"./dep.mog\")",
+        "const { Answer as Alias } = @import(\"./dep.kel\")",
         "print(Alias)",
         ""
     ])
-    alias_import_path = Path(tmpdir) / "alias_import_sample.mog"
+    alias_import_path = Path(tmpdir) / "alias_import_sample.kel"
     alias_import_path.write_text(alias_import_source, encoding="utf-8")
     alias_import_uri = alias_import_path.resolve().as_uri()
     member_source = "\n".join([
@@ -190,7 +190,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    member_path = Path(tmpdir) / "member_sample.mog"
+    member_path = Path(tmpdir) / "member_sample.kel"
     member_path.write_text(member_source, encoding="utf-8")
     member_uri = member_path.resolve().as_uri()
     collection_source = "\n".join([
@@ -205,7 +205,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "print(set.union(set))",
         ""
     ])
-    collection_path = Path(tmpdir) / "collection_sample.mog"
+    collection_path = Path(tmpdir) / "collection_sample.kel"
     collection_path.write_text(collection_source, encoding="utf-8")
     collection_uri = collection_path.resolve().as_uri()
     constructor_type_source = "\n".join([
@@ -215,7 +215,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    constructor_type_path = Path(tmpdir) / "constructor_type_sample.mog"
+    constructor_type_path = Path(tmpdir) / "constructor_type_sample.kel"
     constructor_type_path.write_text(constructor_type_source, encoding="utf-8")
     constructor_type_uri = constructor_type_path.resolve().as_uri()
     imported_state_source = "\n".join([
@@ -225,17 +225,17 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    imported_state_path = Path(tmpdir) / "imported_state.mog"
+    imported_state_path = Path(tmpdir) / "imported_state.kel"
     imported_state_path.write_text(imported_state_source, encoding="utf-8")
     imported_state_uri = imported_state_path.resolve().as_uri()
     imported_member_source = "\n".join([
-        "const { GameState } = @import(\"./imported_state.mog\")",
+        "const { GameState } = @import(\"./imported_state.kel\")",
         "fn update(state GameState) void {",
         "    state.",
         "}",
         ""
     ])
-    imported_member_path = Path(tmpdir) / "imported_member_sample.mog"
+    imported_member_path = Path(tmpdir) / "imported_member_sample.kel"
     imported_member_path.write_text(imported_member_source, encoding="utf-8")
     imported_member_uri = imported_member_path.resolve().as_uri()
     imported_nav_state_source = "\n".join([
@@ -245,11 +245,11 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    imported_nav_state_path = Path(tmpdir) / "imported_nav_state.mog"
+    imported_nav_state_path = Path(tmpdir) / "imported_nav_state.kel"
     imported_nav_state_path.write_text(imported_nav_state_source, encoding="utf-8")
     imported_nav_state_uri = imported_nav_state_path.resolve().as_uri()
     imported_nav_logic_source = "\n".join([
-        "const { GameState } = @import(\"./imported_nav_state.mog\")",
+        "const { GameState } = @import(\"./imported_nav_state.kel\")",
         "fn step(state GameState) void {",
         "    if (state.running == false) {",
         "        return",
@@ -257,7 +257,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    imported_nav_logic_path = Path(tmpdir) / "imported_nav_logic.mog"
+    imported_nav_logic_path = Path(tmpdir) / "imported_nav_logic.kel"
     imported_nav_logic_path.write_text(imported_nav_logic_source, encoding="utf-8")
     imported_nav_logic_uri = imported_nav_logic_path.resolve().as_uri()
     type_definition_source = "\n".join([
@@ -270,15 +270,15 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    type_definition_path = Path(tmpdir) / "type_definition_sample.mog"
+    type_definition_path = Path(tmpdir) / "type_definition_sample.kel"
     type_definition_path.write_text(type_definition_source, encoding="utf-8")
     type_definition_uri = type_definition_path.resolve().as_uri()
     module_member_source = "\n".join([
-        "const dep = @import(\"./dep.mog\")",
+        "const dep = @import(\"./dep.kel\")",
         "print(dep.Ans)",
         ""
     ])
-    module_member_path = Path(tmpdir) / "module_member_sample.mog"
+    module_member_path = Path(tmpdir) / "module_member_sample.kel"
     module_member_path.write_text(module_member_source, encoding="utf-8")
     module_member_uri = module_member_path.resolve().as_uri()
     type_context_source = "\n".join([
@@ -289,7 +289,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    type_context_path = Path(tmpdir) / "type_context_sample.mog"
+    type_context_path = Path(tmpdir) / "type_context_sample.kel"
     type_context_path.write_text(type_context_source, encoding="utf-8")
     type_context_uri = type_context_path.resolve().as_uri()
     signature_source = "\n".join([
@@ -299,7 +299,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "const value i32 = Add(1, 2)",
         ""
     ])
-    signature_path = Path(tmpdir) / "signature_sample.mog"
+    signature_path = Path(tmpdir) / "signature_sample.kel"
     signature_path.write_text(signature_source, encoding="utf-8")
     signature_uri = signature_path.resolve().as_uri()
     signature_fail_source = "\n".join([
@@ -309,7 +309,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "const value i32 = Add(1,",
         ""
     ])
-    signature_fail_path = Path(tmpdir) / "signature_fail_sample.mog"
+    signature_fail_path = Path(tmpdir) / "signature_fail_sample.kel"
     signature_fail_path.write_text(signature_fail_source, encoding="utf-8")
     signature_fail_uri = signature_fail_path.resolve().as_uri()
     builtin_source = "\n".join([
@@ -317,14 +317,14 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "print(value)",
         ""
     ])
-    builtin_path = Path(tmpdir) / "builtin_sample.mog"
+    builtin_path = Path(tmpdir) / "builtin_sample.kel"
     builtin_path.write_text(builtin_source, encoding="utf-8")
     builtin_uri = builtin_path.resolve().as_uri()
     parse_fail_source = "\n".join([
         "fn broken(",
         ""
     ])
-    parse_fail_path = Path(tmpdir) / "parse_fail.mog"
+    parse_fail_path = Path(tmpdir) / "parse_fail.kel"
     parse_fail_path.write_text(parse_fail_source, encoding="utf-8")
     parse_fail_uri = parse_fail_path.resolve().as_uri()
     undefined_source = "\n".join([
@@ -334,7 +334,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    undefined_path = Path(tmpdir) / "undefined_receiver_sample.mog"
+    undefined_path = Path(tmpdir) / "undefined_receiver_sample.kel"
     undefined_path.write_text(undefined_source, encoding="utf-8")
     undefined_uri = undefined_path.resolve().as_uri()
     special_builtin_source = "\n".join([
@@ -343,7 +343,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "print(type(text))",
         ""
     ])
-    special_builtin_path = Path(tmpdir) / "special_builtin_sample.mog"
+    special_builtin_path = Path(tmpdir) / "special_builtin_sample.kel"
     special_builtin_path.write_text(special_builtin_source, encoding="utf-8")
     special_builtin_uri = special_builtin_path.resolve().as_uri()
     native_package_source = "\n".join([
@@ -353,7 +353,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    native_package_path = Path(tmpdir) / "native_package_sample.mog"
+    native_package_path = Path(tmpdir) / "native_package_sample.kel"
     native_package_path.write_text(native_package_source, encoding="utf-8")
     native_package_uri = native_package_path.resolve().as_uri()
     native_window_source = "\n".join([
@@ -363,7 +363,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    native_window_path = Path(tmpdir) / "native_window_sample.mog"
+    native_window_path = Path(tmpdir) / "native_window_sample.kel"
     native_window_path.write_text(native_window_source, encoding="utf-8")
     native_window_uri = native_window_path.resolve().as_uri()
     native_type_completion_source = "\n".join([
@@ -373,14 +373,14 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    native_type_completion_path = Path(tmpdir) / "native_type_completion_sample.mog"
+    native_type_completion_path = Path(tmpdir) / "native_type_completion_sample.kel"
     native_type_completion_path.write_text(
         native_type_completion_source, encoding="utf-8")
     native_type_completion_uri = native_type_completion_path.resolve().as_uri()
     project_root = Path(tmpdir) / "managed_project"
     project_root.mkdir()
     os.symlink(repo_root / "packages", project_root / "packages")
-    (project_root / "mog.toml").write_text(
+    (project_root / "kelvra.toml").write_text(
         "\n".join([
             'kind = "project"',
             'name = "managed-project"',
@@ -398,7 +398,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "print(hello.MESSAGE)",
         ""
     ])
-    managed_project_path = project_root / "main.mog"
+    managed_project_path = project_root / "main.kel"
     managed_project_path.write_text(managed_project_source, encoding="utf-8")
     managed_project_uri = managed_project_path.resolve().as_uri()
     imported_function_state_source = "\n".join([
@@ -407,11 +407,11 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    imported_function_state_path = Path(tmpdir) / "imported_function_state.mog"
+    imported_function_state_path = Path(tmpdir) / "imported_function_state.kel"
     imported_function_state_path.write_text(
         imported_function_state_source, encoding="utf-8")
     imported_function_render_source = "\n".join([
-        "const { GameState } = @import(\"./imported_function_state.mog\")",
+        "const { GameState } = @import(\"./imported_function_state.kel\")",
         "fn renderScore(win i64, state GameState) void {",
         "    print(state.score)",
         "}",
@@ -421,7 +421,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         "}",
         ""
     ])
-    imported_function_render_path = Path(tmpdir) / "imported_function_render.mog"
+    imported_function_render_path = Path(tmpdir) / "imported_function_render.kel"
     imported_function_render_path.write_text(
         imported_function_render_source, encoding="utf-8")
     imported_function_render_uri = imported_function_render_path.resolve().as_uri()
@@ -431,7 +431,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        env={**os.environ, "MOG_CACHE_DIR": str(Path(tmpdir) / ".cache")},
+        env={**os.environ, "KELVRA_CACHE_DIR": str(Path(tmpdir) / ".cache")},
     )
 
     try:
@@ -498,7 +498,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": source
                 }
@@ -518,7 +518,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": module_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": module_source
                 }
@@ -537,7 +537,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": import_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": import_source
                 }
@@ -558,7 +558,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": alias_import_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": alias_import_source
                 }
@@ -577,7 +577,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": member_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": member_source
                 }
@@ -596,7 +596,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": collection_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": collection_source
                 }
@@ -615,7 +615,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": constructor_type_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": constructor_type_source
                 }
@@ -634,7 +634,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": type_definition_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": type_definition_source
                 }
@@ -653,7 +653,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": module_member_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": module_member_source
                 }
@@ -670,7 +670,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": type_context_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": type_context_source
                 }
@@ -687,7 +687,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": signature_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": signature_source
                 }
@@ -706,7 +706,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": signature_fail_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": signature_fail_source
                 }
@@ -723,7 +723,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": builtin_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": builtin_source
                 }
@@ -742,7 +742,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": undefined_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": undefined_source
                 }
@@ -775,7 +775,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": special_builtin_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": special_builtin_source
                 }
@@ -795,7 +795,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": native_package_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": native_package_source
                 }
@@ -816,7 +816,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
                 "params": {
                     "textDocument": {
                         "uri": native_window_uri,
-                        "languageId": "mog",
+                        "languageId": "kelvra",
                         "version": 1,
                         "text": native_window_source
                     }
@@ -836,7 +836,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": managed_project_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": managed_project_source
                 }
@@ -850,7 +850,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         if managed_project_diagnostics["params"]["diagnostics"]:
             raise AssertionError(
                 f"managed project sample should stay diagnostics-free: {managed_project_diagnostics['params']['diagnostics']}")
-        if not (project_root / ".mog" / "install" / "registry.toml").exists():
+        if not (project_root / ".kelvra" / "install" / "registry.toml").exists():
             raise AssertionError("LSP should auto-install project dependencies")
         send_message(proc, {
             "jsonrpc": "2.0",
@@ -858,7 +858,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": native_type_completion_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": native_type_completion_source
                 }
@@ -875,7 +875,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": imported_function_render_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": imported_function_render_source
                 }
@@ -970,7 +970,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         if hover["result"]["contents"]["kind"] != "markdown":
             raise AssertionError(f"unexpected hover markup kind: {hover['result']}")
         hover_value = hover["result"]["contents"]["value"]
-        if hover_value != "```mog\nconst Value i32\n```":
+        if hover_value != "```kelvra\nconst Value i32\n```":
             raise AssertionError(f"unexpected hover payload: {hover['result']}")
 
         send_message(proc, {
@@ -989,7 +989,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         builtin_hover = read_until(proc, lambda msg: msg.get("id") == 5.1)
         builtin_hover_value = builtin_hover["result"]["contents"]["value"]
-        if builtin_hover_value != "**function**\n\n```mog\nfn sqrt(f64) f64\n```":
+        if builtin_hover_value != "**function**\n\n```kelvra\nfn sqrt(f64) f64\n```":
             raise AssertionError(f"unexpected builtin hover payload: {builtin_hover['result']}")
 
         send_message(proc, {
@@ -1008,7 +1008,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         array_builtin_hover = read_until(proc, lambda msg: msg.get("id") == 5.15)
         array_builtin_hover_value = array_builtin_hover["result"]["contents"]["value"]
-        if array_builtin_hover_value != "**function**\n\n```mog\nfn Array() Array<any>\n```":
+        if array_builtin_hover_value != "**function**\n\n```kelvra\nfn Array() Array<any>\n```":
             raise AssertionError(f"unexpected Array builtin hover payload: {array_builtin_hover['result']}")
 
         send_message(proc, {
@@ -1027,7 +1027,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         dict_builtin_hover = read_until(proc, lambda msg: msg.get("id") == 5.16)
         dict_builtin_hover_value = dict_builtin_hover["result"]["contents"]["value"]
-        if dict_builtin_hover_value != "**function**\n\n```mog\nfn Dict() Dict<any, any>\n```":
+        if dict_builtin_hover_value != "**function**\n\n```kelvra\nfn Dict() Dict<any, any>\n```":
             raise AssertionError(f"unexpected Dict builtin hover payload: {dict_builtin_hover['result']}")
 
         send_message(proc, {
@@ -1046,7 +1046,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         set_builtin_hover = read_until(proc, lambda msg: msg.get("id") == 5.17)
         set_builtin_hover_value = set_builtin_hover["result"]["contents"]["value"]
-        if set_builtin_hover_value != "**function**\n\n```mog\nfn Set() Set<any>\n```":
+        if set_builtin_hover_value != "**function**\n\n```kelvra\nfn Set() Set<any>\n```":
             raise AssertionError(f"unexpected Set builtin hover payload: {set_builtin_hover['result']}")
 
         send_message(proc, {
@@ -1233,8 +1233,8 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "method": "textDocument/didOpen",
             "params": {
                 "textDocument": {
-                    "uri": "file://" + os.path.abspath("tests/lsp_member_incomplete.mog"),
-                    "languageId": "mog",
+                    "uri": "file://" + os.path.abspath("tests/lsp_member_incomplete.kel"),
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": member_source.replace("box.value + box.get()", "box.")
                 }
@@ -1246,7 +1246,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "method": "textDocument/completion",
             "params": {
                 "textDocument": {
-                    "uri": "file://" + os.path.abspath("tests/lsp_member_incomplete.mog")
+                    "uri": "file://" + os.path.abspath("tests/lsp_member_incomplete.kel")
                 },
                 "position": {
                     "line": 8,
@@ -1343,8 +1343,8 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "method": "textDocument/didOpen",
             "params": {
                 "textDocument": {
-                    "uri": "file://" + os.path.abspath("tests/lsp_collection_incomplete.mog"),
-                    "languageId": "mog",
+                    "uri": "file://" + os.path.abspath("tests/lsp_collection_incomplete.kel"),
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": collection_source.replace("print(arr.push(2))", "arr.")
                 }
@@ -1356,7 +1356,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "method": "textDocument/completion",
             "params": {
                 "textDocument": {
-                    "uri": "file://" + os.path.abspath("tests/lsp_collection_incomplete.mog")
+                    "uri": "file://" + os.path.abspath("tests/lsp_collection_incomplete.kel")
                 },
                 "position": {
                     "line": 6,
@@ -1380,7 +1380,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": imported_state_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": imported_state_source
                 }
@@ -1400,7 +1400,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": imported_member_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": imported_member_source
                 }
@@ -1418,7 +1418,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": imported_nav_state_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": imported_nav_state_source
                 }
@@ -1439,7 +1439,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": imported_nav_logic_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": imported_nav_logic_source
                 }
@@ -1558,7 +1558,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         member_hover = read_until(proc, lambda msg: msg.get("id") == 8)
         member_hover_value = member_hover["result"]["contents"]["value"]
-        if member_hover_value != "**property**\n\n```mog\nvalue i32\n```":
+        if member_hover_value != "**property**\n\n```kelvra\nvalue i32\n```":
             raise AssertionError(f"unexpected member hover payload: {member_hover['result']}")
 
         send_message(proc, {
@@ -1577,7 +1577,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         imported_member_hover = read_until(proc, lambda msg: msg.get("id") == 8.05)
         imported_member_hover_value = imported_member_hover["result"]["contents"]["value"]
-        if imported_member_hover_value != "**property**\n\n```mog\nrunning bool\n```":
+        if imported_member_hover_value != "**property**\n\n```kelvra\nrunning bool\n```":
             raise AssertionError(
                 f"unexpected imported member hover payload: {imported_member_hover['result']}")
 
@@ -1597,7 +1597,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         collection_hover = read_until(proc, lambda msg: msg.get("id") == 8.1)
         collection_hover_value = collection_hover["result"]["contents"]["value"]
-        if collection_hover_value != "**method**\n\n```mog\nfn keys() Array<str>\n```":
+        if collection_hover_value != "**method**\n\n```kelvra\nfn keys() Array<str>\n```":
             raise AssertionError(f"unexpected collection hover payload: {collection_hover['result']}")
 
         send_message(proc, {
@@ -1616,7 +1616,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         constructor_type_hover = read_until(proc, lambda msg: msg.get("id") == 8.2)
         constructor_type_hover_value = constructor_type_hover["result"]["contents"]["value"]
-        if constructor_type_hover_value != "```mog\ntype Player struct\n```":
+        if constructor_type_hover_value != "```kelvra\ntype Player struct\n```":
             raise AssertionError(f"unexpected constructor type hover payload: {constructor_type_hover['result']}")
 
         send_message(proc, {
@@ -1635,7 +1635,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         })
         native_module_hover = read_until(proc, lambda msg: msg.get("id") == 8.25)
         native_module_hover_value = native_module_hover["result"]["contents"]["value"]
-        if native_module_hover_value != "**module**\n\n```mog\npackage counter\n```":
+        if native_module_hover_value != "**module**\n\n```kelvra\npackage counter\n```":
             raise AssertionError(
                 f"unexpected native package hover payload: {native_module_hover['result']}")
 
@@ -1657,7 +1657,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         native_type_qualifier_hover_value = \
             native_type_qualifier_hover["result"]["contents"]["value"]
         if native_type_qualifier_hover_value != \
-                "**module**\n\n```mog\npackage counter\n```":
+                "**module**\n\n```kelvra\npackage counter\n```":
             raise AssertionError(
                 f"unexpected native type qualifier hover payload: {native_type_qualifier_hover['result']}")
 
@@ -1678,7 +1678,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         native_type_hover = read_until(proc, lambda msg: msg.get("id") == 8.257)
         native_type_hover_value = native_type_hover["result"]["contents"]["value"]
         if native_type_hover_value != \
-                "**type**\n\n```mog\ntype Counter\n```\n\nGC-managed opaque counter handle.":
+                "**type**\n\n```kelvra\ntype Counter\n```\n\nGC-managed opaque counter handle.":
             raise AssertionError(
                 f"unexpected native package type hover payload: {native_type_hover['result']}")
 
@@ -1699,7 +1699,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         native_member_hover = read_until(proc, lambda msg: msg.get("id") == 8.26)
         native_member_hover_value = native_member_hover["result"]["contents"]["value"]
         if native_member_hover_value != \
-                "**function**\n\n```mog\nfn create(initial i64) Counter\n```\n\nCreate a new counter handle.":
+                "**function**\n\n```kelvra\nfn create(initial i64) Counter\n```\n\nCreate a new counter handle.":
             raise AssertionError(
                 f"unexpected native package member hover payload: {native_member_hover['result']}")
 
@@ -1721,7 +1721,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             native_window_hover = read_until(proc, lambda msg: msg.get("id") == 8.265)
             native_window_hover_value = native_window_hover["result"]["contents"]["value"]
             if native_window_hover_value != \
-                    "**function**\n\n```mog\nfn fillRect(win Window, x i64, y i64, width i64, height i64, r i64, g i64, b i64) void\n```\n\nDraw a filled RGB rectangle.":
+                    "**function**\n\n```kelvra\nfn fillRect(win Window, x i64, y i64, width i64, height i64, r i64, g i64, b i64) void\n```\n\nDraw a filled RGB rectangle.":
                 raise AssertionError(
                     f"unexpected native window hover payload: {native_window_hover['result']}")
 
@@ -1744,7 +1744,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         imported_function_hover_value = \
             imported_function_hover["result"]["contents"]["value"]
         if imported_function_hover_value != \
-                "**function**\n\n```mog\nfn renderScore(win i64, state GameState) void\n```":
+                "**function**\n\n```kelvra\nfn renderScore(win i64, state GameState) void\n```":
             raise AssertionError(
                 f"unexpected imported function hover payload: {imported_function_hover['result']}")
 
@@ -1972,9 +1972,9 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
         native_member_definition = read_until(proc, lambda msg: msg.get("id") == 10.4)
         native_member_result = native_member_definition["result"]
         if not native_member_result["uri"].endswith(
-                "/packages/examples/counter/package.api.mog"):
+                "/packages/examples/counter/package.api.kel"):
             raise AssertionError(
-                f"native package definition should jump to package.api.mog: {native_member_result}")
+                f"native package definition should jump to package.api.kel: {native_member_result}")
         if native_member_result["range"]["start"]["line"] != 10 or \
                 native_member_result["range"]["start"]["character"] != 3:
             raise AssertionError(
@@ -1998,9 +1998,9 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             proc, lambda msg: msg.get("id") == 10.45)
         native_type_qualifier_result = native_type_qualifier_definition["result"]
         if not native_type_qualifier_result["uri"].endswith(
-                "/packages/examples/counter/package.api.mog"):
+                "/packages/examples/counter/package.api.kel"):
             raise AssertionError(
-                f"native type qualifier definition should jump to package.api.mog: {native_type_qualifier_result}")
+                f"native type qualifier definition should jump to package.api.kel: {native_type_qualifier_result}")
         if native_type_qualifier_result["range"]["start"]["line"] != 0 or \
                 native_type_qualifier_result["range"]["start"]["character"] != 0:
             raise AssertionError(
@@ -2031,7 +2031,7 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
             "params": {
                 "textDocument": {
                     "uri": parse_fail_uri,
-                    "languageId": "mog",
+                    "languageId": "kelvra",
                     "version": 1,
                     "text": parse_fail_source
                 }
@@ -2374,5 +2374,5 @@ with tempfile.TemporaryDirectory(prefix="mog_lsp_navigation_") as tmpdir:
                 proc.kill()
                 proc.wait(timeout=5)
 
-print("[PASS] mog-lsp navigation regression")
+print("[PASS] kelvra-lsp navigation regression")
 PY

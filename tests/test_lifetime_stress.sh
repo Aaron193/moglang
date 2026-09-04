@@ -96,29 +96,29 @@ run_expect_cache_and_finalizers() {
 failed=0
 
 run_expect_exact_output \
-    "$SCRIPT_DIR/sample_stress_nested_upvalue_chain.mog" \
+    "$SCRIPT_DIR/sample_stress_nested_upvalue_chain.kel" \
     "2009000" || failed=1
 
 run_expect_exact_output \
-    "$SCRIPT_DIR/sample_stress_native_package_functions.mog" \
+    "$SCRIPT_DIR/sample_stress_native_package_functions.kel" \
     "10200" || failed=1
 
 run_expect_cache_and_finalizers \
-    "$SCRIPT_DIR/sample_stress_import_cache_handles.mog" \
+    "$SCRIPT_DIR/sample_stress_import_cache_handles.kel" \
     "2550" \
     1 \
     50 || failed=1
 
 run_expect_exact_output \
-    "$SCRIPT_DIR/sample_stress_method_dispatch_chain.mog" \
+    "$SCRIPT_DIR/sample_stress_method_dispatch_chain.kel" \
     "21100" || failed=1
 
 run_expect_exact_output \
-    "$SCRIPT_DIR/sample_ast_opt_import_member_cast_stress.mog" \
+    "$SCRIPT_DIR/sample_ast_opt_import_member_cast_stress.kel" \
     "2200" || failed=1
 
 run_expect_exact_output \
-    "$SCRIPT_DIR/sample_stress_dict_values_instances.mog" \
+    "$SCRIPT_DIR/sample_stress_dict_values_instances.kel" \
     "50000" || failed=1
 
 if [[ $failed -ne 0 ]]; then

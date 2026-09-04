@@ -1,7 +1,9 @@
 libs/
 build/
 dist/
-tooling/vscode-mog/*.vsix
+tooling/vscode-kelvra/*.vsix
+# Local artifacts left by pre-rebrand editor builds.
+tooling/vscode-mog/
 node_modules/
 apps/site/dist/
 apps/site/.astro/
@@ -12,6 +14,10 @@ error.log
 .internal
 .codex
 
+examples/github_math/.kelvra/
+examples/github_math/kelvra.lock
+.kelvra/
+# Local caches and locks left by Mog-era builds.
 examples/github_math/.mog/
 examples/github_math/mog.lock
 .mog/

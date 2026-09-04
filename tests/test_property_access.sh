@@ -11,7 +11,7 @@ if [[ ! -x "$INTERPRETER" ]]; then
     exit 1
 fi
 
-PASS_FILE="$SCRIPT_DIR/sample_inherit_field.mog"
+PASS_FILE="$SCRIPT_DIR/sample_inherit_field.kel"
 
 if ! "$INTERPRETER" "$PASS_FILE" >/tmp/property_access_pass.out 2>/tmp/property_access_pass.err; then
     echo "[FAIL] Expected inherited field access to succeed: $PASS_FILE"
@@ -19,7 +19,7 @@ if ! "$INTERPRETER" "$PASS_FILE" >/tmp/property_access_pass.out 2>/tmp/property_
     exit 1
 fi
 
-FAIL_FILE="$(mktemp --suffix=.mog)"
+FAIL_FILE="$(mktemp --suffix=.kel)"
 trap 'rm -f "$FAIL_FILE"' EXIT
 
 cat <<'EOF' >"$FAIL_FILE"

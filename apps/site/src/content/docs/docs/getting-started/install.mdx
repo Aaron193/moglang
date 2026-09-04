@@ -1,17 +1,17 @@
 ---
-title: Install Mog
-description: Install a tested Mog release, add the official VS Code extension, or build the toolchain from source.
+title: Install Kelvra
+description: Install a tested Kelvra release, add the official VS Code extension, or build the toolchain from source.
 ---
 
 import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
 The fastest path is a tested runtime archive from GitHub. Each archive contains
-both the `mog` command and the matching `mog-lsp` language server.
+both the `kelvra` command and the matching `kelvra-lsp` language server.
 
 ## Install a release
 
 <Steps>
-1. Open [Mog Releases](https://github.com/moglang/mog/releases) and choose the
+1. Open [Kelvra Releases](https://github.com/kelvralang/kelvra/releases) and choose the
    latest runtime release.
 
 2. Download the archive for your platform and the accompanying `SHA256SUMS`
@@ -29,20 +29,20 @@ both the `mog` command and the matching `mog-lsp` language server.
    <Tabs>
      <TabItem label="Linux">
      ```bash
-     sha256sum mog-*.tar.gz
-     tar -xzf mog-*.tar.gz
+     sha256sum kelvra-*.tar.gz
+     tar -xzf kelvra-*.tar.gz
      ```
      </TabItem>
      <TabItem label="macOS">
      ```bash
-     shasum -a 256 mog-*.tar.gz
-     tar -xzf mog-*.tar.gz
+     shasum -a 256 kelvra-*.tar.gz
+     tar -xzf kelvra-*.tar.gz
      ```
      </TabItem>
      <TabItem label="Windows">
      ```powershell
-     Get-FileHash .\mog-*.zip -Algorithm SHA256
-     Expand-Archive .\mog-*.zip
+     Get-FileHash .\kelvra-*.zip -Algorithm SHA256
+     Expand-Archive .\kelvra-*.zip
      ```
      Add the extracted `bin` directory to your user `Path`.
      </TabItem>
@@ -54,8 +54,8 @@ both the `mog` command and the matching `mog-lsp` language server.
 4. Confirm that the runtime is available:
 
    ```bash
-   mog --version
-   # mog 0.1.7 (native ABI 3)
+   kelvra --version
+   # kelvra 0.1.7 (native ABI 3)
    ```
 </Steps>
 
@@ -67,10 +67,10 @@ both the `mog` command and the matching `mog-lsp` language server.
 
 ## Install the VS Code extension
 
-Install [Moglang Developer Tools](https://marketplace.visualstudio.com/items?itemName=moglang.vscode-mog)
+Install [Kelvra Developer Tools](https://marketplace.visualstudio.com/items?itemName=kelvralang.vscode-kelvra)
 from the Visual Studio Marketplace, or search that exact name in VS Code's
 Extensions view. Platform-specific Marketplace packages already contain a
-tested `mog-lsp`; you do not have to configure a server path after a normal
+tested `kelvra-lsp`; you do not have to configure a server path after a normal
 Marketplace install.
 
 See [VS Code and LSP](/docs/tooling/vscode-and-lsp/) for features, server
@@ -110,13 +110,13 @@ only needed for the official `window` package and its demos.
 Clone the repository and build the default release configuration:
 
 ```bash
-git clone https://github.com/moglang/mog.git
-cd mog
+git clone https://github.com/kelvralang/kelvra
+cd kelvra
 ./build.sh
 ```
 
-The source tree currently produces `build/interpreter`, `build/mog`, and
-`build/mog-lsp`. Use `build/mog` for the public command-line interface; the
+The source tree currently produces `build/interpreter`, `build/kelvra`, and
+`build/kelvra-lsp`. Use `build/kelvra` for the public command-line interface; the
 `interpreter` name remains available for repository development and legacy
 scripts.
 
@@ -132,17 +132,17 @@ Useful development configurations include:
 Sanitizer builds cannot be combined with `--lto`, `--pgo-generate`, or
 `--pgo-use`.
 
-## Run Mog
+## Run Kelvra
 
 ```bash
-mog run path/to/program.mog
+kelvra run path/to/program.kel
 ```
 
 From a source checkout:
 
 ```bash
-./build/mog run path/to/program.mog
+./build/kelvra run path/to/program.kel
 ```
 
-Running `mog` with no arguments starts the REPL. Use `mog --help` for the full
+Running `kelvra` with no arguments starts the REPL. Use `kelvra --help` for the full
 project, package, registry, cache, and runtime command list.

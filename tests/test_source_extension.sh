@@ -23,15 +23,15 @@ STATUS=$?
 set -e
 
 if [[ $STATUS -eq 0 ]]; then
-    echo "[FAIL] expected non-.mog source file to be rejected"
+    echo "[FAIL] expected non-.kel source file to be rejected"
     exit 1
 fi
 
-if ! grep -q "Source files must use the .mog extension" <<< "$OUTPUT"; then
-    echo "[FAIL] missing .mog extension error"
+if ! grep -q "Source files must use the .kel extension" <<< "$OUTPUT"; then
+    echo "[FAIL] missing .kel extension error"
     echo "$OUTPUT"
     exit 1
 fi
 
-echo "[PASS] CLI rejects non-.mog source files."
+echo "[PASS] CLI rejects non-.kel source files."
 exit 0

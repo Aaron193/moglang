@@ -1,0 +1,4 @@
+const { Add, PI } = @import("./modules/math.kel")
+
+print(PI)
+print(Add(3, 4))

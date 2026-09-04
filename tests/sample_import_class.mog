@@ -1,4 +1,0 @@
-const { Counter } = @import("./modules/class_mod.mog")
-
-Counter()
-print(1)

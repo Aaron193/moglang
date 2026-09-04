@@ -14,7 +14,7 @@ fi
 echo "Running benchmarks in $BENCH_DIR"
 echo
 
-for bench in "$BENCH_DIR"/bench_*.mog; do
+for bench in "$BENCH_DIR"/bench_*.kel; do
   [[ -f "$bench" ]] || continue
   echo "=== $(basename "$bench") ==="
   "$INTERPRETER" "$bench"

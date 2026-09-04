@@ -15,17 +15,17 @@ PASS=0
 FAIL=0
 
 SUCCESS_FILES=(
-    "$SCRIPT_DIR/sample_import_basic.mog"
-    "$SCRIPT_DIR/sample_import_named.mog"
-    "$SCRIPT_DIR/sample_import_alias.mog"
-    "$SCRIPT_DIR/sample_import_class.mog"
-    "$SCRIPT_DIR/sample_import_class_typed.mog"
-    "$SCRIPT_DIR/sample_import_nested.mog"
-    "$SCRIPT_DIR/sample_import_native_package.mog"
-    "$SCRIPT_DIR/sample_import_native_named.mog"
-    "$SCRIPT_DIR/sample_import_native_handle.mog"
-    "$SCRIPT_DIR/sample_import_native_handle_typed.mog"
-    "$SCRIPT_DIR/sample_import_native_handle_frontend_typed.mog"
+    "$SCRIPT_DIR/sample_import_basic.kel"
+    "$SCRIPT_DIR/sample_import_named.kel"
+    "$SCRIPT_DIR/sample_import_alias.kel"
+    "$SCRIPT_DIR/sample_import_class.kel"
+    "$SCRIPT_DIR/sample_import_class_typed.kel"
+    "$SCRIPT_DIR/sample_import_nested.kel"
+    "$SCRIPT_DIR/sample_import_native_package.kel"
+    "$SCRIPT_DIR/sample_import_native_named.kel"
+    "$SCRIPT_DIR/sample_import_native_handle.kel"
+    "$SCRIPT_DIR/sample_import_native_handle_typed.kel"
+    "$SCRIPT_DIR/sample_import_native_handle_frontend_typed.kel"
 )
 
 for file in "${SUCCESS_FILES[@]}"; do
@@ -43,7 +43,7 @@ for file in "${SUCCESS_FILES[@]}"; do
     echo
 done
 
-HANDLE_FILE="$SCRIPT_DIR/sample_import_native_handle.mog"
+HANDLE_FILE="$SCRIPT_DIR/sample_import_native_handle.kel"
 echo "========================================"
 echo "Running handle finalizer check: $HANDLE_FILE"
 echo "----------------------------------------"
@@ -69,7 +69,7 @@ else
     fi
 fi
 
-CACHE_FILE="$SCRIPT_DIR/sample_import_cache.mog"
+CACHE_FILE="$SCRIPT_DIR/sample_import_cache.kel"
 echo "========================================"
 echo "Running cache check: $CACHE_FILE"
 echo "----------------------------------------"
@@ -97,7 +97,7 @@ fi
 
 echo
 
-CYCLE_FILE="$SCRIPT_DIR/sample_import_cycle.mog"
+CYCLE_FILE="$SCRIPT_DIR/sample_import_cycle.kel"
 echo "========================================"
 echo "Running (expect runtime error): $CYCLE_FILE"
 echo "----------------------------------------"
@@ -112,7 +112,7 @@ fi
 
 echo
 
-SCOPED_EXPORT_FILE="$SCRIPT_DIR/sample_export_scoped_error.mog"
+SCOPED_EXPORT_FILE="$SCRIPT_DIR/sample_export_scoped_error.kel"
 echo "========================================"
 echo "Running (expect compile error): $SCOPED_EXPORT_FILE"
 echo "----------------------------------------"
@@ -127,7 +127,7 @@ fi
 
 echo
 
-MISSING_NATIVE_FILE="$SCRIPT_DIR/sample_import_native_missing.mog"
+MISSING_NATIVE_FILE="$SCRIPT_DIR/sample_import_native_missing.kel"
 echo "========================================"
 echo "Running (expect compile error): $MISSING_NATIVE_FILE"
 echo "----------------------------------------"
@@ -142,7 +142,7 @@ fi
 
 echo
 
-TYPE_MISMATCH_FILE="$SCRIPT_DIR/sample_import_native_type_mismatch.mog"
+TYPE_MISMATCH_FILE="$SCRIPT_DIR/sample_import_native_type_mismatch.kel"
 echo "========================================"
 echo "Running (expect compile error): $TYPE_MISMATCH_FILE"
 echo "----------------------------------------"
@@ -157,7 +157,7 @@ fi
 
 echo
 
-INVALID_ID_FILE="$SCRIPT_DIR/sample_import_native_invalid_id.mog"
+INVALID_ID_FILE="$SCRIPT_DIR/sample_import_native_invalid_id.kel"
 echo "========================================"
 echo "Running (expect compile error): $INVALID_ID_FILE"
 echo "----------------------------------------"
@@ -172,7 +172,7 @@ fi
 
 echo
 
-BARE_ID_FILE="$SCRIPT_DIR/sample_import_native_bare_invalid.mog"
+BARE_ID_FILE="$SCRIPT_DIR/sample_import_native_bare_invalid.kel"
 echo "========================================"
 echo "Running (expect compile error): $BARE_ID_FILE"
 echo "----------------------------------------"
@@ -187,7 +187,7 @@ fi
 
 echo
 
-MISMATCH_FILE="$SCRIPT_DIR/sample_import_native_metadata_mismatch.mog"
+MISMATCH_FILE="$SCRIPT_DIR/sample_import_native_metadata_mismatch.kel"
 echo "========================================"
 echo "Running (expect compile error): $MISMATCH_FILE"
 echo "----------------------------------------"
@@ -202,7 +202,7 @@ fi
 
 echo
 
-FOREIGN_HANDLE_FILE="$SCRIPT_DIR/fail_import_native_handle_foreign.mog"
+FOREIGN_HANDLE_FILE="$SCRIPT_DIR/fail_import_native_handle_foreign.kel"
 echo "========================================"
 echo "Running (expect runtime error): $FOREIGN_HANDLE_FILE"
 echo "----------------------------------------"
@@ -217,7 +217,7 @@ fi
 
 echo
 
-INVALID_SOURCE_EXTENSION_FILE="$SCRIPT_DIR/fail_import_expr_extension.mog"
+INVALID_SOURCE_EXTENSION_FILE="$SCRIPT_DIR/fail_import_expr_extension.kel"
 echo "========================================"
 echo "Running (expect compile error): $INVALID_SOURCE_EXTENSION_FILE"
 echo "----------------------------------------"
@@ -230,21 +230,21 @@ set -e
 if [[ $INVALID_SOURCE_EXTENSION_STATUS -eq 0 ]]; then
     echo "[FAIL] expected compile error for .expr source-module import"
     FAIL=$((FAIL + 1))
-elif grep -q "Source module imports must use the .mog extension" <<< "$INVALID_SOURCE_EXTENSION_OUTPUT"; then
+elif grep -q "Source module imports must use the .kel extension" <<< "$INVALID_SOURCE_EXTENSION_OUTPUT"; then
     echo "[PASS] .expr source-module import rejected with extension error"
     PASS=$((PASS + 1))
 else
-    echo "[FAIL] missing .mog extension error for .expr source-module import"
+    echo "[FAIL] missing .kel extension error for .expr source-module import"
     echo "$INVALID_SOURCE_EXTENSION_OUTPUT"
     FAIL=$((FAIL + 1))
 fi
 
 echo
 
-WINDOW_PACKAGE_SO="$PROJECT_ROOT/build/packages/mog/window/package.so"
-WINDOW_PACKAGE_DYLIB="$PROJECT_ROOT/build/packages/mog/window/package.dylib"
+WINDOW_PACKAGE_SO="$PROJECT_ROOT/build/packages/kelvra/window/package.so"
+WINDOW_PACKAGE_DYLIB="$PROJECT_ROOT/build/packages/kelvra/window/package.dylib"
 if [[ -f "$WINDOW_PACKAGE_SO" || -f "$WINDOW_PACKAGE_DYLIB" ]]; then
-    WINDOW_FILE="$SCRIPT_DIR/sample_mog_window.mog"
+    WINDOW_FILE="$SCRIPT_DIR/sample_kelvra_window.kel"
     echo "========================================"
     echo "Running SDL window smoke test: $WINDOW_FILE"
     echo "----------------------------------------"
@@ -258,7 +258,7 @@ if [[ -f "$WINDOW_PACKAGE_SO" || -f "$WINDOW_PACKAGE_DYLIB" ]]; then
     fi
     echo
 
-    WINDOW_RENDER_FILE="$SCRIPT_DIR/sample_mog_window_render.mog"
+    WINDOW_RENDER_FILE="$SCRIPT_DIR/sample_kelvra_window_render.kel"
     echo "========================================"
     echo "Running SDL render smoke test: $WINDOW_RENDER_FILE"
     echo "----------------------------------------"

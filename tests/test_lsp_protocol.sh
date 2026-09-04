@@ -3,12 +3,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LSP_BIN="${1:-$PROJECT_ROOT/build/mog-lsp}"
+LSP_BIN="${1:-$PROJECT_ROOT/build/kelvra-lsp}"
 if [[ -d "$LSP_BIN" ]]; then
-    if [[ -x "$LSP_BIN/mog-lsp.exe" ]]; then
-        LSP_BIN="$LSP_BIN/mog-lsp.exe"
+    if [[ -x "$LSP_BIN/kelvra-lsp.exe" ]]; then
+        LSP_BIN="$LSP_BIN/kelvra-lsp.exe"
     else
-        LSP_BIN="$LSP_BIN/mog-lsp"
+        LSP_BIN="$LSP_BIN/kelvra-lsp"
     fi
 fi
 [[ -x "$LSP_BIN" ]] || { echo "LSP binary not found: $LSP_BIN" >&2; exit 1; }
@@ -35,22 +35,22 @@ def until(request_id):
         message = recv()
         if message.get("id") == request_id: return message
 
-with tempfile.TemporaryDirectory(prefix="mog lsp unicode ") as tmp:
+with tempfile.TemporaryDirectory(prefix="kelvra lsp unicode ") as tmp:
     root = Path(tmp)
     # Partial transport writes and escaped non-BMP workspace names exercise
     # framing plus JSON surrogate-pair decoding.
     init = frame({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
-        "workspaceFolders":[{"uri":root.as_uri(),"name":"Mog \U0001f680"}]}})
+        "workspaceFolders":[{"uri":root.as_uri(),"name":"Kelvra \U0001f680"}]}})
     p.stdin.write(init[:13]); p.stdin.flush()
     p.stdin.write(init[13:]); p.stdin.flush()
     initialized = until(1)
     assert initialized["result"]["capabilities"]["positionEncoding"] == "utf-16"
 
     source = '/*\U0001f680*/ const Value i32 = 1\nprint(Value)\n'
-    source_path = root / "\u5de5\u5177.mog"
+    source_path = root / "\u5de5\u5177.kel"
     source_path.write_text(source, encoding="utf-8")
     p.stdin.write(frame({"jsonrpc":"2.0","method":"textDocument/didOpen","params":{
-        "textDocument":{"uri":source_path.as_uri(),"languageId":"mog",
+        "textDocument":{"uri":source_path.as_uri(),"languageId":"kelvra",
                         "version":1,"text":source}}}))
     p.stdin.flush()
     while recv().get("method") != "textDocument/publishDiagnostics": pass
@@ -65,12 +65,12 @@ with tempfile.TemporaryDirectory(prefix="mog lsp unicode ") as tmp:
 
     broken = root / "broken-project"
     broken.mkdir()
-    (broken / "mog.toml").write_text(
+    (broken / "kelvra.toml").write_text(
         'kind = "project"\nname = "broken"\nversion = "0.1.0"\n'
         '[dependencies]\nmissing = { path = "does-not-exist", '
         'package = "test:missing", version = "0.1.0" }\n', encoding="utf-8")
     p.stdin.write(frame({"jsonrpc":"2.0","id":6,
-                         "method":"mog/installProjectDependencies",
+                         "method":"kelvra/installProjectDependencies",
                          "params":{"projectRoot":str(broken)}}))
     p.stdin.flush()
     install_failure = until(6)
@@ -81,7 +81,7 @@ with tempfile.TemporaryDirectory(prefix="mog lsp unicode ") as tmp:
     assert broken.name in install_failure["error"]["message"], install_failure
 
     # Multiple messages in one write must retain their framing boundaries.
-    p.stdin.write(frame({"jsonrpc":"2.0","id":2,"method":"mog/unknown","params":{}}) +
+    p.stdin.write(frame({"jsonrpc":"2.0","id":2,"method":"kelvra/unknown","params":{}}) +
                   frame({"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":3}}) +
                   frame({"jsonrpc":"2.0","id":3,"method":"workspace/symbol","params":{"query":""}}))
     p.stdin.flush()
@@ -105,5 +105,5 @@ abnormal = subprocess.Popen([sys.argv[1]], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 abnormal.stdin.close()
 assert abnormal.wait(timeout=10) != 0
-print("[PASS] mog-lsp protocol hardening")
+print("[PASS] kelvra-lsp protocol hardening")
 PY

@@ -1,7 +1,0 @@
-kind = "project"
-name = "github-math-example"
-version = "0.1.0"
-description = "Example project that imports the Mog math package from GitHub."
-
-[dependencies]
-"github.com/moglang/math" = { version = "v0.1.0" }

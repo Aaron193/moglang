@@ -3,15 +3,15 @@ title: Modules and Imports
 description: Source-module imports, named bindings, aliases, export rules, and package-vs-source resolution.
 ---
 
-Mog uses `@import(...)` for both source modules and native packages. That
+Kelvra uses `@import(...)` for both source modules and native packages. That
 shared surface is one of the most important things to document clearly.
 
 ## Source modules
 
 Use a string literal path that includes the filename:
 
-```mog
-const math = @import("./math.mog")
+```kelvra
+const math = @import("./math.kel")
 print(math.PI)
 print(math.Add(1, 2))
 ```
@@ -27,7 +27,7 @@ Current source-module rules:
 Capitalized top-level names are exported. Lowercase names stay private to the
 module.
 
-```mog
+```kelvra
 fn Add(a i32, b i32) i32 { return a + b }
 const PI f64 = 3.14159
 type Vector struct {}
@@ -35,30 +35,30 @@ type Vector struct {}
 
 ## Named imports and aliasing
 
-```mog
-const { Add, PI } = @import("./math.mog")
-const { Add as sum } = @import("./math.mog")
+```kelvra
+const { Add, PI } = @import("./math.kel")
+const { Add as sum } = @import("./math.kel")
 
 print(sum(10, 5))
 ```
 
 The frontend and parser tests also cover typed destructuring imports:
 
-```mog
+```kelvra
 const { Add: fn(i32, i32) i32, PI as Tau: f64 } =
-  @import("./math.mog")
+  @import("./math.kel")
 ```
 
 ## Packages use the same syntax
 
 Bare names resolve as package imports:
 
-```mog
+```kelvra
 const nativeMath = @import("math")
 const { addI64, greet } = @import("math")
 ```
 
-Path-like imports such as `"./math.mog"` stay source imports. Bare names such
+Path-like imports such as `"./math.kel"` stay source imports. Bare names such
 as `"math"` or `"window"` resolve as package imports.
 
 ## Import resolution today

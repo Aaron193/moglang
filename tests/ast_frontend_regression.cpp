@@ -1046,13 +1046,13 @@ bool checkCallableDiagnosticSpans() {
 
 bool checkImportedModuleRegression(const std::filesystem::path& repoRoot) {
     if (!checkCanonicalLoweringStable(
-            repoRoot / "tests/sample_import_frontend_identity.mog",
+            repoRoot / "tests/sample_import_frontend_identity.kel",
             "optimized importer sample")) {
         return false;
     }
 
     if (!checkCanonicalLoweringStable(
-            repoRoot / "tests/sample_import_frontend_nested_strict.mog",
+            repoRoot / "tests/sample_import_frontend_nested_strict.kel",
             "nested importer sample")) {
         return false;
     }
@@ -1064,7 +1064,7 @@ bool checkImportedModuleRegression(const std::filesystem::path& repoRoot) {
 bool checkImportedClassTypeFrontendRegression(
     const std::filesystem::path& repoRoot) {
     const std::filesystem::path sourcePath =
-        repoRoot / "tests/sample_import_class_typed.mog";
+        repoRoot / "tests/sample_import_class_typed.kel";
     const std::string source = readFile(sourcePath);
 
     AstFrontendModuleGraphCache moduleGraphCache;
@@ -1135,9 +1135,9 @@ bool checkImportedClassTypeFrontendRegression(
     }
 
     const std::filesystem::path windowPackageSo =
-        repoRoot / "build/packages/mog/window/package.so";
+        repoRoot / "build/packages/kelvra/window/package.so";
     const std::filesystem::path windowPackageDylib =
-        repoRoot / "build/packages/mog/window/package.dylib";
+        repoRoot / "build/packages/kelvra/window/package.dylib";
     if (!std::filesystem::exists(windowPackageSo) &&
         !std::filesystem::exists(windowPackageDylib)) {
         std::cout << "[PASS] imported class type frontend regression\n";
@@ -1145,7 +1145,7 @@ bool checkImportedClassTypeFrontendRegression(
     }
 
     const std::filesystem::path flappyPath =
-        repoRoot / "examples/game/flappy_bird.mog";
+        repoRoot / "examples/game/flappy_bird.kel";
     const std::string flappySource = readFile(flappyPath);
 
     AstFrontendOptions flappyOptions;
@@ -1168,7 +1168,7 @@ bool checkImportedClassTypeFrontendRegression(
 
 bool checkTypedImportFrontendRegression(const std::filesystem::path& repoRoot) {
     const std::filesystem::path sourcePath =
-        repoRoot / "tests/sample_import_frontend_typed.mog";
+        repoRoot / "tests/sample_import_frontend_typed.kel";
     const std::string source = readFile(sourcePath);
 
     AstFrontendModuleGraphCache moduleGraphCache;
@@ -1275,7 +1275,7 @@ bool checkTypedImportFrontendRegression(const std::filesystem::path& repoRoot) {
 bool checkNativeHandleTypeFrontendRegression(
     const std::filesystem::path& repoRoot) {
     const std::filesystem::path sourcePath =
-        repoRoot / "tests/sample_import_native_handle_frontend_typed.mog";
+        repoRoot / "tests/sample_import_native_handle_frontend_typed.kel";
     const std::string source = readFile(sourcePath);
 
     AstFrontendModuleGraphCache moduleGraphCache;
@@ -1377,20 +1377,20 @@ bool checkTypedImportDiagnosticRegression(const std::filesystem::path& repoRoot)
     };
 
     if (!expectStrictError(repoRoot /
-                               "tests/types/errors/import_binding_type_mismatch.mog",
+                               "tests/types/errors/import_binding_type_mismatch.kel",
                            1, 9, "cannot assign imported value",
                            "typed import mismatch sample")) {
         return false;
     }
 
-    if (!expectStrictError(repoRoot / "tests/types/errors/import_missing_export.mog",
+    if (!expectStrictError(repoRoot / "tests/types/errors/import_missing_export.kel",
                            1, 9, "has no export 'Missing'",
                            "missing export sample")) {
         return false;
     }
 
     if (!expectStrictError(
-            repoRoot / "tests/types/errors/import_native_binding_type_mismatch.mog",
+            repoRoot / "tests/types/errors/import_native_binding_type_mismatch.kel",
             1, 9, "function(i64, i64) -> i64",
             "native typed import mismatch sample")) {
         return false;
@@ -1398,14 +1398,14 @@ bool checkTypedImportDiagnosticRegression(const std::filesystem::path& repoRoot)
 
     if (!expectStrictError(
             repoRoot /
-                "tests/types/errors/import_native_handle_binding_type_mismatch.mog",
+                "tests/types/errors/import_native_handle_binding_type_mismatch.kel",
             3, 9, "function(i64) -> counter.Counter",
             "native handle typed import mismatch sample")) {
         return false;
     }
 
     if (!expectStrictError(repoRoot /
-                               "tests/types/errors/import_cycle_frontend.mog",
+                               "tests/types/errors/import_cycle_frontend.kel",
                            1, 21, "Circular import detected",
                            "import cycle sample")) {
         return false;
@@ -1417,7 +1417,7 @@ bool checkTypedImportDiagnosticRegression(const std::filesystem::path& repoRoot)
 
 bool checkStructuredDiagnosticRegression(const std::filesystem::path& repoRoot) {
     const std::filesystem::path path =
-        repoRoot / "tests/types/errors/import_cycle_frontend.mog";
+        repoRoot / "tests/types/errors/import_cycle_frontend.kel";
     const std::string source = readFile(path);
     AstFrontendModuleGraphCache moduleGraphCache;
     AstFrontendOptions options;
@@ -1433,7 +1433,7 @@ bool checkStructuredDiagnosticRegression(const std::filesystem::path& repoRoot) 
         std::any_of(errors.front().importTrace.begin(),
                     errors.front().importTrace.end(),
                     [](const FrontendImportTraceFrame& frame) {
-                        return frame.rawSpecifier == "../../modules/cycle_a.mog";
+                        return frame.rawSpecifier == "../../modules/cycle_a.kel";
                     });
     if (!require(status == AstFrontendBuildStatus::SemanticError,
                  "structured diagnostic sample should fail semantic analysis") ||
@@ -1456,19 +1456,19 @@ bool checkStructuredDiagnosticRegression(const std::filesystem::path& repoRoot) 
 
 bool checkModuleGraphCacheRegression() {
     const std::filesystem::path tempRoot =
-        std::filesystem::temp_directory_path() / "mog_frontend_cache_regression";
+        std::filesystem::temp_directory_path() / "kelvra_frontend_cache_regression";
     std::error_code ec;
     std::filesystem::create_directories(tempRoot, ec);
     if (!require(!ec, "module graph cache regression should create its temp directory")) {
         return false;
     }
 
-    const std::filesystem::path depPath = tempRoot / "dep.mog";
-    const std::filesystem::path importerPath = tempRoot / "main.mog";
+    const std::filesystem::path depPath = tempRoot / "dep.kel";
+    const std::filesystem::path importerPath = tempRoot / "main.kel";
     if (!require(writeFile(depPath, "const Value i32 = 1i32\n"),
                  "module graph cache regression should write the dependency sample") ||
         !require(writeFile(importerPath,
-                           "const { Value: i32 } = @import(\"./dep.mog\")\nprint(Value)\n"),
+                           "const { Value: i32 } = @import(\"./dep.kel\")\nprint(Value)\n"),
                  "module graph cache regression should write the importer sample")) {
         return false;
     }
@@ -1532,43 +1532,43 @@ bool checkModuleGraphCacheRegression() {
 
 bool checkNewlineOptimizationRegression(const std::filesystem::path& repoRoot) {
     if (!checkCanonicalLoweringStable(
-            repoRoot / "tests/newline/sample_newline_call_suffix.mog",
+            repoRoot / "tests/newline/sample_newline_call_suffix.kel",
             "newline call-suffix sample")) {
         return false;
     }
 
     if (!checkCanonicalLoweringStable(
-            repoRoot / "tests/newline/sample_newline_member_suffix.mog",
+            repoRoot / "tests/newline/sample_newline_member_suffix.kel",
             "newline member-suffix sample")) {
         return false;
     }
 
     if (!checkCanonicalLoweringStable(
-            repoRoot / "tests/newline/sample_newline_index_suffix.mog",
+            repoRoot / "tests/newline/sample_newline_index_suffix.kel",
             "newline index-suffix sample")) {
         return false;
     }
 
     if (!checkCanonicalLoweringStable(
-            repoRoot / "tests/newline/sample_newline_operator_rhs.mog",
+            repoRoot / "tests/newline/sample_newline_operator_rhs.kel",
             "newline operator sample")) {
         return false;
     }
 
     if (!checkCanonicalLoweringStable(
-            repoRoot / "tests/newline/sample_newline_call_suffix_folded_arg.mog",
+            repoRoot / "tests/newline/sample_newline_call_suffix_folded_arg.kel",
             "newline folded call sample")) {
         return false;
     }
 
     if (!checkStrictHirHasNoAdd(
-            repoRoot / "tests/newline/sample_newline_operator_rhs.mog",
+            repoRoot / "tests/newline/sample_newline_operator_rhs.kel",
             "default newline operator sample")) {
         return false;
     }
 
     if (!checkStrictHirHasNoAdd(
-            repoRoot / "tests/newline/sample_newline_call_suffix_folded_arg.mog",
+            repoRoot / "tests/newline/sample_newline_call_suffix_folded_arg.kel",
             "default newline folded call sample")) {
         return false;
     }

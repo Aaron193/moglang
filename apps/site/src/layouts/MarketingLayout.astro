@@ -1,6 +1,6 @@
 ---
 import '../styles/site.css';
-import mogLogo from '../../../../tooling/vscode-mog/images/fileicons/moglang-icon-option-3.svg';
+import kelvraLogo from '../../../../tooling/vscode-kelvra/images/fileicons/kelvralang-icon-option-3.svg';
 
 interface Props {
 	title: string;
@@ -10,7 +10,7 @@ interface Props {
 }
 
 const { title, description, path = '/', variant = 'default' } = Astro.props;
-const site = Astro.site ?? new URL('https://moglang.dev');
+const site = Astro.site ?? new URL('https://kelvralang.dev');
 const base = import.meta.env.BASE_URL.endsWith('/')
 	? import.meta.env.BASE_URL
 	: `${import.meta.env.BASE_URL}/`;
@@ -24,7 +24,7 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>{title} | Mog</title>
+		<title>{title} | Kelvra</title>
 		<meta name="description" content={description} />
 		{
 			isLanding ? (
@@ -32,7 +32,7 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 					<meta id="theme-color-meta" name="theme-color" content="#f7f8ff" />
 					<script is:inline>
 						(() => {
-							const storageKey = 'mog-landing-theme-mode';
+							const storageKey = 'kelvra-landing-theme-mode';
 							const root = document.documentElement;
 							const themeColorMeta = document.getElementById('theme-color-meta');
 							const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -41,7 +41,7 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 							const resolveTheme = (mode) =>
 								mode === 'light' ? 'light' : mode === 'dark' ? 'dark' : darkQuery.matches ? 'dark' : 'light';
 
-							window.__mogThemeMode = {
+							window.__kelvraThemeMode = {
 								apply(mode) {
 									const nextMode = normalizeMode(mode);
 									const resolvedTheme = resolveTheme(nextMode);
@@ -69,7 +69,7 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 								},
 							};
 
-							window.__mogThemeMode.apply(window.__mogThemeMode.read());
+							window.__kelvraThemeMode.apply(window.__kelvraThemeMode.read());
 						})();
 					</script>
 				</>
@@ -78,20 +78,20 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 			)
 		}
 		<link rel="canonical" href={canonical} />
-		<meta property="og:title" content={`${title} | Mog`} />
+		<meta property="og:title" content={`${title} | Kelvra`} />
 		<meta property="og:description" content={description} />
 		<meta property="og:type" content="website" />
 		<meta property="og:url" content={canonical} />
 		<meta name="twitter:card" content="summary_large_image" />
-		<link rel="icon" href={mogLogo.src} type="image/svg+xml" />
+		<link rel="icon" href={kelvraLogo.src} type="image/svg+xml" />
 	</head>
 	<body class={bodyClass}>
 		<header class="topbar">
 			<div class="topbar__inner">
 				<a class="brand" href={base}>
-					<img src={mogLogo.src} alt="Mog" />
+					<img src={kelvraLogo.src} alt="Kelvra" />
 					<span>
-						Mog
+						Kelvra
 						<small>Strict by default. Fast on purpose.</small>
 					</span>
 				</a>
@@ -99,7 +99,7 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 					<a href={`${base}docs/`}>Docs</a>
 					<a href={`${base}manifesto/`}>Manifesto</a>
 					<a href={`${base}docs/reference/releases/`}>Releases</a>
-					<a class="cta" href={`${base}docs/getting-started/install/`}>Install Mog</a>
+					<a class="cta" href={`${base}docs/getting-started/install/`}>Install Kelvra</a>
 					{
 						isLanding && (
 							<label class="theme-select" data-theme-icon="system">
@@ -140,12 +140,12 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 		</main>
 		<footer class="footer">
 			<div class="footer__inner">
-				<p>Mog is a bytecode-compiled language project implemented in C++ with official docs in Astro + Starlight.</p>
+				<p>Kelvra is a bytecode-compiled language project implemented in C++ with official docs in Astro + Starlight.</p>
 				<div class="footer__links">
 					<a href={`${base}docs/`}>Docs</a>
 					<a href={`${base}manifesto/`}>Manifesto</a>
 					<a href={`${base}docs/reference/releases/`}>Releases</a>
-					<a href="https://github.com/moglang/mog">GitHub</a>
+					<a href="https://github.com/kelvralang/kelvra">GitHub</a>
 				</div>
 			</div>
 		</footer>
@@ -153,7 +153,7 @@ const bodyClass = ['site-shell', isLanding ? 'site-shell--landing' : ''].filter(
 			isLanding && (
 				<script is:inline>
 					(() => {
-						const themeApi = window.__mogThemeMode;
+						const themeApi = window.__kelvraThemeMode;
 						if (!themeApi) return;
 
 						const select = document.querySelector('[data-theme-select]');

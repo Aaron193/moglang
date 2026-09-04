@@ -1,0 +1,22 @@
+const window = @import("github.com/kelvralang/window")
+
+const win window.Window =
+    window.create("window visible demo", 800i64, 600i64)
+
+window.show(win)
+window.clear(win)
+window.present(win)
+
+var running bool = true
+var start f64 = clock()
+
+while (running && (clock() - start) < 5) {
+    const evt window.Event? = window.pollEvent(win)
+    if (evt != null) {
+        if (window.eventKind(evt) == "quit") {
+            running = false
+        }
+    }
+}
+
+window.close(win)
