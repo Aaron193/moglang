@@ -88,7 +88,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: kelvralang/http
-          ref: rebrand/kelvra
+          ref: v0.2.0
           path: integration-packages/http
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libssl-dev libsdl2-dev
@@ -121,52 +121,52 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: kelvralang/encoding
-          ref: rebrand/kelvra
+          ref: v0.2.0
           path: foundation-packages/encoding
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: kelvralang/fs
-          ref: rebrand/kelvra
+          ref: v0.2.0
           path: foundation-packages/fs
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: kelvralang/json
-          ref: rebrand/kelvra
+          ref: v0.2.0
           path: foundation-packages/json
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: kelvralang/log
-          ref: rebrand/kelvra
+          ref: v0.2.0
           path: foundation-packages/log
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: kelvralang/math
-          ref: rebrand/kelvra
+          ref: v0.2.0
           path: foundation-packages/math
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: kelvralang/path
-          ref: rebrand/kelvra
+          ref: v0.2.0
           path: foundation-packages/path
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: kelvralang/random
-          ref: rebrand/kelvra
+          ref: v0.2.0
           path: foundation-packages/random
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: kelvralang/test
-          ref: rebrand/kelvra
+          ref: v0.2.0
           path: foundation-packages/test
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: kelvralang/time
-          ref: rebrand/kelvra
+          ref: v0.2.0
           path: foundation-packages/time
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: kelvralang/window
-          ref: rebrand/kelvra
+          ref: v0.2.0
           path: foundation-packages/window
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libssl-dev libsdl2-dev

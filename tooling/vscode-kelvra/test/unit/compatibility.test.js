@@ -6,11 +6,11 @@ const { checkCompatibility, protocolMetadata } = require("../../src/compatibilit
 
 test("reads advertised Kelvra protocol metadata", () => {
   const metadata = protocolMetadata({
-    serverInfo: { name: "kelvra-lsp", version: "0.1.6" },
+    serverInfo: { name: "kelvra-lsp", version: "0.2.0" },
     kelvra: { toolingProtocolVersion: "1.2", features: ["install"] }
   });
   assert.deepEqual(metadata, {
-    serverVersion: "0.1.6",
+    serverVersion: "0.2.0",
     protocolVersion: 1,
     features: ["install"]
   });
