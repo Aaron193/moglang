@@ -1,6 +1,6 @@
-# Mog Site
+# Kelvra Site
 
-Official landing page and documentation site for the Mog programming language.
+Official landing page and documentation site for the Kelvra programming language.
 
 ## Commands
 
@@ -15,7 +15,7 @@ Run these from the repository root:
 ## Environment
 
 - `SITE_URL` sets the canonical site URL used for sitemap and metadata.
-- `MOG_SITE_EDIT_BASE_URL` enables Starlight edit links for docs pages.
+- `KELVRA_SITE_EDIT_BASE_URL` enables Starlight edit links for docs pages.
 - `BASE_PATH` sets the deployment subpath. The GitHub Pages workflow supplies this automatically.
 
 ## Deployment
@@ -26,4 +26,4 @@ Pushes to `main` that change the site or its build inputs publish `apps/site/dis
 
 - `src/pages/` contains the landing page, manifesto page, and custom 404 page.
 - `src/content/docs/` contains the official docs content rendered by Starlight.
-- `src/styles/site.css` defines the Mog visual system for both docs and marketing pages.
+- `src/styles/site.css` defines the Kelvra visual system for both docs and marketing pages.

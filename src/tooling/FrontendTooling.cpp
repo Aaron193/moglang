@@ -299,7 +299,7 @@ bool isPackageApiDocumentPath(std::string_view sourcePath) {
         return false;
     }
 
-    return std::filesystem::path(sourcePath).filename() == "package.api.mog";
+    return std::filesystem::path(sourcePath).filename() == "package.api.kel";
 }
 
 ToolingDiagnostic makePackageApiDiagnostic(const std::string& sourcePath,
@@ -1486,7 +1486,7 @@ std::optional<TypeRef> declarationTypeForTooling(
     return std::nullopt;
 }
 
-std::string mogTypeText(const TypeRef& type) {
+std::string kelvraTypeText(const TypeRef& type) {
     if (!type) {
         return "any";
     }
@@ -1543,21 +1543,21 @@ std::string mogTypeText(const TypeRef& type) {
                 if (index > 0) {
                     result += ", ";
                 }
-                result += mogTypeText(type->paramTypes[index]);
+                result += kelvraTypeText(type->paramTypes[index]);
             }
             result += ") ";
-            result += mogTypeText(type->returnType);
+            result += kelvraTypeText(type->returnType);
             return result;
         }
         case TypeKind::ARRAY:
-            return "Array<" + mogTypeText(type->elementType) + ">";
+            return "Array<" + kelvraTypeText(type->elementType) + ">";
         case TypeKind::DICT:
-            return "Dict<" + mogTypeText(type->keyType) + ", " +
-                   mogTypeText(type->valueType) + ">";
+            return "Dict<" + kelvraTypeText(type->keyType) + ", " +
+                   kelvraTypeText(type->valueType) + ">";
         case TypeKind::SET:
-            return "Set<" + mogTypeText(type->elementType) + ">";
+            return "Set<" + kelvraTypeText(type->elementType) + ">";
         case TypeKind::OPTIONAL:
-            return mogTypeText(type->innerType) + "?";
+            return kelvraTypeText(type->innerType) + "?";
     }
 
     return "any";
@@ -1601,7 +1601,7 @@ const AstMethodDecl* findMethodDeclarationByNodeId(const AstModule& module,
     return nullptr;
 }
 
-std::vector<std::string> mogParameterLabels(
+std::vector<std::string> kelvraParameterLabels(
     const std::vector<AstParameter>* params, const TypeRef& callableType) {
     std::vector<std::string> labels;
     const size_t paramCount = params != nullptr ? params->size()
@@ -1616,13 +1616,13 @@ std::vector<std::string> mogParameterLabels(
                 param.type ? frontendTypeExprText(*param.type)
                            : (callableType &&
                                       index < callableType->paramTypes.size()
-                                  ? mogTypeText(callableType->paramTypes[index])
+                                  ? kelvraTypeText(callableType->paramTypes[index])
                                   : std::string("any"));
             labels.push_back(tokenText(param.name) + " " + typeText);
         } else {
             const std::string typeText =
                 callableType && index < callableType->paramTypes.size()
-                    ? mogTypeText(callableType->paramTypes[index])
+                    ? kelvraTypeText(callableType->paramTypes[index])
                     : std::string("any");
             labels.push_back(typeText);
         }
@@ -1630,7 +1630,7 @@ std::vector<std::string> mogParameterLabels(
     return labels;
 }
 
-std::string mogFunctionSignature(std::string_view name,
+std::string kelvraFunctionSignature(std::string_view name,
                                  const std::vector<std::string>& parameterLabels,
                                  const TypeRef& callableType,
                                  const std::string* returnTypeLabel = nullptr) {
@@ -1646,7 +1646,7 @@ std::string mogFunctionSignature(std::string_view name,
     result += ") ";
     result += returnTypeLabel != nullptr && !returnTypeLabel->empty()
                   ? *returnTypeLabel
-                  : (callableType ? mogTypeText(callableType->returnType)
+                  : (callableType ? kelvraTypeText(callableType->returnType)
                                   : std::string("any"));
     return result;
 }
@@ -1661,7 +1661,7 @@ ToolingCallablePresentation callablePresentationFromLabels(
     const TypeRef& callableType, const std::string* returnTypeLabel = nullptr) {
     ToolingCallablePresentation info;
     info.label =
-        mogFunctionSignature(name, parameterLabels, callableType, returnTypeLabel);
+        kelvraFunctionSignature(name, parameterLabels, callableType, returnTypeLabel);
     info.parameters.reserve(parameterLabels.size());
     for (const auto& parameterLabel : parameterLabels) {
         info.parameters.push_back(ToolingSignatureParameter{parameterLabel});
@@ -1671,14 +1671,14 @@ ToolingCallablePresentation callablePresentationFromLabels(
 
 ToolingCallablePresentation callablePresentationFromType(
     std::string_view name, const TypeRef& callableType) {
-    const auto parameterLabels = mogParameterLabels(nullptr, callableType);
+    const auto parameterLabels = kelvraParameterLabels(nullptr, callableType);
     return callablePresentationFromLabels(name, parameterLabels, callableType);
 }
 
 ToolingCallablePresentation callablePresentationFromParameters(
     std::string_view name, const std::vector<AstParameter>& params,
     const TypeRef& callableType, const AstTypeExpr* returnTypeExpr = nullptr) {
-    const auto parameterLabels = mogParameterLabels(&params, callableType);
+    const auto parameterLabels = kelvraParameterLabels(&params, callableType);
     const std::string returnTypeLabel =
         returnTypeExpr ? frontendTypeExprText(*returnTypeExpr) : std::string();
     return callablePresentationFromLabels(
@@ -1802,7 +1802,7 @@ std::string declarationDetailForDeclaration(
 
     const auto declarationType = declarationTypeForTooling(analysis, declaration);
     const TypeRef type = declarationType.has_value() ? *declarationType : nullptr;
-    const std::string typeText = mogTypeText(type);
+    const std::string typeText = kelvraTypeText(type);
 
     if (declaration.kind == "function") {
         return callablePresentationForDeclaration(analysis, declaration,
@@ -1937,7 +1937,7 @@ std::optional<HoverPresentation> importedDeclarationHoverPresentationForTooling(
                                                      exportIt->second)
                   .label
             : "const " + declaration.name + " " +
-                  mogTypeText(exportIt->second.type),
+                  kelvraTypeText(exportIt->second.type),
         exportIt->second.doc,
     };
 }
@@ -2021,7 +2021,7 @@ ToolingCompletionItem completionItemForExportedSymbol(std::string_view name,
     return ToolingCompletionItem{std::string(name),
                                  "constant",
                                  "const " + std::string(name) + " " +
-                                     mogTypeText(symbol.type),
+                                     kelvraTypeText(symbol.type),
                                  completionSortText(0, std::string(name))};
 }
 
@@ -2029,7 +2029,7 @@ ToolingCompletionItem completionItemForFieldMetadata(std::string_view name,
                                                      const TypeRef& type) {
     return ToolingCompletionItem{std::string(name),
                                  "field",
-                                 std::string(name) + " " + mogTypeText(type),
+                                 std::string(name) + " " + kelvraTypeText(type),
                                  completionSortText(0, std::string(name))};
 }
 
@@ -7496,7 +7496,7 @@ std::string repairedCompletionSource(std::string_view source,
         ++character;
     }
 
-    repaired.insert(offset, "__mog_completion__");
+    repaired.insert(offset, "__kelvra_completion__");
     return repairedSignatureHelpSource(repaired, position);
 }
 

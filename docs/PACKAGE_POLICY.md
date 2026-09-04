@@ -1,12 +1,12 @@
-# Mog Package Policy
+# Kelvra Package Policy
 
-Mog keeps its language-provided library deliberately small: primitive values, core collections, conversions, errors, and basic math/time helpers remain runtime features. Reusable libraries are independently versioned packages.
+Kelvra keeps its language-provided library deliberately small: primitive values, core collections, conversions, errors, and basic math/time helpers remain runtime features. Reusable libraries are independently versioned packages.
 
 ## Names and ownership
 
 - `std/...` is reserved for language-owned modules. It is not a publishing namespace.
-- `github.com/moglang/...` is the canonical module namespace for official external packages. Shared code must use that path; `import_name` is only a local convenience alias.
-- Public packages require a stable `package.api.mog`, semantic version, license, changelog, compatibility declaration, runnable README example, and tests.
+- `github.com/kelvralang/...` is the canonical module namespace for official external packages. Shared code must use that path; `import_name` is only a local convenience alias.
+- Public packages require a stable `package.api.kel`, semantic version, license, changelog, compatibility declaration, runnable README example, and tests.
 
 ## Native boundary
 

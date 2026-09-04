@@ -1,0 +1,4 @@
+const { Answer, Get } = @import("./modules/frontend_identity_module.kel")
+
+print(Get())
+print(Answer)

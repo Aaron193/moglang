@@ -1,0 +1,15 @@
+kind = "native"
+import_name = "counter"
+namespace = "examples"
+name = "counter"
+version = "0.1.0"
+license = "MIT"
+abi_version = 3
+kelvra_runtime = "^0.2.0"
+author = "Kelvra runtime"
+description = "Reference opaque handle package."
+dependencies = []
+
+[native]
+build = "cmake"
+targets = ["linux-x86_64-gnu", "linux-arm64-gnu", "macos-arm64"]

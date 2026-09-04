@@ -1,0 +1,5 @@
+const math = @import("github.com/kelvralang/math")
+
+print(math.Name())
+print(math.Add(math.VALUE, 8))
+print(math.Multiply(6, 7))

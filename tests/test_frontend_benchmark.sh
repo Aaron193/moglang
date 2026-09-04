@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BENCHMARK_BIN="$PROJECT_ROOT/build/frontend_benchmark"
 BENCHMARK_SCRIPT="$PROJECT_ROOT/benchmarks/compare_frontend_benchmarks.sh"
-TARGET="$SCRIPT_DIR/sample_var.mog"
+TARGET="$SCRIPT_DIR/sample_var.kel"
 
 if [[ ! -x "$BENCHMARK_BIN" ]]; then
     echo "Frontend benchmark binary not found at $BENCHMARK_BIN"

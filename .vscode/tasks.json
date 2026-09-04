@@ -2,58 +2,58 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Mog: Install Extension Dependencies",
+      "label": "Kelvra: Install Extension Dependencies",
       "type": "shell",
       "command": "npm ci && npm run compile",
-      "options": { "cwd": "${workspaceFolder}/tooling/vscode-mog" },
+      "options": { "cwd": "${workspaceFolder}/tooling/vscode-kelvra" },
       "problemMatcher": []
     },
     {
-      "label": "Mog: Configure Tooling Debug Build",
+      "label": "Kelvra: Configure Tooling Debug Build",
       "type": "shell",
       "command": "bash scripts/configure_tooling_build.sh",
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
     {
-      "label": "Mog: Build Language Server",
+      "label": "Kelvra: Build Language Server",
       "type": "shell",
-      "command": "cmake --build build/tooling-debug --target mog-lsp --parallel",
+      "command": "cmake --build build/tooling-debug --target kelvra-lsp --parallel",
       "options": { "cwd": "${workspaceFolder}" },
-      "dependsOn": "Mog: Configure Tooling Debug Build",
+      "dependsOn": "Kelvra: Configure Tooling Debug Build",
       "problemMatcher": "$gcc"
     },
     {
-      "label": "Mog: Prepare Tooling Development",
+      "label": "Kelvra: Prepare Tooling Development",
       "dependsOn": [
-        "Mog: Install Extension Dependencies",
-        "Mog: Build Language Server"
+        "Kelvra: Install Extension Dependencies",
+        "Kelvra: Build Language Server"
       ],
       "dependsOrder": "parallel",
       "problemMatcher": []
     },
     {
-      "label": "Mog: Run LSP Tests",
+      "label": "Kelvra: Run LSP Tests",
       "type": "shell",
       "command": "npm run test:lsp",
       "options": {
-        "cwd": "${workspaceFolder}/tooling/vscode-mog",
-        "env": { "MOG_LSP_PATH": "${workspaceFolder}/build/tooling-debug" }
+        "cwd": "${workspaceFolder}/tooling/vscode-kelvra",
+        "env": { "KELVRA_LSP_PATH": "${workspaceFolder}/build/tooling-debug" }
       },
       "dependsOn": [
-        "Mog: Install Extension Dependencies",
-        "Mog: Build Language Server"
+        "Kelvra: Install Extension Dependencies",
+        "Kelvra: Build Language Server"
       ],
       "problemMatcher": []
     },
     {
-      "label": "Mog: Package Development VSIX",
+      "label": "Kelvra: Package Development VSIX",
       "type": "shell",
       "command": "bash scripts/package_development_vsix.sh",
       "options": { "cwd": "${workspaceFolder}" },
       "dependsOn": [
-        "Mog: Install Extension Dependencies",
-        "Mog: Build Language Server"
+        "Kelvra: Install Extension Dependencies",
+        "Kelvra: Build Language Server"
       ],
       "problemMatcher": []
     }

@@ -18,19 +18,19 @@ Build the interpreter first:
 Run the simple visible-window demo:
 
 ```bash
-./build/interpreter examples/window_open.mog
+./build/interpreter examples/window_open.kel
 ```
 
 Run the interactive event demo:
 
 ```bash
-./build/interpreter examples/window_events.mog
+./build/interpreter examples/window_events.kel
 ```
 
 Run the Flappy Bird rectangle-rendered demo:
 
 ```bash
-./build/interpreter examples/flappy_bird.mog
+./build/interpreter examples/flappy_bird.kel
 ```
 
 Run the GitHub package import example:
@@ -40,19 +40,19 @@ Run the GitHub package import example:
 ```
 
 Use `./scripts/run_github_math_example.sh --in-place` to leave the generated
-`examples/github_math/mog.lock` and `examples/github_math/.mog/install`
+`examples/github_math/kelvra.lock` and `examples/github_math/.kelvra/install`
 directory available for inspection.
 
-`window_open.mog` opens a visible window, presents a frame, and closes after a
+`window_open.kel` opens a visible window, presents a frame, and closes after a
 short delay unless the user closes it first.
 
-`window_events.mog` opens a visible window, prints observed event kinds, and
+`window_events.kel` opens a visible window, prints observed event kinds, and
 exits when the user closes the window or presses Escape.
 
-`flappy_bird.mog` uses the `clearRgb`, `fillRect`, `drawText`, `delay`, and
+`flappy_bird.kel` uses the `clearRgb`, `fillRect`, `drawText`, `delay`, and
 key constant APIs to run a simple playable game with rectangle art and an
 in-window score HUD.
 
-Headless automated coverage remains in `tests/sample_mog_window.mog`, which is
+Headless automated coverage remains in `tests/sample_kelvra_window.kel`, which is
 designed to run under `SDL_VIDEODRIVER=dummy`. Additional render coverage lives
-in `tests/sample_mog_window_render.mog`.
+in `tests/sample_kelvra_window_render.kel`.

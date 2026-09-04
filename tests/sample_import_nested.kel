@@ -1,0 +1,3 @@
+const nested = @import("./modules/nested_a_module.kel")
+
+print(nested.A)

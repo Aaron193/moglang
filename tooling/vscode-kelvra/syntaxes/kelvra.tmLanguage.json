@@ -1,0 +1,411 @@
+{
+  "scopeName": "source.kel",
+  "name": "Kelvra",
+  "patterns": [
+    {
+      "name": "comment.block.kel",
+      "begin": "/\\*",
+      "end": "\\*/"
+    },
+    {
+      "name": "comment.line.double-slash.kel",
+      "match": "//.*$"
+    },
+    {
+      "name": "string.quoted.double.kel",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.kel",
+          "match": "\\\\."
+        }
+      ]
+    },
+    {
+      "name": "constant.numeric.kel",
+      "match": "\\b\\d+(?:\\.\\d+)?(?:usize|i8|i16|i32|i64|u|u8|u16|u32|u64|f32|f64)?\\b"
+    },
+    {
+      "name": "constant.language.boolean.kel",
+      "match": "\\b(?:true|false|null)\\b"
+    },
+    {
+      "name": "keyword.control.import.kel",
+      "match": "@import\\b"
+    },
+    {
+      "name": "storage.modifier.annotation.kel",
+      "match": "@(?:operator|doc|native_handle)\\b"
+    },
+    {
+      "match": "\\b(package)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": {
+          "name": "keyword.control.kel"
+        },
+        "2": {
+          "name": "entity.name.namespace.kel"
+        }
+      }
+    },
+    {
+      "match": "\\b(opaque)\\s+(type)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": {
+          "name": "keyword.control.kel"
+        },
+        "2": {
+          "name": "keyword.control.kel"
+        },
+        "3": {
+          "name": "entity.name.type.kel"
+        }
+      }
+    },
+    {
+      "include": "#type-context-expression"
+    },
+    {
+      "match": "\\b(type)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": {
+          "name": "keyword.control.kel"
+        },
+        "2": {
+          "name": "entity.name.type.kel"
+        }
+      }
+    },
+    {
+      "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": {
+          "name": "keyword.control.kel"
+        },
+        "2": {
+          "name": "entity.name.function.kel"
+        }
+      }
+    },
+    {
+      "match": "\\b(const)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": {
+          "name": "keyword.control.kel"
+        },
+        "2": {
+          "name": "variable.other.constant.kel"
+        }
+      }
+    },
+    {
+      "match": "\\b(var)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": {
+          "name": "keyword.control.kel"
+        },
+        "2": {
+          "name": "variable.other.readwrite.kel"
+        }
+      }
+    },
+    {
+      "name": "keyword.control.kel",
+      "match": "\\b(?:var|const|fn|type|struct|opaque|package|if|else|for|while|break|continue|this|super|return|as)\\b"
+    },
+    {
+      "include": "#type-angle-expression"
+    },
+    {
+      "name": "entity.name.type.kel",
+      "match": "\\b(?:i8|i16|i32|i64|u8|u16|u32|u64|u|usize|f32|f64|bool|str|void|null|fn)\\b"
+    },
+    {
+      "name": "entity.name.function.method.kel",
+      "match": "(?<=\\.)[A-Za-z_][A-Za-z0-9_]*\\b(?=\\s*\\()"
+    },
+    {
+      "name": "variable.other.property.kel",
+      "match": "(?<=\\.)[A-Za-z_][A-Za-z0-9_]*\\b"
+    },
+    {
+      "name": "entity.name.function.kel",
+      "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b(?=\\s*\\()"
+    },
+    {
+      "name": "keyword.operator.kel",
+      "match": "(?:\\+\\+|--|&&|\\|\\||==|!=|<=|>=|<<=|>>=|<<|>>|=>|\\+=|-=|\\*=|/=|&=|\\|=|\\^=|[+\\-*/&|^~<>!=?:.])"
+    },
+    {
+      "name": "punctuation.separator.kel",
+      "match": "[,;]"
+    },
+    {
+      "name": "punctuation.section.group.begin.kel",
+      "match": "[\\[{(]"
+    },
+    {
+      "name": "punctuation.section.group.end.kel",
+      "match": "[\\]})]"
+    }
+  ],
+  "repository": {
+    "type-context-expression": {
+      "patterns": [
+        {
+          "match": "\\b(const)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+((?:[A-Za-z_][A-Za-z0-9_]*\\.)+[A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.control.kel"
+            },
+            "2": {
+              "name": "variable.other.constant.kel"
+            },
+            "3": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "\\b(const)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+([A-Za-z_][A-Za-z0-9_]*)(?!\\s*\\.)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.control.kel"
+            },
+            "2": {
+              "name": "variable.other.constant.kel"
+            },
+            "3": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "\\b(var)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+((?:[A-Za-z_][A-Za-z0-9_]*\\.)+[A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.control.kel"
+            },
+            "2": {
+              "name": "variable.other.readwrite.kel"
+            },
+            "3": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "\\b(var)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+([A-Za-z_][A-Za-z0-9_]*)(?!\\s*\\.)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.control.kel"
+            },
+            "2": {
+              "name": "variable.other.readwrite.kel"
+            },
+            "3": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "\\b(?!(?:as|print|var|const|fn|type|struct|opaque|package|if|else|for|while|break|continue|this|super|return)\\b)([A-Za-z_][A-Za-z0-9_]*)\\s+((?:[A-Za-z_][A-Za-z0-9_]*\\.)+[A-Za-z_][A-Za-z0-9_]*)\\b(?=\\s*(?:,|\\)|:))",
+          "captures": {
+            "1": {
+              "name": "variable.parameter.kel"
+            },
+            "2": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "\\b(?!(?:as|print|var|const|fn|type|struct|opaque|package|if|else|for|while|break|continue|this|super|return)\\b)([A-Za-z_][A-Za-z0-9_]*)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b(?=\\s*<[^\\n]*>\\s*(?:,|\\)|:))",
+          "captures": {
+            "1": {
+              "name": "variable.parameter.kel"
+            },
+            "2": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "\\b(?!(?:as|print|var|const|fn|type|struct|opaque|package|if|else|for|while|break|continue|this|super|return)\\b)([A-Za-z_][A-Za-z0-9_]*)\\s+(fn)\\b(?=\\s*\\([^\\n]*\\)\\s+[A-Za-z_][A-Za-z0-9_.]*\\s*(?:,|\\)|:))",
+          "captures": {
+            "1": {
+              "name": "variable.parameter.kel"
+            },
+            "2": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "\\b(?!(?:as|print|var|const|fn|type|struct|opaque|package|if|else|for|while|break|continue|this|super|return)\\b)([A-Za-z_][A-Za-z0-9_]*)\\s+([A-Za-z_][A-Za-z0-9_]*)(?!\\s*\\.)\\b(?=\\s*(?:,|\\)|:))",
+          "captures": {
+            "1": {
+              "name": "variable.parameter.kel"
+            },
+            "2": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "\\b(?!(?:as|print|var|const|fn|type|struct|opaque|package|if|else|for|while|break|continue|this|super|return)\\b)([A-Za-z_][A-Za-z0-9_]*)\\s+((?:[A-Za-z_][A-Za-z0-9_]*\\.)+[A-Za-z_][A-Za-z0-9_]*)\\b(?=\\s*$)",
+          "captures": {
+            "1": {
+              "name": "variable.parameter.kel"
+            },
+            "2": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "\\b(?!(?:as|print|var|const|fn|type|struct|opaque|package|if|else|for|while|break|continue|this|super|return)\\b)([A-Za-z_][A-Za-z0-9_]*)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b(?=\\s*<[^\\n]*>\\s*$)",
+          "captures": {
+            "1": {
+              "name": "variable.parameter.kel"
+            },
+            "2": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "\\b(?!(?:as|print|var|const|fn|type|struct|opaque|package|if|else|for|while|break|continue|this|super|return)\\b)([A-Za-z_][A-Za-z0-9_]*)\\s+(fn)\\b(?=\\s*\\([^\\n]*\\)\\s+[A-Za-z_][A-Za-z0-9_.]*\\s*$)",
+          "captures": {
+            "1": {
+              "name": "variable.parameter.kel"
+            },
+            "2": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "\\b(?!(?:as|print|var|const|fn|type|struct|opaque|package|if|else|for|while|break|continue|this|super|return)\\b)([A-Za-z_][A-Za-z0-9_]*)\\s+([A-Za-z_][A-Za-z0-9_]*)(?!\\s*\\.)\\b(?=\\s*$)",
+          "captures": {
+            "1": {
+              "name": "variable.parameter.kel"
+            },
+            "2": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "(\\))\\s+((?:[A-Za-z_][A-Za-z0-9_]*\\.)+[A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": {
+              "name": "punctuation.section.group.end.kel"
+            },
+            "2": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "(\\))\\s+(fn)\\b(?=\\s*\\()",
+          "captures": {
+            "1": {
+              "name": "punctuation.section.group.end.kel"
+            },
+            "2": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        },
+        {
+          "match": "(\\))\\s+(?!(?:as|print|var|const|fn|type|struct|opaque|package|if|else|for|while|break|continue|this|super|return)\\b)([A-Za-z_][A-Za-z0-9_]*)(?!\\s*\\.)\\b",
+          "captures": {
+            "1": {
+              "name": "punctuation.section.group.end.kel"
+            },
+            "2": {
+              "name": "entity.name.type.kel"
+            }
+          }
+        }
+      ]
+    },
+    "type-angle-expression": {
+      "patterns": [
+        {
+          "name": "meta.type.generic.collection.kel",
+          "begin": "\\b(Array|Set|Dict)\\s*(<)",
+          "beginCaptures": {
+            "1": {
+              "name": "entity.name.type.kel"
+            },
+            "2": {
+              "name": "punctuation.section.group.begin.kel"
+            }
+          },
+          "end": "(>)",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.section.group.end.kel"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#type-angle-expression"
+            },
+            {
+              "name": "entity.name.type.kel",
+              "match": "\\b(?:[A-Za-z_][A-Za-z0-9_]*\\.)+[A-Za-z_][A-Za-z0-9_]*\\b"
+            },
+            {
+              "name": "punctuation.separator.kel",
+              "match": ","
+            },
+            {
+              "name": "entity.name.type.kel",
+              "match": "\\b(?:i8|i16|i32|i64|u8|u16|u32|u64|u|usize|f32|f64|bool|str|void|null|fn)\\b"
+            },
+            {
+              "name": "entity.name.type.kel",
+              "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+            }
+          ]
+        },
+        {
+          "name": "meta.type.native-handle.kel",
+          "begin": "\\b(handle)\\s*(<)",
+          "beginCaptures": {
+            "1": {
+              "name": "entity.name.type.kel"
+            },
+            "2": {
+              "name": "punctuation.section.group.begin.kel"
+            }
+          },
+          "end": "(>)",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.section.group.end.kel"
+            }
+          },
+          "patterns": [
+            {
+              "name": "punctuation.separator.kel",
+              "match": ":"
+            },
+            {
+              "name": "entity.name.type.kel",
+              "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+            },
+            {
+              "name": "variable.other.readwrite.kel",
+              "match": "\\b[a-z_][A-Za-z0-9_]*\\b"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

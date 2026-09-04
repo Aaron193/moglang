@@ -3,10 +3,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MOG="$PROJECT_ROOT/build/interpreter"
+KELVRA="$PROJECT_ROOT/build/interpreter"
 
-if [[ ! -x "$MOG" ]]; then
-    echo "Interpreter not found at $MOG"
+if [[ ! -x "$KELVRA" ]]; then
+    echo "Interpreter not found at $KELVRA"
     echo "Build first with: $PROJECT_ROOT/build.sh"
     exit 1
 fi
@@ -553,34 +553,34 @@ PY
 }
 
 ln -s "$PROJECT_ROOT/packages" "$TEMP_DIR/packages"
-export MOG_CACHE_DIR="$TEMP_DIR/cache-root"
+export KELVRA_CACHE_DIR="$TEMP_DIR/cache-root"
 export XDG_CONFIG_HOME="$TEMP_DIR/xdg-config"
 
 pushd "$TEMP_DIR" >/dev/null
 
-"$MOG" init pkg-manager-test
+"$KELVRA" init pkg-manager-test
 
-if [[ ! -f "$TEMP_DIR/mog.toml" ]]; then
-    echo "[FAIL] init did not create mog.toml"
+if [[ ! -f "$TEMP_DIR/kelvra.toml" ]]; then
+    echo "[FAIL] init did not create kelvra.toml"
     exit 1
 fi
 
-"$MOG" add math
-"$MOG" add hello
+"$KELVRA" add math
+"$KELVRA" add hello
 
-if ! grep -Fq 'math = { path = "' "$TEMP_DIR/mog.toml" || \
-   ! grep -Fq 'package = "examples:math"' "$TEMP_DIR/mog.toml" || \
-   ! grep -Fq 'hello = { path = "' "$TEMP_DIR/mog.toml" || \
-   ! grep -Fq 'package = "examples:hello"' "$TEMP_DIR/mog.toml"; then
+if ! grep -Fq 'math = { path = "' "$TEMP_DIR/kelvra.toml" || \
+   ! grep -Fq 'package = "examples:math"' "$TEMP_DIR/kelvra.toml" || \
+   ! grep -Fq 'hello = { path = "' "$TEMP_DIR/kelvra.toml" || \
+   ! grep -Fq 'package = "examples:hello"' "$TEMP_DIR/kelvra.toml"; then
     echo "[FAIL] add did not write the dependency metadata"
-    cat "$TEMP_DIR/mog.toml"
+    cat "$TEMP_DIR/kelvra.toml"
     exit 1
 fi
 
 ADD_FLAGS_DIR="$(mktemp -d)"
 ln -s "$PROJECT_ROOT/packages" "$ADD_FLAGS_DIR/packages"
 mkdir -p "$ADD_FLAGS_DIR/local-build-util/src"
-cat > "$ADD_FLAGS_DIR/local-build-util/mog.toml" <<'EOF_ADD_BUILD_MANIFEST'
+cat > "$ADD_FLAGS_DIR/local-build-util/kelvra.toml" <<'EOF_ADD_BUILD_MANIFEST'
 kind = "source"
 import_name = "build_util"
 namespace = "acme"
@@ -588,30 +588,30 @@ name = "build-util"
 version = "0.1.0"
 license = "MIT"
 description = "build dependency add test"
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_ADD_BUILD_MANIFEST
-cat > "$ADD_FLAGS_DIR/local-build-util/src/main.mog" <<'EOF_ADD_BUILD_SRC'
+cat > "$ADD_FLAGS_DIR/local-build-util/src/main.kel" <<'EOF_ADD_BUILD_SRC'
 fn Name() str {
     return "build util"
 }
 EOF_ADD_BUILD_SRC
 pushd "$ADD_FLAGS_DIR" >/dev/null
-"$MOG" init add-flags-test >/dev/null
-"$MOG" add --path packages/examples/hello --dev >/dev/null
-"$MOG" add --path local-build-util --build >/dev/null
-if ! grep -Fq '[dev-dependencies]' mog.toml || \
-   ! grep -Fq 'hello = { path = "packages/examples/hello"' mog.toml || \
-   ! grep -Fq '[build-dependencies]' mog.toml || \
-   ! grep -Fq 'build_util = { path = "local-build-util"' mog.toml; then
+"$KELVRA" init add-flags-test >/dev/null
+"$KELVRA" add --path packages/examples/hello --dev >/dev/null
+"$KELVRA" add --path local-build-util --build >/dev/null
+if ! grep -Fq '[dev-dependencies]' kelvra.toml || \
+   ! grep -Fq 'hello = { path = "packages/examples/hello"' kelvra.toml || \
+   ! grep -Fq '[build-dependencies]' kelvra.toml || \
+   ! grep -Fq 'build_util = { path = "local-build-util"' kelvra.toml; then
     echo "[FAIL] add should support explicit path dependencies in dev/build groups"
-    cat mog.toml
+    cat kelvra.toml
     exit 1
 fi
 
 GIT_PACKAGE_DIR="$ADD_FLAGS_DIR/git-package"
 mkdir -p "$GIT_PACKAGE_DIR/src"
-cat > "$GIT_PACKAGE_DIR/mog.toml" <<'EOF_ADD_GIT_MANIFEST'
+cat > "$GIT_PACKAGE_DIR/kelvra.toml" <<'EOF_ADD_GIT_MANIFEST'
 kind = "source"
 import_name = "git_util"
 namespace = "acme"
@@ -619,133 +619,133 @@ name = "git-util"
 version = "0.1.0"
 license = "MIT"
 description = "git add dependency"
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_ADD_GIT_MANIFEST
-cat > "$GIT_PACKAGE_DIR/src/main.mog" <<'EOF_ADD_GIT_SRC'
+cat > "$GIT_PACKAGE_DIR/src/main.kel" <<'EOF_ADD_GIT_SRC'
 fn Name() str {
     return "git util"
 }
 EOF_ADD_GIT_SRC
 git -C "$GIT_PACKAGE_DIR" init >/dev/null
-git -C "$GIT_PACKAGE_DIR" config user.email "mog@example.invalid"
-git -C "$GIT_PACKAGE_DIR" config user.name "Mog Test"
+git -C "$GIT_PACKAGE_DIR" config user.email "kelvra@example.invalid"
+git -C "$GIT_PACKAGE_DIR" config user.name "Kelvra Test"
 git -C "$GIT_PACKAGE_DIR" add .
 git -C "$GIT_PACKAGE_DIR" commit -m "initial git package" >/dev/null
 git -C "$GIT_PACKAGE_DIR" tag v0.1.0
-"$MOG" add --git "$GIT_PACKAGE_DIR" --tag v0.1.0 --alias git_util --dev >/dev/null
-if ! grep -Fq 'git_util = { package = "acme:git-util", version = "0.1.0", git = "'"$GIT_PACKAGE_DIR"'", tag = "v0.1.0" }' mog.toml; then
+"$KELVRA" add --git "$GIT_PACKAGE_DIR" --tag v0.1.0 --alias git_util --dev >/dev/null
+if ! grep -Fq 'git_util = { package = "acme:git-util", version = "0.1.0", git = "'"$GIT_PACKAGE_DIR"'", tag = "v0.1.0" }' kelvra.toml; then
     echo "[FAIL] add should auto-discover git package metadata and write git refs"
-    cat mog.toml
+    cat kelvra.toml
     exit 1
 fi
 popd >/dev/null
 
-if [[ ! -f "$TEMP_DIR/.mog/install/registry.toml" ]]; then
-    echo "[FAIL] add/install did not create .mog/install/registry.toml"
+if [[ ! -f "$TEMP_DIR/.kelvra/install/registry.toml" ]]; then
+    echo "[FAIL] add/install did not create .kelvra/install/registry.toml"
     exit 1
 fi
 
-cat > "$TEMP_DIR/app.mog" <<'EOF_APP'
+cat > "$TEMP_DIR/app.kel" <<'EOF_APP'
 const math = @import("math")
 const hello = @import("hello")
 print(math.MEANING_OF_LIFE)
 print(hello.Greet())
 EOF_APP
 
-rm -f "$TEMP_DIR/.mog/install/registry.toml"
+rm -f "$TEMP_DIR/.kelvra/install/registry.toml"
 
-RUN_OUTPUT="$("$MOG" run "$TEMP_DIR/app.mog")"
+RUN_OUTPUT="$("$KELVRA" run "$TEMP_DIR/app.kel")"
 if [[ "$RUN_OUTPUT" != *"42"* || "$RUN_OUTPUT" != *"hello from source package"* ]]; then
     echo "[FAIL] run did not reinstall packages or produce expected output"
     echo "$RUN_OUTPUT"
     exit 1
 fi
 
-if [[ ! -f "$TEMP_DIR/.mog/install/registry.toml" ]]; then
-    echo "[FAIL] run did not recreate .mog/install/registry.toml"
+if [[ ! -f "$TEMP_DIR/.kelvra/install/registry.toml" ]]; then
+    echo "[FAIL] run did not recreate .kelvra/install/registry.toml"
     exit 1
 fi
 
-if ! grep -Fq 'schema_version = "lock.v4"' "$TEMP_DIR/mog.lock"; then
+if ! grep -Fq 'schema_version = "lock.v4"' "$TEMP_DIR/kelvra.lock"; then
     echo "[FAIL] lockfile did not write the new lock schema"
-    cat "$TEMP_DIR/mog.lock"
+    cat "$TEMP_DIR/kelvra.lock"
     exit 1
 fi
-RUNTIME_VERSION="$($MOG --version | sed -n 's/^mog \([0-9][0-9.]*\) (native ABI [0-9][0-9]*)$/\1/p')"
+RUNTIME_VERSION="$($KELVRA --version | sed -n 's/^kelvra \([0-9][0-9.]*\) (native ABI [0-9][0-9]*)$/\1/p')"
 if [[ -z "$RUNTIME_VERSION" ]]; then
-    echo "[FAIL] could not determine runtime version from mog --version"
+    echo "[FAIL] could not determine runtime version from kelvra --version"
     exit 1
 fi
 
-if ! grep -Fq "generator_version = \"$RUNTIME_VERSION\"" "$TEMP_DIR/mog.lock"; then
+if ! grep -Fq "generator_version = \"$RUNTIME_VERSION\"" "$TEMP_DIR/kelvra.lock"; then
     echo "[FAIL] lockfile should record generator_version"
-    cat "$TEMP_DIR/mog.lock"
+    cat "$TEMP_DIR/kelvra.lock"
     exit 1
 fi
 
-if ! grep -Fq 'schema_version = "install.v4"' "$TEMP_DIR/.mog/install/registry.toml"; then
+if ! grep -Fq 'schema_version = "install.v4"' "$TEMP_DIR/.kelvra/install/registry.toml"; then
     echo "[FAIL] install registry did not write the new install schema"
-    cat "$TEMP_DIR/.mog/install/registry.toml"
+    cat "$TEMP_DIR/.kelvra/install/registry.toml"
     exit 1
 fi
-if ! grep -Fq "generator_version = \"$RUNTIME_VERSION\"" "$TEMP_DIR/.mog/install/registry.toml"; then
+if ! grep -Fq "generator_version = \"$RUNTIME_VERSION\"" "$TEMP_DIR/.kelvra/install/registry.toml"; then
     echo "[FAIL] install registry should record generator_version"
-    cat "$TEMP_DIR/.mog/install/registry.toml"
+    cat "$TEMP_DIR/.kelvra/install/registry.toml"
     exit 1
 fi
 
 if grep -Fq 'package_dir = "/home/dev/Desktop/projects/programming-language/packages' \
-    "$TEMP_DIR/.mog/install/registry.toml"; then
+    "$TEMP_DIR/.kelvra/install/registry.toml"; then
     echo "[FAIL] install registry should point at project-local installs"
-    cat "$TEMP_DIR/.mog/install/registry.toml"
+    cat "$TEMP_DIR/.kelvra/install/registry.toml"
     exit 1
 fi
 
-if ! grep -Fq 'package_dir = ".mog/install/packages/examples/math"' \
-    "$TEMP_DIR/.mog/install/registry.toml" || \
-   ! grep -Fq 'package_dir = ".mog/install/packages/examples/hello"' \
-    "$TEMP_DIR/.mog/install/registry.toml"; then
+if ! grep -Fq 'package_dir = ".kelvra/install/packages/examples/math"' \
+    "$TEMP_DIR/.kelvra/install/registry.toml" || \
+   ! grep -Fq 'package_dir = ".kelvra/install/packages/examples/hello"' \
+    "$TEMP_DIR/.kelvra/install/registry.toml"; then
     echo "[FAIL] install registry missing project-local package roots"
-    cat "$TEMP_DIR/.mog/install/registry.toml"
+    cat "$TEMP_DIR/.kelvra/install/registry.toml"
     exit 1
 fi
 
-if ! grep -Fq 'source_path = "' "$TEMP_DIR/mog.lock" || \
-   ! grep -Fq 'package_id = "examples:math"' "$TEMP_DIR/mog.lock" || \
-   ! grep -Fq 'package_id = "examples:hello"' "$TEMP_DIR/mog.lock"; then
+if ! grep -Fq 'source_path = "' "$TEMP_DIR/kelvra.lock" || \
+   ! grep -Fq 'package_id = "examples:math"' "$TEMP_DIR/kelvra.lock" || \
+   ! grep -Fq 'package_id = "examples:hello"' "$TEMP_DIR/kelvra.lock"; then
     echo "[FAIL] lockfile missing source metadata"
-    cat "$TEMP_DIR/mog.lock"
+    cat "$TEMP_DIR/kelvra.lock"
     exit 1
 fi
 
-if [[ ! -f "$TEMP_DIR/.mog/install/packages/examples/math/package.so" ]]; then
+if [[ ! -f "$TEMP_DIR/.kelvra/install/packages/examples/math/package.so" ]]; then
     echo "[FAIL] native package was not materialized into the project install store"
-    find "$TEMP_DIR/.mog" -maxdepth 5 -type f | sort
+    find "$TEMP_DIR/.kel" -maxdepth 5 -type f | sort
     exit 1
 fi
 
-if [[ ! -f "$TEMP_DIR/.mog/install/packages/examples/hello/src/main.mog" ]]; then
+if [[ ! -f "$TEMP_DIR/.kelvra/install/packages/examples/hello/src/main.kel" ]]; then
     echo "[FAIL] source package was not materialized into the project install store"
-    find "$TEMP_DIR/.mog" -maxdepth 5 -type f | sort
+    find "$TEMP_DIR/.kel" -maxdepth 5 -type f | sort
     exit 1
 fi
 
-if [[ ! -f "$TEMP_DIR/.mog/install/packages/examples/hello/mog.toml" || \
-      -f "$TEMP_DIR/.mog/install/packages/examples/hello/package.toml" ]]; then
-    echo "[FAIL] installed source packages should materialize a canonical mog.toml manifest"
-    find "$TEMP_DIR/.mog/install/packages/examples/hello" -maxdepth 3 -type f | sort
+if [[ ! -f "$TEMP_DIR/.kelvra/install/packages/examples/hello/kelvra.toml" || \
+      -f "$TEMP_DIR/.kelvra/install/packages/examples/hello/package.toml" ]]; then
+    echo "[FAIL] installed source packages should materialize a canonical kelvra.toml manifest"
+    find "$TEMP_DIR/.kelvra/install/packages/examples/hello" -maxdepth 3 -type f | sort
     exit 1
 fi
 
-"$MOG" --validate-package "$PROJECT_ROOT/packages/examples/math" >/dev/null
+"$KELVRA" --validate-package "$PROJECT_ROOT/packages/examples/math" >/dev/null
 
 popd >/dev/null
 
 CARET_PACKAGE_DIR="$TEMP_DIR/caret-package"
 CARET_CONSUMER_DIR="$TEMP_DIR/caret-consumer"
 mkdir -p "$CARET_PACKAGE_DIR/src" "$CARET_CONSUMER_DIR"
-cat > "$CARET_PACKAGE_DIR/mog.toml" <<'EOF_CARET_PACKAGE'
+cat > "$CARET_PACKAGE_DIR/kelvra.toml" <<'EOF_CARET_PACKAGE'
 kind = "source"
 import_name = "caret_pkg"
 namespace = "acme"
@@ -753,13 +753,13 @@ name = "caret-package"
 version = "0.2.0"
 license = "MIT"
 description = "Caret compatibility regression fixture."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_CARET_PACKAGE
-cat > "$CARET_PACKAGE_DIR/src/main.mog" <<'EOF_CARET_SOURCE'
+cat > "$CARET_PACKAGE_DIR/src/main.kel" <<'EOF_CARET_SOURCE'
 const VALUE i64 = 1
 EOF_CARET_SOURCE
-cat > "$CARET_CONSUMER_DIR/mog.toml" <<EOF_CARET_CONSUMER
+cat > "$CARET_CONSUMER_DIR/kelvra.toml" <<EOF_CARET_CONSUMER
 kind = "project"
 name = "caret-consumer"
 version = "0.1.0"
@@ -769,13 +769,13 @@ description = "Caret compatibility regression consumer."
 caret_pkg = { path = "$CARET_PACKAGE_DIR", package = "acme:caret-package", version = "^0.1.1" }
 EOF_CARET_CONSUMER
 
-if (cd "$CARET_CONSUMER_DIR" && "$MOG" install >/tmp/mog_caret_zero_major_failure.txt 2>&1); then
+if (cd "$CARET_CONSUMER_DIR" && "$KELVRA" install >/tmp/kelvra_caret_zero_major_failure.txt 2>&1); then
     echo "[FAIL] ^0.1.1 must reject the incompatible 0.2.0 package version"
     exit 1
 fi
-if ! grep -Fq "requires version '^0.1.1'" /tmp/mog_caret_zero_major_failure.txt; then
+if ! grep -Fq "requires version '^0.1.1'" /tmp/kelvra_caret_zero_major_failure.txt; then
     echo "[FAIL] incompatible pre-1.0 caret failures should report the requirement"
-    cat /tmp/mog_caret_zero_major_failure.txt
+    cat /tmp/kelvra_caret_zero_major_failure.txt
     exit 1
 fi
 
@@ -789,23 +789,23 @@ name = "legacysource"
 version = "0.1.0"
 license = "MIT"
 description = "Legacy-only source package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_LEGACY_SOURCE_MANIFEST
 
-cat > "$LEGACY_SOURCE_PROJECT/vendor/examples/legacysource/package.api.mog" <<'EOF_LEGACY_SOURCE_API'
+cat > "$LEGACY_SOURCE_PROJECT/vendor/examples/legacysource/package.api.kel" <<'EOF_LEGACY_SOURCE_API'
 package legacysource
 
 fn Greet() str
 EOF_LEGACY_SOURCE_API
 
-cat > "$LEGACY_SOURCE_PROJECT/vendor/examples/legacysource/src/main.mog" <<'EOF_LEGACY_SOURCE_SRC'
+cat > "$LEGACY_SOURCE_PROJECT/vendor/examples/legacysource/src/main.kel" <<'EOF_LEGACY_SOURCE_SRC'
 fn Greet() str {
     return "hello from legacy source package"
 }
 EOF_LEGACY_SOURCE_SRC
 
-cat > "$LEGACY_SOURCE_PROJECT/mog.toml" <<'EOF_LEGACY_SOURCE_PROJECT'
+cat > "$LEGACY_SOURCE_PROJECT/kelvra.toml" <<'EOF_LEGACY_SOURCE_PROJECT'
 kind = "project"
 name = "legacy-source-project"
 version = "0.1.0"
@@ -815,55 +815,55 @@ description = "legacy source project"
 legacysource = { path = "vendor/examples/legacysource", package = "examples:legacysource", version = "0.1.0" }
 EOF_LEGACY_SOURCE_PROJECT
 
-cat > "$LEGACY_SOURCE_PROJECT/app.mog" <<'EOF_LEGACY_SOURCE_APP'
+cat > "$LEGACY_SOURCE_PROJECT/app.kel" <<'EOF_LEGACY_SOURCE_APP'
 const legacysource = @import("legacysource")
 print(legacysource.Greet())
 EOF_LEGACY_SOURCE_APP
 
-if [[ "$(cd "$LEGACY_SOURCE_PROJECT" && "$MOG" run app.mog)" != *"hello from legacy source package"* ]]; then
+if [[ "$(cd "$LEGACY_SOURCE_PROJECT" && "$KELVRA" run app.kel)" != *"hello from legacy source package"* ]]; then
     echo "[FAIL] run should continue to load source packages from legacy package.toml manifests"
     exit 1
 fi
 
-if [[ ! -f "$LEGACY_SOURCE_PROJECT/.mog/install/packages/examples/legacysource/mog.toml" || \
-      -f "$LEGACY_SOURCE_PROJECT/.mog/install/packages/examples/legacysource/package.toml" ]]; then
-    echo "[FAIL] legacy source package installs should normalize manifests to mog.toml"
-    find "$LEGACY_SOURCE_PROJECT/.mog/install/packages/examples/legacysource" -maxdepth 3 -type f | sort
+if [[ ! -f "$LEGACY_SOURCE_PROJECT/.kelvra/install/packages/examples/legacysource/kelvra.toml" || \
+      -f "$LEGACY_SOURCE_PROJECT/.kelvra/install/packages/examples/legacysource/package.toml" ]]; then
+    echo "[FAIL] legacy source package installs should normalize manifests to kelvra.toml"
+    find "$LEGACY_SOURCE_PROJECT/.kelvra/install/packages/examples/legacysource" -maxdepth 3 -type f | sort
     exit 1
 fi
 
-if ! find "$MOG_CACHE_DIR" -name ".metadata.toml" -print -quit | grep -q .; then
+if ! find "$KELVRA_CACHE_DIR" -name ".metadata.toml" -print -quit | grep -q .; then
     echo "[FAIL] install did not write durable cache metadata"
-    find "$MOG_CACHE_DIR" -maxdepth 6 -print
+    find "$KELVRA_CACHE_DIR" -maxdepth 6 -print
     exit 1
 fi
 
-cp "$TEMP_DIR/mog.lock" "$TEMP_DIR/mog.lock.before"
-(cd "$TEMP_DIR" && "$MOG" install --locked >/dev/null)
-if ! cmp -s "$TEMP_DIR/mog.lock.before" "$TEMP_DIR/mog.lock"; then
-    echo "[FAIL] install --locked should not rewrite mog.lock"
+cp "$TEMP_DIR/kelvra.lock" "$TEMP_DIR/kelvra.lock.before"
+(cd "$TEMP_DIR" && "$KELVRA" install --locked >/dev/null)
+if ! cmp -s "$TEMP_DIR/kelvra.lock.before" "$TEMP_DIR/kelvra.lock"; then
+    echo "[FAIL] install --locked should not rewrite kelvra.lock"
     exit 1
 fi
 
-rm -f "$TEMP_DIR/.mog/install/registry.toml"
-LOCKED_RUN_OUTPUT="$("$MOG" run --locked "$TEMP_DIR/app.mog")"
+rm -f "$TEMP_DIR/.kelvra/install/registry.toml"
+LOCKED_RUN_OUTPUT="$("$KELVRA" run --locked "$TEMP_DIR/app.kel")"
 if [[ "$LOCKED_RUN_OUTPUT" != *"42"* || "$LOCKED_RUN_OUTPUT" != *"hello from source package"* ]]; then
     echo "[FAIL] run --locked did not reinstall packages or produce expected output"
     echo "$LOCKED_RUN_OUTPUT"
     exit 1
 fi
 
-if [[ ! -f "$TEMP_DIR/.mog/install/registry.toml" ]]; then
-    echo "[FAIL] run --locked did not recreate .mog/install/registry.toml"
+if [[ ! -f "$TEMP_DIR/.kelvra/install/registry.toml" ]]; then
+    echo "[FAIL] run --locked did not recreate .kelvra/install/registry.toml"
     exit 1
 fi
 
-if ! (cd "$TEMP_DIR" && "$MOG" install --offline >/dev/null); then
+if ! (cd "$TEMP_DIR" && "$KELVRA" install --offline >/dev/null); then
     echo "[FAIL] install --offline should succeed for local path dependencies"
     exit 1
 fi
 
-python3 - "$TEMP_DIR/mog.toml" <<'PY'
+python3 - "$TEMP_DIR/kelvra.toml" <<'PY'
 from pathlib import Path
 import sys
 
@@ -880,15 +880,15 @@ if updated == text:
 path.write_text(updated, encoding="utf-8")
 PY
 
-if (cd "$TEMP_DIR" && "$MOG" install --locked >/tmp/mog_locked_failure.txt 2>&1); then
+if (cd "$TEMP_DIR" && "$KELVRA" install --locked >/tmp/kelvra_locked_failure.txt 2>&1); then
     echo "[FAIL] install --locked should reject manifest drift"
-    cat /tmp/mog_locked_failure.txt
+    cat /tmp/kelvra_locked_failure.txt
     exit 1
 fi
 
-if ! grep -Eq "out of date|requires version" /tmp/mog_locked_failure.txt; then
+if ! grep -Eq "out of date|requires version" /tmp/kelvra_locked_failure.txt; then
     echo "[FAIL] install --locked should explain manifest drift"
-    cat /tmp/mog_locked_failure.txt
+    cat /tmp/kelvra_locked_failure.txt
     exit 1
 fi
 
@@ -898,7 +898,7 @@ mkdir -p "$REGISTRY_DIR/packages/acme/util/1.0.0/src" \
          "$REGISTRY_DIR/packages/acme/http/1.0.0/src" \
          "$REGISTRY_DIR/packages/acme/native-demo/1.0.0"
 
-cat > "$REGISTRY_DIR/packages/acme/util/1.0.0/mog.toml" <<'EOF_REGISTRY_UTIL_MANIFEST'
+cat > "$REGISTRY_DIR/packages/acme/util/1.0.0/kelvra.toml" <<'EOF_REGISTRY_UTIL_MANIFEST'
 kind = "source"
 import_name = "util"
 namespace = "acme"
@@ -906,11 +906,11 @@ name = "util"
 version = "1.0.0"
 author = "Registry test"
 description = "Published utility package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_REGISTRY_UTIL_MANIFEST
 
-cat > "$REGISTRY_DIR/packages/acme/util/1.0.0/src/main.mog" <<'EOF_REGISTRY_UTIL_SRC'
+cat > "$REGISTRY_DIR/packages/acme/util/1.0.0/src/main.kel" <<'EOF_REGISTRY_UTIL_SRC'
 const MESSAGE str = "utility from registry"
 
 fn Name() str {
@@ -918,7 +918,7 @@ fn Name() str {
 }
 EOF_REGISTRY_UTIL_SRC
 
-cat > "$REGISTRY_DIR/packages/acme/http/1.0.0/mog.toml" <<'EOF_REGISTRY_HTTP_MANIFEST'
+cat > "$REGISTRY_DIR/packages/acme/http/1.0.0/kelvra.toml" <<'EOF_REGISTRY_HTTP_MANIFEST'
 kind = "source"
 import_name = "http"
 namespace = "acme"
@@ -926,12 +926,12 @@ name = "http"
 version = "1.0.0"
 author = "Registry test"
 description = "Published http package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 [dependencies]
 util = { package = "acme:util", version = "^1.0.0" }
 EOF_REGISTRY_HTTP_MANIFEST
 
-cat > "$REGISTRY_DIR/packages/acme/http/1.0.0/src/main.mog" <<'EOF_REGISTRY_HTTP_SRC'
+cat > "$REGISTRY_DIR/packages/acme/http/1.0.0/src/main.kel" <<'EOF_REGISTRY_HTTP_SRC'
 const util = @import("util")
 
 fn Fetch() str {
@@ -939,7 +939,7 @@ fn Fetch() str {
 }
 EOF_REGISTRY_HTTP_SRC
 
-cat > "$REGISTRY_DIR/packages/acme/native-demo/1.0.0/mog.toml" <<'EOF_REGISTRY_NATIVE_MANIFEST'
+cat > "$REGISTRY_DIR/packages/acme/native-demo/1.0.0/kelvra.toml" <<'EOF_REGISTRY_NATIVE_MANIFEST'
 kind = "native"
 import_name = "native-demo"
 namespace = "acme"
@@ -954,7 +954,7 @@ EOF_REGISTRY_NATIVE_MANIFEST
 write_registry_index "$REGISTRY_DIR"
 
 REGISTRY_ADD_DIR="$(mktemp -d)"
-cat > "$REGISTRY_ADD_DIR/mog.toml" <<EOF_REGISTRY_ADD
+cat > "$REGISTRY_ADD_DIR/kelvra.toml" <<EOF_REGISTRY_ADD
 kind = "project"
 name = "registry-add-test"
 version = "0.1.0"
@@ -964,18 +964,18 @@ description = "registry add test"
 index = "$REGISTRY_DIR"
 EOF_REGISTRY_ADD
 
-if ! (cd "$REGISTRY_ADD_DIR" && "$MOG" add --registry internal acme/http@^1.0.0 >/dev/null); then
+if ! (cd "$REGISTRY_ADD_DIR" && "$KELVRA" add --registry internal acme/http@^1.0.0 >/dev/null); then
     echo "[FAIL] add should support explicit non-default registry aliases"
     exit 1
 fi
 if ! grep -Fq 'http = { package = "acme:http", version = "^1.0.0", registry = "internal" }' \
-    "$REGISTRY_ADD_DIR/mog.toml"; then
-    echo "[FAIL] add should preserve explicit registry aliases in mog.toml"
-    cat "$REGISTRY_ADD_DIR/mog.toml"
+    "$REGISTRY_ADD_DIR/kelvra.toml"; then
+    echo "[FAIL] add should preserve explicit registry aliases in kelvra.toml"
+    cat "$REGISTRY_ADD_DIR/kelvra.toml"
     exit 1
 fi
 
-cat > "$REMOTE_DIR/mog.toml" <<EOF_REMOTE
+cat > "$REMOTE_DIR/kelvra.toml" <<EOF_REMOTE
 kind = "project"
 name = "remote-test"
 version = "0.1.0"
@@ -988,52 +988,52 @@ index = "$REGISTRY_DIR"
 http = { package = "acme:http", version = "1.0.0" }
 EOF_REMOTE
 
-if ! (cd "$REMOTE_DIR" && "$MOG" install >/dev/null); then
+if ! (cd "$REMOTE_DIR" && "$KELVRA" install >/dev/null); then
     echo "[FAIL] install should resolve published source packages from the registry"
     exit 1
 fi
 
-if ! grep -Fq 'source_type = "registry"' "$REMOTE_DIR/mog.lock" || \
-   ! grep -Fq 'registry = "default"' "$REMOTE_DIR/mog.lock" || \
-   ! grep -Fq 'artifact_digest = "' "$REMOTE_DIR/mog.lock"; then
+if ! grep -Fq 'source_type = "registry"' "$REMOTE_DIR/kelvra.lock" || \
+   ! grep -Fq 'registry = "default"' "$REMOTE_DIR/kelvra.lock" || \
+   ! grep -Fq 'artifact_digest = "' "$REMOTE_DIR/kelvra.lock"; then
     echo "[FAIL] remote lockfile should record registry source metadata"
-    cat "$REMOTE_DIR/mog.lock"
+    cat "$REMOTE_DIR/kelvra.lock"
     exit 1
 fi
 
-cat > "$REMOTE_DIR/app.mog" <<'EOF_REMOTE_APP'
+cat > "$REMOTE_DIR/app.kel" <<'EOF_REMOTE_APP'
 const http = @import("http")
 print(http.Fetch())
 EOF_REMOTE_APP
 
-REMOTE_RUN_OUTPUT="$("$MOG" run "$REMOTE_DIR/app.mog")"
+REMOTE_RUN_OUTPUT="$("$KELVRA" run "$REMOTE_DIR/app.kel")"
 if [[ "$REMOTE_RUN_OUTPUT" != *"utility from registry"* ]]; then
     echo "[FAIL] run should execute registry-installed source packages with transitive dependencies"
     echo "$REMOTE_RUN_OUTPUT"
     exit 1
 fi
 
-rm -f "$REMOTE_DIR/.mog/install/registry.toml"
-if ! (cd "$REMOTE_DIR" && "$MOG" install --offline >/dev/null); then
+rm -f "$REMOTE_DIR/.kelvra/install/registry.toml"
+if ! (cd "$REMOTE_DIR" && "$KELVRA" install --offline >/dev/null); then
     echo "[FAIL] install --offline should succeed after a registry package has been cached"
     exit 1
 fi
 
 EMPTY_CACHE_DIR="$(mktemp -d)"
-if (cd "$REMOTE_DIR" && MOG_CACHE_DIR="$EMPTY_CACHE_DIR" "$MOG" install --offline >/tmp/mog_registry_offline_failure.txt 2>&1); then
+if (cd "$REMOTE_DIR" && KELVRA_CACHE_DIR="$EMPTY_CACHE_DIR" "$KELVRA" install --offline >/tmp/kelvra_registry_offline_failure.txt 2>&1); then
     echo "[FAIL] install --offline should reject uncached registry dependencies"
-    cat /tmp/mog_registry_offline_failure.txt
+    cat /tmp/kelvra_registry_offline_failure.txt
     exit 1
 fi
 rm -rf "$EMPTY_CACHE_DIR"
 
-if ! grep -Eq "offline|cached locally" /tmp/mog_registry_offline_failure.txt; then
+if ! grep -Eq "offline|cached locally" /tmp/kelvra_registry_offline_failure.txt; then
     echo "[FAIL] install --offline should explain the missing registry cache"
-    cat /tmp/mog_registry_offline_failure.txt
+    cat /tmp/kelvra_registry_offline_failure.txt
     exit 1
 fi
 
-cat > "$REGISTRY_DIR/packages/acme/util/1.0.0/src/main.mog" <<'EOF_REGISTRY_UTIL_SRC_UPDATED'
+cat > "$REGISTRY_DIR/packages/acme/util/1.0.0/src/main.kel" <<'EOF_REGISTRY_UTIL_SRC_UPDATED'
 const MESSAGE str = "utility from registry v2"
 
 fn Name() str {
@@ -1042,12 +1042,12 @@ fn Name() str {
 EOF_REGISTRY_UTIL_SRC_UPDATED
 write_registry_index "$REGISTRY_DIR"
 
-if ! (cd "$REMOTE_DIR" && "$MOG" install --locked >/dev/null); then
+if ! (cd "$REMOTE_DIR" && "$KELVRA" install --locked >/dev/null); then
     echo "[FAIL] install --locked should continue to use the pinned registry lockfile"
     exit 1
 fi
 
-LOCKED_REMOTE_OUTPUT="$("$MOG" run --locked "$REMOTE_DIR/app.mog")"
+LOCKED_REMOTE_OUTPUT="$("$KELVRA" run --locked "$REMOTE_DIR/app.kel")"
 if [[ "$LOCKED_REMOTE_OUTPUT" != *"utility from registry"* ]] || \
    [[ "$LOCKED_REMOTE_OUTPUT" == *"utility from registry v2"* ]]; then
     echo "[FAIL] run --locked should continue to use the pinned registry artifact"
@@ -1056,7 +1056,7 @@ if [[ "$LOCKED_REMOTE_OUTPUT" != *"utility from registry"* ]] || \
 fi
 
 RANGE_DIR="$(mktemp -d)"
-cat > "$RANGE_DIR/mog.toml" <<EOF_RANGE
+cat > "$RANGE_DIR/kelvra.toml" <<EOF_RANGE
 kind = "project"
 name = "range-test"
 version = "0.1.0"
@@ -1069,21 +1069,21 @@ index = "$REGISTRY_DIR"
 http = { package = "acme:http", version = "^1.0.0" }
 EOF_RANGE
 
-if ! (cd "$RANGE_DIR" && "$MOG" install >/dev/null); then
+if ! (cd "$RANGE_DIR" && "$KELVRA" install >/dev/null); then
     echo "[FAIL] install should accept published dependency version ranges"
     exit 1
 fi
 
-if ! grep -Fq 'version = "1.0.0"' "$RANGE_DIR/mog.lock"; then
+if ! grep -Fq 'version = "1.0.0"' "$RANGE_DIR/kelvra.lock"; then
     echo "[FAIL] initial ranged install should lock the only available published version"
-    cat "$RANGE_DIR/mog.lock"
+    cat "$RANGE_DIR/kelvra.lock"
     exit 1
 fi
 
 mkdir -p "$REGISTRY_DIR/packages/acme/util/1.1.0/src" \
          "$REGISTRY_DIR/packages/acme/http/1.1.0/src"
 
-cat > "$REGISTRY_DIR/packages/acme/util/1.1.0/mog.toml" <<'EOF_REGISTRY_UTIL_MANIFEST_110'
+cat > "$REGISTRY_DIR/packages/acme/util/1.1.0/kelvra.toml" <<'EOF_REGISTRY_UTIL_MANIFEST_110'
 kind = "source"
 import_name = "util"
 namespace = "acme"
@@ -1091,11 +1091,11 @@ name = "util"
 version = "1.1.0"
 author = "Registry test"
 description = "Published utility package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_REGISTRY_UTIL_MANIFEST_110
 
-cat > "$REGISTRY_DIR/packages/acme/util/1.1.0/src/main.mog" <<'EOF_REGISTRY_UTIL_SRC_110'
+cat > "$REGISTRY_DIR/packages/acme/util/1.1.0/src/main.kel" <<'EOF_REGISTRY_UTIL_SRC_110'
 const MESSAGE str = "utility from registry 1.1"
 
 fn Name() str {
@@ -1103,7 +1103,7 @@ fn Name() str {
 }
 EOF_REGISTRY_UTIL_SRC_110
 
-cat > "$REGISTRY_DIR/packages/acme/http/1.1.0/mog.toml" <<'EOF_REGISTRY_HTTP_MANIFEST_110'
+cat > "$REGISTRY_DIR/packages/acme/http/1.1.0/kelvra.toml" <<'EOF_REGISTRY_HTTP_MANIFEST_110'
 kind = "source"
 import_name = "http"
 namespace = "acme"
@@ -1111,13 +1111,13 @@ name = "http"
 version = "1.1.0"
 author = "Registry test"
 description = "Published http package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 
 [dependencies]
 util = { package = "acme:util", version = "^1.1.0" }
 EOF_REGISTRY_HTTP_MANIFEST_110
 
-cat > "$REGISTRY_DIR/packages/acme/http/1.1.0/src/main.mog" <<'EOF_REGISTRY_HTTP_SRC_110'
+cat > "$REGISTRY_DIR/packages/acme/http/1.1.0/src/main.kel" <<'EOF_REGISTRY_HTTP_SRC_110'
 const util = @import("util")
 
 fn Fetch() str {
@@ -1127,30 +1127,30 @@ EOF_REGISTRY_HTTP_SRC_110
 
 write_registry_index "$REGISTRY_DIR"
 
-if ! (cd "$RANGE_DIR" && "$MOG" install >/dev/null); then
+if ! (cd "$RANGE_DIR" && "$KELVRA" install >/dev/null); then
     echo "[FAIL] install should continue to work after new compatible releases are published"
     exit 1
 fi
 
-if ! grep -Fq 'version = "1.0.0"' "$RANGE_DIR/mog.lock"; then
+if ! grep -Fq 'version = "1.0.0"' "$RANGE_DIR/kelvra.lock"; then
     echo "[FAIL] install should keep using the existing lockfile for ranged dependencies"
-    cat "$RANGE_DIR/mog.lock"
+    cat "$RANGE_DIR/kelvra.lock"
     exit 1
 fi
 
-if ! (cd "$RANGE_DIR" && "$MOG" update >/dev/null); then
+if ! (cd "$RANGE_DIR" && "$KELVRA" update >/dev/null); then
     echo "[FAIL] update should refresh ranged published dependencies"
     exit 1
 fi
 
-if ! grep -Fq 'version = "1.1.0"' "$RANGE_DIR/mog.lock"; then
+if ! grep -Fq 'version = "1.1.0"' "$RANGE_DIR/kelvra.lock"; then
     echo "[FAIL] update should upgrade ranged published dependencies to the newest compatible version"
-    cat "$RANGE_DIR/mog.lock"
+    cat "$RANGE_DIR/kelvra.lock"
     exit 1
 fi
 
 ADD_DIR="$(mktemp -d)"
-cat > "$ADD_DIR/mog.toml" <<EOF_ADD
+cat > "$ADD_DIR/kelvra.toml" <<EOF_ADD
 kind = "project"
 name = "add-test"
 version = "0.1.0"
@@ -1160,19 +1160,19 @@ description = "published add test"
 index = "$REGISTRY_DIR"
 EOF_ADD
 
-if ! (cd "$ADD_DIR" && "$MOG" add acme/http >/dev/null); then
+if ! (cd "$ADD_DIR" && "$KELVRA" add acme/http >/dev/null); then
     echo "[FAIL] add should support published package specs without an explicit version"
     exit 1
 fi
 
-if ! grep -Fq 'http = { package = "acme:http", version = "1.1.0" }' "$ADD_DIR/mog.toml"; then
+if ! grep -Fq 'http = { package = "acme:http", version = "1.1.0" }' "$ADD_DIR/kelvra.toml"; then
     echo "[FAIL] add should record the latest exact published version when no version is specified"
-    cat "$ADD_DIR/mog.toml"
+    cat "$ADD_DIR/kelvra.toml"
     exit 1
 fi
 
 ADD_RANGE_DIR="$(mktemp -d)"
-cat > "$ADD_RANGE_DIR/mog.toml" <<EOF_ADD_RANGE
+cat > "$ADD_RANGE_DIR/kelvra.toml" <<EOF_ADD_RANGE
 kind = "project"
 name = "add-range-test"
 version = "0.1.0"
@@ -1182,14 +1182,14 @@ description = "published add range test"
 index = "$REGISTRY_DIR"
 EOF_ADD_RANGE
 
-if ! (cd "$ADD_RANGE_DIR" && "$MOG" add acme/util@^1.0.0 >/dev/null); then
+if ! (cd "$ADD_RANGE_DIR" && "$KELVRA" add acme/util@^1.0.0 >/dev/null); then
     echo "[FAIL] add should support published package specs with explicit version ranges"
     exit 1
 fi
 
-if ! grep -Fq 'util = { package = "acme:util", version = "^1.0.0" }' "$ADD_RANGE_DIR/mog.toml"; then
+if ! grep -Fq 'util = { package = "acme:util", version = "^1.0.0" }' "$ADD_RANGE_DIR/kelvra.toml"; then
     echo "[FAIL] add should preserve explicit published version ranges"
-    cat "$ADD_RANGE_DIR/mog.toml"
+    cat "$ADD_RANGE_DIR/kelvra.toml"
     exit 1
 fi
 
@@ -1197,7 +1197,7 @@ PUBLISH_WORKSPACE="$(mktemp -d)"
 PUBLISH_PACKAGE_DIR="$PUBLISH_WORKSPACE/packages/greeter"
 mkdir -p "$PUBLISH_PACKAGE_DIR/src"
 
-cat > "$PUBLISH_WORKSPACE/mog.toml" <<EOF_PUBLISH_ROOT
+cat > "$PUBLISH_WORKSPACE/kelvra.toml" <<EOF_PUBLISH_ROOT
 kind = "project"
 name = "publish-root"
 version = "0.1.0"
@@ -1207,7 +1207,7 @@ description = "publish root"
 index = "$REGISTRY_DIR"
 EOF_PUBLISH_ROOT
 
-cat > "$PUBLISH_PACKAGE_DIR/mog.toml" <<'EOF_PUBLISH_PACKAGE'
+cat > "$PUBLISH_PACKAGE_DIR/kelvra.toml" <<'EOF_PUBLISH_PACKAGE'
 kind = "source"
 import_name = "greeter"
 namespace = "demo"
@@ -1216,13 +1216,13 @@ version = "0.1.0"
 license = "MIT"
 author = "Registry test"
 description = "Published greeter package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 
 [dependencies]
 util = { package = "acme:util", version = "^1.0.0" }
 EOF_PUBLISH_PACKAGE
 
-cat > "$PUBLISH_PACKAGE_DIR/src/main.mog" <<'EOF_PUBLISH_SRC'
+cat > "$PUBLISH_PACKAGE_DIR/src/main.kel" <<'EOF_PUBLISH_SRC'
 const util = @import("util")
 
 fn Greet() str {
@@ -1230,34 +1230,34 @@ fn Greet() str {
 }
 EOF_PUBLISH_SRC
 
-if ! (cd "$PUBLISH_WORKSPACE" && "$MOG" publish "$PUBLISH_PACKAGE_DIR" >/dev/null); then
+if ! (cd "$PUBLISH_WORKSPACE" && "$KELVRA" publish "$PUBLISH_PACKAGE_DIR" >/dev/null); then
     echo "[FAIL] publish should create a source package registry entry"
     exit 1
 fi
 
-if ! (cd "$PUBLISH_WORKSPACE" && "$MOG" publish "$PUBLISH_PACKAGE_DIR" >/dev/null); then
+if ! (cd "$PUBLISH_WORKSPACE" && "$KELVRA" publish "$PUBLISH_PACKAGE_DIR" >/dev/null); then
     echo "[FAIL] publish should allow idempotent re-publish when the artifact and metadata are unchanged"
     exit 1
 fi
 
 if (cd "$PUBLISH_WORKSPACE" && \
-    "$MOG" publish --target "$ALT_TARGET" "$PUBLISH_PACKAGE_DIR" \
-    >/tmp/mog_source_publish_native_flag_failure.txt 2>&1); then
+    "$KELVRA" publish --target "$ALT_TARGET" "$PUBLISH_PACKAGE_DIR" \
+    >/tmp/kelvra_source_publish_native_flag_failure.txt 2>&1); then
     echo "[FAIL] publish should reject native artifact flags for source packages"
-    cat /tmp/mog_source_publish_native_flag_failure.txt
+    cat /tmp/kelvra_source_publish_native_flag_failure.txt
     exit 1
 fi
 
 if ! grep -Fq "Only native packages accept --target or --native-artifact-dir." \
-    /tmp/mog_source_publish_native_flag_failure.txt; then
+    /tmp/kelvra_source_publish_native_flag_failure.txt; then
     echo "[FAIL] source publish flag failures should explain native-only options"
-    cat /tmp/mog_source_publish_native_flag_failure.txt
+    cat /tmp/kelvra_source_publish_native_flag_failure.txt
     exit 1
 fi
 
 PRIVATE_SOURCE_PACKAGE_DIR="$PUBLISH_WORKSPACE/packages/private-greeter"
 mkdir -p "$PRIVATE_SOURCE_PACKAGE_DIR/src"
-cat > "$PRIVATE_SOURCE_PACKAGE_DIR/mog.toml" <<'EOF_PRIVATE_SOURCE'
+cat > "$PRIVATE_SOURCE_PACKAGE_DIR/kelvra.toml" <<'EOF_PRIVATE_SOURCE'
 kind = "source"
 import_name = "private_greeter"
 namespace = "demo"
@@ -1267,27 +1267,27 @@ license = "MIT"
 publish = false
 author = "Registry test"
 description = "Private source package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_PRIVATE_SOURCE
 
-cat > "$PRIVATE_SOURCE_PACKAGE_DIR/src/main.mog" <<'EOF_PRIVATE_SOURCE_SRC'
+cat > "$PRIVATE_SOURCE_PACKAGE_DIR/src/main.kel" <<'EOF_PRIVATE_SOURCE_SRC'
 fn Hidden() str {
     return "not published"
 }
 EOF_PRIVATE_SOURCE_SRC
 
 if (cd "$PUBLISH_WORKSPACE" && \
-    "$MOG" publish "$PRIVATE_SOURCE_PACKAGE_DIR" \
-    >/tmp/mog_source_publish_private_failure.txt 2>&1); then
+    "$KELVRA" publish "$PRIVATE_SOURCE_PACKAGE_DIR" \
+    >/tmp/kelvra_source_publish_private_failure.txt 2>&1); then
     echo "[FAIL] publish should reject source packages marked publish = false"
-    cat /tmp/mog_source_publish_private_failure.txt
+    cat /tmp/kelvra_source_publish_private_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "publish = false" /tmp/mog_source_publish_private_failure.txt; then
+if ! grep -Fq "publish = false" /tmp/kelvra_source_publish_private_failure.txt; then
     echo "[FAIL] source publish guard failures should mention publish = false"
-    cat /tmp/mog_source_publish_private_failure.txt
+    cat /tmp/kelvra_source_publish_private_failure.txt
     exit 1
 fi
 
@@ -1299,7 +1299,7 @@ if ! grep -Fq 'package_id = "demo:greeter"' "$REGISTRY_DIR/index.toml" || \
 fi
 
 PUBLISHED_GREETER_DIR="$(mktemp -d)"
-cat > "$PUBLISHED_GREETER_DIR/mog.toml" <<EOF_PUBLISHED_GREETER
+cat > "$PUBLISHED_GREETER_DIR/kelvra.toml" <<EOF_PUBLISHED_GREETER
 kind = "project"
 name = "published-greeter"
 version = "0.1.0"
@@ -1312,19 +1312,19 @@ index = "$REGISTRY_DIR"
 greeter = { package = "demo:greeter", version = "0.1.0" }
 EOF_PUBLISHED_GREETER
 
-cat > "$PUBLISHED_GREETER_DIR/app.mog" <<'EOF_PUBLISHED_GREETER_APP'
+cat > "$PUBLISHED_GREETER_DIR/app.kel" <<'EOF_PUBLISHED_GREETER_APP'
 const greeter = @import("greeter")
 print(greeter.Greet())
 EOF_PUBLISHED_GREETER_APP
 
-PUBLISHED_GREETER_OUTPUT="$("$MOG" run "$PUBLISHED_GREETER_DIR/app.mog")"
+PUBLISHED_GREETER_OUTPUT="$("$KELVRA" run "$PUBLISHED_GREETER_DIR/app.kel")"
 if [[ "$PUBLISHED_GREETER_OUTPUT" != *"utility from registry 1.1"* ]]; then
-    echo "[FAIL] published source packages should install and run after mog publish"
+    echo "[FAIL] published source packages should install and run after kelvra publish"
     echo "$PUBLISHED_GREETER_OUTPUT"
     exit 1
 fi
 
-cat > "$REMOTE_DIR/mog.toml" <<EOF_UNKNOWN_REGISTRY
+cat > "$REMOTE_DIR/kelvra.toml" <<EOF_UNKNOWN_REGISTRY
 kind = "project"
 name = "remote-test"
 version = "0.1.0"
@@ -1337,21 +1337,21 @@ index = "$REGISTRY_DIR"
 http = { package = "acme:http", version = "1.0.0", registry = "missing" }
 EOF_UNKNOWN_REGISTRY
 
-if (cd "$REMOTE_DIR" && "$MOG" install >/tmp/mog_registry_missing_failure.txt 2>&1); then
+if (cd "$REMOTE_DIR" && "$KELVRA" install >/tmp/kelvra_registry_missing_failure.txt 2>&1); then
     echo "[FAIL] install should reject unknown registry aliases"
-    cat /tmp/mog_registry_missing_failure.txt
+    cat /tmp/kelvra_registry_missing_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "unknown registry" /tmp/mog_registry_missing_failure.txt; then
+if ! grep -Fq "unknown registry" /tmp/kelvra_registry_missing_failure.txt; then
     echo "[FAIL] install should explain missing registry aliases"
-    cat /tmp/mog_registry_missing_failure.txt
+    cat /tmp/kelvra_registry_missing_failure.txt
     exit 1
 fi
 
 write_registry_index "$REGISTRY_DIR" digest-mismatch
 DIGEST_DIR="$(mktemp -d)"
-cat > "$DIGEST_DIR/mog.toml" <<EOF_BAD_DIGEST
+cat > "$DIGEST_DIR/kelvra.toml" <<EOF_BAD_DIGEST
 kind = "project"
 name = "digest-test"
 version = "0.1.0"
@@ -1364,15 +1364,15 @@ index = "$REGISTRY_DIR"
 http = { package = "acme:http", version = "1.0.0" }
 EOF_BAD_DIGEST
 
-if (cd "$DIGEST_DIR" && "$MOG" install >/tmp/mog_registry_digest_failure.txt 2>&1); then
+if (cd "$DIGEST_DIR" && "$KELVRA" install >/tmp/kelvra_registry_digest_failure.txt 2>&1); then
     echo "[FAIL] install should reject registry artifact digest mismatches"
-    cat /tmp/mog_registry_digest_failure.txt
+    cat /tmp/kelvra_registry_digest_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "digest mismatch" /tmp/mog_registry_digest_failure.txt; then
+if ! grep -Fq "digest mismatch" /tmp/kelvra_registry_digest_failure.txt; then
     echo "[FAIL] install should explain registry artifact digest mismatches"
-    cat /tmp/mog_registry_digest_failure.txt
+    cat /tmp/kelvra_registry_digest_failure.txt
     exit 1
 fi
 
@@ -1386,14 +1386,14 @@ NATIVE_NO_CMAKE_DIR="$(mktemp -d)"
 NATIVE_BUILD_FAIL_DIR="$(mktemp -d)"
 mkdir -p "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" \
          "$NATIVE_PUBLISH_WORKSPACE/build/packages/examples/counter"
-cp "$PROJECT_ROOT/packages/examples/counter/mog.toml" \
-   "$PROJECT_ROOT/packages/examples/counter/package.api.mog" \
+cp "$PROJECT_ROOT/packages/examples/counter/kelvra.toml" \
+   "$PROJECT_ROOT/packages/examples/counter/package.api.kel" \
    "$PROJECT_ROOT/packages/examples/counter/package.cpp" \
    "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/"
 cp "$PROJECT_ROOT/build/packages/examples/counter/package.so" \
    "$NATIVE_PUBLISH_WORKSPACE/build/packages/examples/counter/package.so"
 
-cat > "$NATIVE_PUBLISH_WORKSPACE/mog.toml" <<EOF_NATIVE_PUBLISH_ROOT
+cat > "$NATIVE_PUBLISH_WORKSPACE/kelvra.toml" <<EOF_NATIVE_PUBLISH_ROOT
 kind = "project"
 name = "native-publish-root"
 version = "0.1.0"
@@ -1404,43 +1404,43 @@ index = "$REGISTRY_DIR"
 EOF_NATIVE_PUBLISH_ROOT
 
 if ! (cd "$NATIVE_PUBLISH_WORKSPACE" && \
-      "$MOG" publish "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" >/dev/null); then
+      "$KELVRA" publish "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" >/dev/null); then
     echo "[FAIL] publish should create a native package registry entry"
     exit 1
 fi
 
 if ! (cd "$NATIVE_PUBLISH_WORKSPACE" && \
-      "$MOG" publish "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" >/dev/null); then
+      "$KELVRA" publish "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" >/dev/null); then
     echo "[FAIL] publish should allow idempotent native re-publish"
     exit 1
 fi
 
 NATIVE_EXTERNAL_BUNDLE_DIR="$(mktemp -d)"
-cp "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/mog.toml" \
-   "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/package.api.mog" \
+cp "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/kelvra.toml" \
+   "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/package.api.kel" \
    "$NATIVE_EXTERNAL_BUNDLE_DIR/"
 cp "$NATIVE_PUBLISH_WORKSPACE/build/packages/examples/counter/package.so" \
    "$NATIVE_EXTERNAL_BUNDLE_DIR/package.so"
 
 if (cd "$NATIVE_PUBLISH_WORKSPACE" && \
-    "$MOG" publish \
+    "$KELVRA" publish \
       --native-artifact-dir "$NATIVE_EXTERNAL_BUNDLE_DIR" \
       "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" \
-      >/tmp/mog_native_publish_missing_target.txt 2>&1); then
+      >/tmp/kelvra_native_publish_missing_target.txt 2>&1); then
     echo "[FAIL] publish should require --target when --native-artifact-dir is used"
-    cat /tmp/mog_native_publish_missing_target.txt
+    cat /tmp/kelvra_native_publish_missing_target.txt
     exit 1
 fi
 
-if ! grep -Fq "requires --target" /tmp/mog_native_publish_missing_target.txt; then
+if ! grep -Fq "requires --target" /tmp/kelvra_native_publish_missing_target.txt; then
     echo "[FAIL] native publish should explain missing --target for external artifact directories"
-    cat /tmp/mog_native_publish_missing_target.txt
+    cat /tmp/kelvra_native_publish_missing_target.txt
     exit 1
 fi
 
 PRIVATE_NATIVE_PACKAGE_DIR="$NATIVE_PUBLISH_WORKSPACE/packages/examples/private-counter"
 mkdir -p "$PRIVATE_NATIVE_PACKAGE_DIR"
-cat > "$PRIVATE_NATIVE_PACKAGE_DIR/mog.toml" <<'EOF_PRIVATE_NATIVE'
+cat > "$PRIVATE_NATIVE_PACKAGE_DIR/kelvra.toml" <<'EOF_PRIVATE_NATIVE'
 kind = "native"
 namespace = "examples"
 name = "private-counter"
@@ -1448,8 +1448,8 @@ version = "0.1.0"
 license = "MIT"
 publish = false
 abi_version = 3
-mog_runtime = "^0.1.0"
-author = "Mog runtime"
+kelvra_runtime = "^0.2.0"
+author = "Kelvra runtime"
 description = "Private native package."
 dependencies = []
 
@@ -1459,21 +1459,21 @@ targets = ["linux-x86_64-gnu"]
 EOF_PRIVATE_NATIVE
 
 if (cd "$NATIVE_PUBLISH_WORKSPACE" && \
-    "$MOG" publish "$PRIVATE_NATIVE_PACKAGE_DIR" \
-    >/tmp/mog_native_publish_private_failure.txt 2>&1); then
+    "$KELVRA" publish "$PRIVATE_NATIVE_PACKAGE_DIR" \
+    >/tmp/kelvra_native_publish_private_failure.txt 2>&1); then
     echo "[FAIL] publish should reject native packages marked publish = false"
-    cat /tmp/mog_native_publish_private_failure.txt
+    cat /tmp/kelvra_native_publish_private_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "publish = false" /tmp/mog_native_publish_private_failure.txt; then
+if ! grep -Fq "publish = false" /tmp/kelvra_native_publish_private_failure.txt; then
     echo "[FAIL] native publish guard failures should mention publish = false"
-    cat /tmp/mog_native_publish_private_failure.txt
+    cat /tmp/kelvra_native_publish_private_failure.txt
     exit 1
 fi
 
 if ! (cd "$NATIVE_PUBLISH_WORKSPACE" && \
-      "$MOG" publish \
+      "$KELVRA" publish \
         --target "$ALT_TARGET" \
         --native-artifact-dir "$NATIVE_EXTERNAL_BUNDLE_DIR" \
         "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" >/dev/null); then
@@ -1505,18 +1505,18 @@ if [[ ! -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/package.cpp" ||
     exit 1
 fi
 
-if [[ ! -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/mog.toml" || \
+if [[ ! -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/kelvra.toml" || \
       -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/package.toml" || \
-      ! -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/mog.toml" || \
+      ! -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/kelvra.toml" || \
       -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/package.toml" || \
-      ! -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/mog.toml" || \
+      ! -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/kelvra.toml" || \
       -f "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/package.toml" ]]; then
-    echo "[FAIL] published native artifacts should normalize manifests to mog.toml"
+    echo "[FAIL] published native artifacts should normalize manifests to kelvra.toml"
     find "$REGISTRY_DIR/packages/examples/counter/0.1.0" -maxdepth 3 -type f | sort
     exit 1
 fi
 
-python3 - "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/mog.toml" <<'PY'
+python3 - "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter/kelvra.toml" <<'PY'
 from pathlib import Path
 import sys
 
@@ -1532,20 +1532,20 @@ path.write_text(updated, encoding="utf-8")
 PY
 
 if (cd "$NATIVE_PUBLISH_WORKSPACE" && \
-    "$MOG" publish "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" \
-    >/tmp/mog_native_publish_conflict.txt 2>&1); then
+    "$KELVRA" publish "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" \
+    >/tmp/kelvra_native_publish_conflict.txt 2>&1); then
     echo "[FAIL] publish should reject conflicting native re-publishes"
-    cat /tmp/mog_native_publish_conflict.txt
+    cat /tmp/kelvra_native_publish_conflict.txt
     exit 1
 fi
 
-if ! grep -Fq "different published contents" /tmp/mog_native_publish_conflict.txt; then
+if ! grep -Fq "different published contents" /tmp/kelvra_native_publish_conflict.txt; then
     echo "[FAIL] publish should explain native re-publish conflicts"
-    cat /tmp/mog_native_publish_conflict.txt
+    cat /tmp/kelvra_native_publish_conflict.txt
     exit 1
 fi
 
-cat > "$NATIVE_CONSUMER_DIR/mog.toml" <<EOF_NATIVE_CONSUMER
+cat > "$NATIVE_CONSUMER_DIR/kelvra.toml" <<EOF_NATIVE_CONSUMER
 kind = "project"
 name = "native-consumer"
 version = "0.1.0"
@@ -1558,7 +1558,7 @@ index = "$REGISTRY_DIR"
 counter = { package = "examples:counter", version = "0.1.0" }
 EOF_NATIVE_CONSUMER
 
-cat > "$NATIVE_CONSUMER_DIR/app.mog" <<'EOF_NATIVE_CONSUMER_APP'
+cat > "$NATIVE_CONSUMER_DIR/app.kel" <<'EOF_NATIVE_CONSUMER_APP'
 const counter = @import("counter")
 
 const value = counter.create(10i64)
@@ -1566,49 +1566,49 @@ print(counter.PACKAGE_ID)
 print(counter.add(value, 5i64))
 EOF_NATIVE_CONSUMER_APP
 
-if ! (cd "$NATIVE_CONSUMER_DIR" && "$MOG" install >/dev/null); then
+if ! (cd "$NATIVE_CONSUMER_DIR" && "$KELVRA" install >/dev/null); then
     echo "[FAIL] install should resolve published native packages from the registry"
     exit 1
 fi
 
-NATIVE_RUN_OUTPUT="$("$MOG" run "$NATIVE_CONSUMER_DIR/app.mog")"
+NATIVE_RUN_OUTPUT="$("$KELVRA" run "$NATIVE_CONSUMER_DIR/app.kel")"
 if [[ "$NATIVE_RUN_OUTPUT" != *"examples:counter"* || "$NATIVE_RUN_OUTPUT" != *"15"* ]]; then
     echo "[FAIL] run should execute registry-installed native packages"
     echo "$NATIVE_RUN_OUTPUT"
     exit 1
 fi
 
-if ! grep -Fq 'package_id = "examples:counter"' "$NATIVE_CONSUMER_DIR/mog.lock" || \
-   ! grep -Fq 'source_type = "registry"' "$NATIVE_CONSUMER_DIR/mog.lock" || \
-   ! grep -Fq 'kind = "native"' "$NATIVE_CONSUMER_DIR/mog.lock" || \
-   ! grep -Fq "selected_target = \"$HOST_TARGET\"" "$NATIVE_CONSUMER_DIR/mog.lock"; then
-    echo "[FAIL] native registry installs should be recorded in mog.lock"
-    cat "$NATIVE_CONSUMER_DIR/mog.lock"
+if ! grep -Fq 'package_id = "examples:counter"' "$NATIVE_CONSUMER_DIR/kelvra.lock" || \
+   ! grep -Fq 'source_type = "registry"' "$NATIVE_CONSUMER_DIR/kelvra.lock" || \
+   ! grep -Fq 'kind = "native"' "$NATIVE_CONSUMER_DIR/kelvra.lock" || \
+   ! grep -Fq "selected_target = \"$HOST_TARGET\"" "$NATIVE_CONSUMER_DIR/kelvra.lock"; then
+    echo "[FAIL] native registry installs should be recorded in kelvra.lock"
+    cat "$NATIVE_CONSUMER_DIR/kelvra.lock"
     exit 1
 fi
 
 if ! grep -Fq "selected_target = \"$HOST_TARGET\"" \
-    "$NATIVE_CONSUMER_DIR/.mog/install/registry.toml"; then
+    "$NATIVE_CONSUMER_DIR/.kelvra/install/registry.toml"; then
     echo "[FAIL] install registry should record the selected native target"
-    cat "$NATIVE_CONSUMER_DIR/.mog/install/registry.toml"
+    cat "$NATIVE_CONSUMER_DIR/.kelvra/install/registry.toml"
     exit 1
 fi
 
-if [[ ! -f "$NATIVE_CONSUMER_DIR/.mog/install/packages/examples/counter/package.so" ]]; then
+if [[ ! -f "$NATIVE_CONSUMER_DIR/.kelvra/install/packages/examples/counter/package.so" ]]; then
     echo "[FAIL] native registry installs should materialize the shared library"
-    find "$NATIVE_CONSUMER_DIR/.mog" -maxdepth 6 -print
+    find "$NATIVE_CONSUMER_DIR/.kel" -maxdepth 6 -print
     exit 1
 fi
 
-rm -f "$NATIVE_CONSUMER_DIR/.mog/install/registry.toml"
+rm -f "$NATIVE_CONSUMER_DIR/.kelvra/install/registry.toml"
 if ! (cd "$NATIVE_CONSUMER_DIR" && \
-      "$MOG" install --prefer-prebuilt --target "$HOST_TARGET" >/dev/null); then
+      "$KELVRA" install --prefer-prebuilt --target "$HOST_TARGET" >/dev/null); then
     echo "[FAIL] install should accept explicit native target selection flags"
     exit 1
 fi
 
-rm -f "$NATIVE_CONSUMER_DIR/.mog/install/registry.toml"
-if ! (cd "$NATIVE_CONSUMER_DIR" && "$MOG" install --offline >/dev/null); then
+rm -f "$NATIVE_CONSUMER_DIR/.kelvra/install/registry.toml"
+if ! (cd "$NATIVE_CONSUMER_DIR" && "$KELVRA" install --offline >/dev/null); then
     echo "[FAIL] install --offline should succeed for cached native registry packages"
     exit 1
 fi
@@ -1655,7 +1655,7 @@ for package in data.get("package", []):
 index_path.write_text("\n".join(parts) + "\n", encoding="utf-8")
 PY
 
-cat > "$NATIVE_SOURCE_DIR/mog.toml" <<EOF_NATIVE_SOURCE
+cat > "$NATIVE_SOURCE_DIR/kelvra.toml" <<EOF_NATIVE_SOURCE
 kind = "project"
 name = "native-source-consumer"
 version = "0.1.0"
@@ -1668,34 +1668,34 @@ index = "$REGISTRY_DIR"
 counter = { package = "examples:counter", version = "0.1.0" }
 EOF_NATIVE_SOURCE
 
-cp "$NATIVE_CONSUMER_DIR/app.mog" "$NATIVE_SOURCE_DIR/app.mog"
+cp "$NATIVE_CONSUMER_DIR/app.kel" "$NATIVE_SOURCE_DIR/app.kel"
 
-if ! (cd "$NATIVE_SOURCE_DIR" && "$MOG" install >/dev/null); then
+if ! (cd "$NATIVE_SOURCE_DIR" && "$KELVRA" install >/dev/null); then
     echo "[FAIL] install should source-build a native package when the registry only publishes a source artifact"
     exit 1
 fi
 
-if ! grep -Fq 'build_from_source = true' "$NATIVE_SOURCE_DIR/mog.lock"; then
+if ! grep -Fq 'build_from_source = true' "$NATIVE_SOURCE_DIR/kelvra.lock"; then
     echo "[FAIL] lockfile should record native source-build installs"
-    cat "$NATIVE_SOURCE_DIR/mog.lock"
+    cat "$NATIVE_SOURCE_DIR/kelvra.lock"
     exit 1
 fi
 
-NATIVE_SOURCE_OUTPUT="$("$MOG" run "$NATIVE_SOURCE_DIR/app.mog")"
+NATIVE_SOURCE_OUTPUT="$("$KELVRA" run "$NATIVE_SOURCE_DIR/app.kel")"
 if [[ "$NATIVE_SOURCE_OUTPUT" != *"examples:counter"* || "$NATIVE_SOURCE_OUTPUT" != *"15"* ]]; then
     echo "[FAIL] run should execute source-built native registry packages"
     echo "$NATIVE_SOURCE_OUTPUT"
     exit 1
 fi
 
-rm -f "$NATIVE_SOURCE_DIR/.mog/install/registry.toml"
-if ! (cd "$NATIVE_SOURCE_DIR" && "$MOG" install --offline >/dev/null); then
+rm -f "$NATIVE_SOURCE_DIR/.kelvra/install/registry.toml"
+if ! (cd "$NATIVE_SOURCE_DIR" && "$KELVRA" install --offline >/dev/null); then
     echo "[FAIL] install --offline should succeed for cached source-built native packages"
     exit 1
 fi
 
 NATIVE_CROSS_TARGET_DIR="$(mktemp -d)"
-cat > "$NATIVE_CROSS_TARGET_DIR/mog.toml" <<EOF_NATIVE_CROSS_TARGET
+cat > "$NATIVE_CROSS_TARGET_DIR/kelvra.toml" <<EOF_NATIVE_CROSS_TARGET
 kind = "project"
 name = "native-cross-target"
 version = "0.1.0"
@@ -1708,21 +1708,21 @@ index = "$REGISTRY_DIR"
 counter = { package = "examples:counter", version = "0.1.0" }
 EOF_NATIVE_CROSS_TARGET
 
-cp "$NATIVE_CONSUMER_DIR/app.mog" "$NATIVE_CROSS_TARGET_DIR/app.mog"
+cp "$NATIVE_CONSUMER_DIR/app.kel" "$NATIVE_CROSS_TARGET_DIR/app.kel"
 
 if (cd "$NATIVE_CROSS_TARGET_DIR" && \
-    MOG_CACHE_DIR="$TEMP_DIR/cross-target-missing-toolchain-cache" \
-    "$MOG" install --target "$ALT_TARGET" \
-    >/tmp/mog_native_cross_target_toolchain_failure.txt 2>&1); then
+    KELVRA_CACHE_DIR="$TEMP_DIR/cross-target-missing-toolchain-cache" \
+    "$KELVRA" install --target "$ALT_TARGET" \
+    >/tmp/kelvra_native_cross_target_toolchain_failure.txt 2>&1); then
     echo "[FAIL] install should require --cmake-toolchain for non-host source fallback"
-    cat /tmp/mog_native_cross_target_toolchain_failure.txt
+    cat /tmp/kelvra_native_cross_target_toolchain_failure.txt
     exit 1
 fi
 
 if ! grep -Fq -- "--cmake-toolchain" \
-    /tmp/mog_native_cross_target_toolchain_failure.txt; then
+    /tmp/kelvra_native_cross_target_toolchain_failure.txt; then
     echo "[FAIL] install should explain how to enable non-host source fallback"
-    cat /tmp/mog_native_cross_target_toolchain_failure.txt
+    cat /tmp/kelvra_native_cross_target_toolchain_failure.txt
     exit 1
 fi
 
@@ -1730,22 +1730,22 @@ printf '# host toolchain passthrough for package-manager tests\n' \
     > "$TEMP_DIR/cross-target-toolchain.cmake"
 
 if ! (cd "$NATIVE_CROSS_TARGET_DIR" && \
-      "$MOG" install --target "$ALT_TARGET" \
+      "$KELVRA" install --target "$ALT_TARGET" \
       --cmake-toolchain "$TEMP_DIR/cross-target-toolchain.cmake" >/dev/null); then
     echo "[FAIL] install should allow non-host native source fallback with --cmake-toolchain"
     exit 1
 fi
 
-if ! grep -Fq 'build_from_source = true' "$NATIVE_CROSS_TARGET_DIR/mog.lock" || \
-   ! grep -Fq "selected_target = \"$ALT_TARGET\"" "$NATIVE_CROSS_TARGET_DIR/mog.lock"; then
+if ! grep -Fq 'build_from_source = true' "$NATIVE_CROSS_TARGET_DIR/kelvra.lock" || \
+   ! grep -Fq "selected_target = \"$ALT_TARGET\"" "$NATIVE_CROSS_TARGET_DIR/kelvra.lock"; then
     echo "[FAIL] lockfile should pin non-host source-built native installs"
-    cat "$NATIVE_CROSS_TARGET_DIR/mog.lock"
+    cat "$NATIVE_CROSS_TARGET_DIR/kelvra.lock"
     exit 1
 fi
 
-rm -f "$NATIVE_CROSS_TARGET_DIR/.mog/install/registry.toml"
-CROSS_TARGET_OUTPUT="$("$MOG" run --locked --target "$ALT_TARGET" \
-    "$NATIVE_CROSS_TARGET_DIR/app.mog")"
+rm -f "$NATIVE_CROSS_TARGET_DIR/.kelvra/install/registry.toml"
+CROSS_TARGET_OUTPUT="$("$KELVRA" run --locked --target "$ALT_TARGET" \
+    "$NATIVE_CROSS_TARGET_DIR/app.kel")"
 if [[ "$CROSS_TARGET_OUTPUT" != *"examples:counter"* || \
       "$CROSS_TARGET_OUTPUT" != *"15"* ]]; then
     echo "[FAIL] run --locked should reuse cached non-host source-built native packages"
@@ -1754,7 +1754,7 @@ if [[ "$CROSS_TARGET_OUTPUT" != *"examples:counter"* || \
 fi
 
 NATIVE_CROSS_TARGET_MANIFEST_DIR="$(mktemp -d)"
-cat > "$NATIVE_CROSS_TARGET_MANIFEST_DIR/mog.toml" <<EOF_NATIVE_CROSS_TARGET_MANIFEST
+cat > "$NATIVE_CROSS_TARGET_MANIFEST_DIR/kelvra.toml" <<EOF_NATIVE_CROSS_TARGET_MANIFEST
 kind = "project"
 name = "native-cross-target-manifest"
 version = "0.1.0"
@@ -1769,17 +1769,17 @@ generator = "Unix Makefiles"
 build_type = "RelWithDebInfo"
 configure_args = ["--log-level=NOTICE"]
 build_args = ["--verbose"]
-env = { "MOG_NATIVE_TEST_ENV" = "manifest-value" }
+env = { "KELVRA_NATIVE_TEST_ENV" = "manifest-value" }
 
 [dependencies]
 counter = { package = "examples:counter", version = "0.1.0" }
 EOF_NATIVE_CROSS_TARGET_MANIFEST
 
-cp "$NATIVE_CONSUMER_DIR/app.mog" "$NATIVE_CROSS_TARGET_MANIFEST_DIR/app.mog"
+cp "$NATIVE_CONSUMER_DIR/app.kel" "$NATIVE_CROSS_TARGET_MANIFEST_DIR/app.kel"
 
 if ! (cd "$NATIVE_CROSS_TARGET_MANIFEST_DIR" && \
-      MOG_CACHE_DIR="$TEMP_DIR/manifest-target-cache" \
-      "$MOG" install --target "$ALT_TARGET" >/dev/null); then
+      KELVRA_CACHE_DIR="$TEMP_DIR/manifest-target-cache" \
+      "$KELVRA" install --target "$ALT_TARGET" >/dev/null); then
     echo "[FAIL] install should allow non-host native source fallback from manifest-configured toolchains"
     exit 1
 fi
@@ -1791,7 +1791,7 @@ if [[ -z "$MANIFEST_BUILD_LOG" ]]; then
     exit 1
 fi
 
-if ! grep -Fq '"MOG_NATIVE_TEST_ENV=manifest-value" cmake' "$MANIFEST_BUILD_LOG" || \
+if ! grep -Fq '"KELVRA_NATIVE_TEST_ENV=manifest-value" cmake' "$MANIFEST_BUILD_LOG" || \
    ! grep -Fq -- '-G "Unix Makefiles"' "$MANIFEST_BUILD_LOG" || \
    ! grep -Fq -- '-DCMAKE_BUILD_TYPE="RelWithDebInfo"' "$MANIFEST_BUILD_LOG" || \
    ! grep -Fq -- '"--log-level=NOTICE"' "$MANIFEST_BUILD_LOG" || \
@@ -1802,17 +1802,17 @@ if ! grep -Fq '"MOG_NATIVE_TEST_ENV=manifest-value" cmake' "$MANIFEST_BUILD_LOG"
 fi
 
 if ! grep -Fq 'build_from_source = true' \
-    "$NATIVE_CROSS_TARGET_MANIFEST_DIR/mog.lock" || \
+    "$NATIVE_CROSS_TARGET_MANIFEST_DIR/kelvra.lock" || \
    ! grep -Fq "selected_target = \"$ALT_TARGET\"" \
-    "$NATIVE_CROSS_TARGET_MANIFEST_DIR/mog.lock"; then
+    "$NATIVE_CROSS_TARGET_MANIFEST_DIR/kelvra.lock"; then
     echo "[FAIL] lockfile should pin manifest-configured non-host native installs"
-    cat "$NATIVE_CROSS_TARGET_MANIFEST_DIR/mog.lock"
+    cat "$NATIVE_CROSS_TARGET_MANIFEST_DIR/kelvra.lock"
     exit 1
 fi
 
-rm -f "$NATIVE_CROSS_TARGET_MANIFEST_DIR/.mog/install/registry.toml"
-MANIFEST_CROSS_TARGET_OUTPUT="$("$MOG" run --locked --target "$ALT_TARGET" \
-    "$NATIVE_CROSS_TARGET_MANIFEST_DIR/app.mog")"
+rm -f "$NATIVE_CROSS_TARGET_MANIFEST_DIR/.kelvra/install/registry.toml"
+MANIFEST_CROSS_TARGET_OUTPUT="$("$KELVRA" run --locked --target "$ALT_TARGET" \
+    "$NATIVE_CROSS_TARGET_MANIFEST_DIR/app.kel")"
 if [[ "$MANIFEST_CROSS_TARGET_OUTPUT" != *"examples:counter"* || \
       "$MANIFEST_CROSS_TARGET_OUTPUT" != *"15"* ]]; then
     echo "[FAIL] run --locked should reuse manifest-configured non-host native installs"
@@ -1824,7 +1824,7 @@ printf '# host toolchain override for package-manager tests\n' \
     > "$TEMP_DIR/cross-target-override-toolchain.cmake"
 
 NATIVE_CROSS_TARGET_OVERRIDE_DIR="$(mktemp -d)"
-cat > "$NATIVE_CROSS_TARGET_OVERRIDE_DIR/mog.toml" <<EOF_NATIVE_CROSS_TARGET_OVERRIDE
+cat > "$NATIVE_CROSS_TARGET_OVERRIDE_DIR/kelvra.toml" <<EOF_NATIVE_CROSS_TARGET_OVERRIDE
 kind = "project"
 name = "native-cross-target-override"
 version = "0.1.0"
@@ -1840,11 +1840,11 @@ cmake_toolchain = "missing-manifest-toolchain.cmake"
 counter = { package = "examples:counter", version = "0.1.0" }
 EOF_NATIVE_CROSS_TARGET_OVERRIDE
 
-cp "$NATIVE_CONSUMER_DIR/app.mog" "$NATIVE_CROSS_TARGET_OVERRIDE_DIR/app.mog"
+cp "$NATIVE_CONSUMER_DIR/app.kel" "$NATIVE_CROSS_TARGET_OVERRIDE_DIR/app.kel"
 
 if ! (cd "$NATIVE_CROSS_TARGET_OVERRIDE_DIR" && \
-      MOG_CACHE_DIR="$TEMP_DIR/override-target-cache" \
-      "$MOG" install --target "$ALT_TARGET" \
+      KELVRA_CACHE_DIR="$TEMP_DIR/override-target-cache" \
+      "$KELVRA" install --target "$ALT_TARGET" \
       --cmake-toolchain "$TEMP_DIR/cross-target-override-toolchain.cmake" \
       >/dev/null); then
     echo "[FAIL] install should let --cmake-toolchain override manifest native toolchain configuration"
@@ -1852,7 +1852,7 @@ if ! (cd "$NATIVE_CROSS_TARGET_OVERRIDE_DIR" && \
 fi
 
 NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR="$(mktemp -d)"
-cat > "$NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR/mog.toml" <<EOF_NATIVE_CROSS_TARGET_BAD
+cat > "$NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR/kelvra.toml" <<EOF_NATIVE_CROSS_TARGET_BAD
 kind = "project"
 name = "native-cross-target-bad-toolchain"
 version = "0.1.0"
@@ -1868,35 +1868,35 @@ cmake_toolchain = "missing-manifest-toolchain.cmake"
 counter = { package = "examples:counter", version = "0.1.0" }
 EOF_NATIVE_CROSS_TARGET_BAD
 
-cp "$NATIVE_CONSUMER_DIR/app.mog" "$NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR/app.mog"
+cp "$NATIVE_CONSUMER_DIR/app.kel" "$NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR/app.kel"
 
 if (cd "$NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR" && \
-    MOG_CACHE_DIR="$TEMP_DIR/bad-manifest-toolchain-cache" \
-    "$MOG" install --target "$ALT_TARGET" \
-    >/tmp/mog_native_bad_manifest_toolchain_failure.txt 2>&1); then
+    KELVRA_CACHE_DIR="$TEMP_DIR/bad-manifest-toolchain-cache" \
+    "$KELVRA" install --target "$ALT_TARGET" \
+    >/tmp/kelvra_native_bad_manifest_toolchain_failure.txt 2>&1); then
     echo "[FAIL] install should reject missing manifest-configured native toolchains"
-    cat /tmp/mog_native_bad_manifest_toolchain_failure.txt
+    cat /tmp/kelvra_native_bad_manifest_toolchain_failure.txt
     exit 1
 fi
 
 if ! grep -Fq "missing-manifest-toolchain.cmake" \
-    /tmp/mog_native_bad_manifest_toolchain_failure.txt || \
+    /tmp/kelvra_native_bad_manifest_toolchain_failure.txt || \
    ! grep -Fq '[native.toolchains."'$ALT_TARGET'"].cmake_toolchain' \
-    /tmp/mog_native_bad_manifest_toolchain_failure.txt; then
+    /tmp/kelvra_native_bad_manifest_toolchain_failure.txt; then
     echo "[FAIL] install should identify missing manifest-configured native toolchains"
-    cat /tmp/mog_native_bad_manifest_toolchain_failure.txt
+    cat /tmp/kelvra_native_bad_manifest_toolchain_failure.txt
     exit 1
 fi
 
 if ! (cd "$NATIVE_CROSS_TARGET_BAD_TOOLCHAIN_DIR" && \
-      MOG_CACHE_DIR="$TEMP_DIR/bad-manifest-host-cache" \
-      "$MOG" install >/dev/null); then
+      KELVRA_CACHE_DIR="$TEMP_DIR/bad-manifest-host-cache" \
+      "$KELVRA" install >/dev/null); then
     echo "[FAIL] host-target installs should ignore unrelated manifest native toolchain entries"
     exit 1
 fi
 
 NATIVE_CROSS_TARGET_ENV_DIR="$(mktemp -d)"
-cat > "$NATIVE_CROSS_TARGET_ENV_DIR/mog.toml" <<EOF_NATIVE_CROSS_TARGET_ENV
+cat > "$NATIVE_CROSS_TARGET_ENV_DIR/kelvra.toml" <<EOF_NATIVE_CROSS_TARGET_ENV
 kind = "project"
 name = "native-cross-target-env"
 version = "0.1.0"
@@ -1909,22 +1909,22 @@ index = "$REGISTRY_DIR"
 counter = { package = "examples:counter", version = "0.1.0" }
 EOF_NATIVE_CROSS_TARGET_ENV
 
-mkdir -p "$NATIVE_CROSS_TARGET_ENV_DIR/.mog/toolchains"
+mkdir -p "$NATIVE_CROSS_TARGET_ENV_DIR/.kelvra/toolchains"
 printf '# env-discovered toolchain for package-manager tests\n' \
     > "$TEMP_DIR/env-cross-target-toolchain.cmake"
-cp "$NATIVE_CONSUMER_DIR/app.mog" "$NATIVE_CROSS_TARGET_ENV_DIR/app.mog"
+cp "$NATIVE_CONSUMER_DIR/app.kel" "$NATIVE_CROSS_TARGET_ENV_DIR/app.kel"
 
-ENV_TOOLCHAIN_NAME="MOG_CMAKE_TOOLCHAIN_$(printf '%s' "$ALT_TARGET" | tr '[:lower:]-.' '[:upper:]__')"
+ENV_TOOLCHAIN_NAME="KELVRA_CMAKE_TOOLCHAIN_$(printf '%s' "$ALT_TARGET" | tr '[:lower:]-.' '[:upper:]__')"
 if ! (cd "$NATIVE_CROSS_TARGET_ENV_DIR" && \
       env "$ENV_TOOLCHAIN_NAME=$TEMP_DIR/env-cross-target-toolchain.cmake" \
-      MOG_CACHE_DIR="$TEMP_DIR/env-target-cache" \
-      "$MOG" install --target "$ALT_TARGET" >/dev/null); then
+      KELVRA_CACHE_DIR="$TEMP_DIR/env-target-cache" \
+      "$KELVRA" install --target "$ALT_TARGET" >/dev/null); then
     echo "[FAIL] install should auto-discover non-host native toolchains from the environment"
     exit 1
 fi
 
 NATIVE_CROSS_TARGET_NO_BUILD_DIR="$(mktemp -d)"
-cat > "$NATIVE_CROSS_TARGET_NO_BUILD_DIR/mog.toml" <<EOF_NATIVE_CROSS_TARGET_NO_BUILD
+cat > "$NATIVE_CROSS_TARGET_NO_BUILD_DIR/kelvra.toml" <<EOF_NATIVE_CROSS_TARGET_NO_BUILD
 kind = "project"
 name = "native-cross-target-no-build"
 version = "0.1.0"
@@ -1937,26 +1937,26 @@ index = "$REGISTRY_DIR"
 counter = { package = "examples:counter", version = "0.1.0" }
 EOF_NATIVE_CROSS_TARGET_NO_BUILD
 
-cp "$NATIVE_CONSUMER_DIR/app.mog" "$NATIVE_CROSS_TARGET_NO_BUILD_DIR/app.mog"
+cp "$NATIVE_CONSUMER_DIR/app.kel" "$NATIVE_CROSS_TARGET_NO_BUILD_DIR/app.kel"
 
 if (cd "$NATIVE_CROSS_TARGET_NO_BUILD_DIR" && \
-    MOG_CACHE_DIR="$TEMP_DIR/cross-target-no-build-cache" "$MOG" install \
+    KELVRA_CACHE_DIR="$TEMP_DIR/cross-target-no-build-cache" "$KELVRA" install \
     --target "$ALT_TARGET" --no-native-build \
     --cmake-toolchain "$TEMP_DIR/cross-target-toolchain.cmake" \
-    >/tmp/mog_native_cross_target_no_build_failure.txt 2>&1); then
+    >/tmp/kelvra_native_cross_target_no_build_failure.txt 2>&1); then
     echo "[FAIL] install --no-native-build should still reject non-host source-only native packages"
-    cat /tmp/mog_native_cross_target_no_build_failure.txt
+    cat /tmp/kelvra_native_cross_target_no_build_failure.txt
     exit 1
 fi
 
 if ! grep -Fq -- "--no-native-build forbids using it" \
-    /tmp/mog_native_cross_target_no_build_failure.txt; then
+    /tmp/kelvra_native_cross_target_no_build_failure.txt; then
     echo "[FAIL] install --no-native-build should still explain non-host source-fallback rejection"
-    cat /tmp/mog_native_cross_target_no_build_failure.txt
+    cat /tmp/kelvra_native_cross_target_no_build_failure.txt
     exit 1
 fi
 
-cat > "$NATIVE_NO_CMAKE_DIR/mog.toml" <<EOF_NATIVE_NO_CMAKE
+cat > "$NATIVE_NO_CMAKE_DIR/kelvra.toml" <<EOF_NATIVE_NO_CMAKE
 kind = "project"
 name = "native-no-cmake"
 version = "0.1.0"
@@ -1969,48 +1969,48 @@ index = "$REGISTRY_DIR"
 counter = { package = "examples:counter", version = "0.1.0" }
 EOF_NATIVE_NO_CMAKE
 
-cp "$NATIVE_CONSUMER_DIR/app.mog" "$NATIVE_NO_CMAKE_DIR/app.mog"
+cp "$NATIVE_CONSUMER_DIR/app.kel" "$NATIVE_NO_CMAKE_DIR/app.kel"
 
-if (cd "$NATIVE_NO_CMAKE_DIR" && MOG_CACHE_DIR="$TEMP_DIR/no-native-build-cache" \
-    "$MOG" install --no-native-build >/tmp/mog_native_no_build_failure.txt 2>&1); then
+if (cd "$NATIVE_NO_CMAKE_DIR" && KELVRA_CACHE_DIR="$TEMP_DIR/no-native-build-cache" \
+    "$KELVRA" install --no-native-build >/tmp/kelvra_native_no_build_failure.txt 2>&1); then
     echo "[FAIL] install --no-native-build should reject source-only native registry packages"
-    cat /tmp/mog_native_no_build_failure.txt
+    cat /tmp/kelvra_native_no_build_failure.txt
     exit 1
 fi
 
-if ! grep -Fq -- "--no-native-build forbids using it" /tmp/mog_native_no_build_failure.txt; then
+if ! grep -Fq -- "--no-native-build forbids using it" /tmp/kelvra_native_no_build_failure.txt; then
     echo "[FAIL] install --no-native-build should explain source-fallback rejection"
-    cat /tmp/mog_native_no_build_failure.txt
+    cat /tmp/kelvra_native_no_build_failure.txt
     exit 1
 fi
 
-if (cd "$NATIVE_NO_CMAKE_DIR" && MOG_CACHE_DIR="$TEMP_DIR/source-offline-cache" \
-    "$MOG" install --offline >/tmp/mog_native_source_offline_failure.txt 2>&1); then
+if (cd "$NATIVE_NO_CMAKE_DIR" && KELVRA_CACHE_DIR="$TEMP_DIR/source-offline-cache" \
+    "$KELVRA" install --offline >/tmp/kelvra_native_source_offline_failure.txt 2>&1); then
     echo "[FAIL] install --offline should reject uncached source-built native packages"
-    cat /tmp/mog_native_source_offline_failure.txt
+    cat /tmp/kelvra_native_source_offline_failure.txt
     exit 1
 fi
 
-if ! grep -Eq "offline|cached locally" /tmp/mog_native_source_offline_failure.txt; then
+if ! grep -Eq "offline|cached locally" /tmp/kelvra_native_source_offline_failure.txt; then
     echo "[FAIL] install --offline should explain missing cached source-built native packages"
-    cat /tmp/mog_native_source_offline_failure.txt
+    cat /tmp/kelvra_native_source_offline_failure.txt
     exit 1
 fi
 
-if (cd "$NATIVE_NO_CMAKE_DIR" && PATH="" MOG_CACHE_DIR="$TEMP_DIR/missing-cmake-cache" \
-    "$MOG" install >/tmp/mog_native_missing_cmake_failure.txt 2>&1); then
+if (cd "$NATIVE_NO_CMAKE_DIR" && PATH="" KELVRA_CACHE_DIR="$TEMP_DIR/missing-cmake-cache" \
+    "$KELVRA" install >/tmp/kelvra_native_missing_cmake_failure.txt 2>&1); then
     echo "[FAIL] install should report missing cmake for native source fallback"
-    cat /tmp/mog_native_missing_cmake_failure.txt
+    cat /tmp/kelvra_native_missing_cmake_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "requires CMake" /tmp/mog_native_missing_cmake_failure.txt; then
+if ! grep -Fq "requires CMake" /tmp/kelvra_native_missing_cmake_failure.txt; then
     echo "[FAIL] install should explain missing cmake for native source fallback"
-    cat /tmp/mog_native_missing_cmake_failure.txt
+    cat /tmp/kelvra_native_missing_cmake_failure.txt
     exit 1
 fi
 
-cat > "$NATIVE_BUILD_FAIL_DIR/mog.toml" <<EOF_NATIVE_BUILD_FAIL
+cat > "$NATIVE_BUILD_FAIL_DIR/kelvra.toml" <<EOF_NATIVE_BUILD_FAIL
 kind = "project"
 name = "native-build-fail"
 version = "0.1.0"
@@ -2023,14 +2023,14 @@ index = "$REGISTRY_DIR"
 counter = { package = "examples:counter", version = "0.1.2" }
 EOF_NATIVE_BUILD_FAIL
 
-cp "$NATIVE_CONSUMER_DIR/app.mog" "$NATIVE_BUILD_FAIL_DIR/app.mog"
+cp "$NATIVE_CONSUMER_DIR/app.kel" "$NATIVE_BUILD_FAIL_DIR/app.kel"
 
 mkdir -p "$REGISTRY_DIR/packages/examples/counter/0.1.2/source"
-cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/mog.toml" \
-   "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/package.api.mog" \
+cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/kelvra.toml" \
+   "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/package.api.kel" \
    "$REGISTRY_DIR/packages/examples/counter/0.1.0/source/NativePackageAPI.hpp" \
    "$REGISTRY_DIR/packages/examples/counter/0.1.2/source/"
-python3 - "$REGISTRY_DIR/packages/examples/counter/0.1.2/source/mog.toml" <<'PY'
+python3 - "$REGISTRY_DIR/packages/examples/counter/0.1.2/source/kelvra.toml" <<'PY'
 from pathlib import Path
 import sys
 
@@ -2098,22 +2098,22 @@ for package in packages:
 index_path.write_text("\n".join(parts) + "\n", encoding="utf-8")
 PY
 
-if (cd "$NATIVE_BUILD_FAIL_DIR" && MOG_CACHE_DIR="$TEMP_DIR/build-fail-cache" \
-    "$MOG" install >/tmp/mog_native_build_failure.txt 2>&1); then
+if (cd "$NATIVE_BUILD_FAIL_DIR" && KELVRA_CACHE_DIR="$TEMP_DIR/build-fail-cache" \
+    "$KELVRA" install >/tmp/kelvra_native_build_failure.txt 2>&1); then
     echo "[FAIL] install should report native source-build failures"
-    cat /tmp/mog_native_build_failure.txt
+    cat /tmp/kelvra_native_build_failure.txt
     exit 1
 fi
 
 if ! grep -Fq "source-build fallback for target '$HOST_TARGET' failed." \
-    /tmp/mog_native_build_failure.txt; then
+    /tmp/kelvra_native_build_failure.txt; then
     echo "[FAIL] install should explain native source-build failures"
-    cat /tmp/mog_native_build_failure.txt
+    cat /tmp/kelvra_native_build_failure.txt
     exit 1
 fi
 
 NATIVE_SYSDEP_FAIL_DIR="$(mktemp -d)"
-cat > "$NATIVE_SYSDEP_FAIL_DIR/mog.toml" <<EOF_NATIVE_SYSDEP_FAIL
+cat > "$NATIVE_SYSDEP_FAIL_DIR/kelvra.toml" <<EOF_NATIVE_SYSDEP_FAIL
 kind = "project"
 name = "native-sysdep-fail"
 version = "0.1.0"
@@ -2126,13 +2126,13 @@ index = "$REGISTRY_DIR"
 sysdep = { package = "acme:sysdep-demo", version = "1.0.0" }
 EOF_NATIVE_SYSDEP_FAIL
 
-cat > "$NATIVE_SYSDEP_FAIL_DIR/app.mog" <<'EOF_NATIVE_SYSDEP_FAIL_APP'
+cat > "$NATIVE_SYSDEP_FAIL_DIR/app.kel" <<'EOF_NATIVE_SYSDEP_FAIL_APP'
 const sysdep = @import("sysdep")
 print(sysdep.PACKAGE_ID)
 EOF_NATIVE_SYSDEP_FAIL_APP
 
 mkdir -p "$REGISTRY_DIR/packages/acme/sysdep-demo/1.0.0/source"
-cat > "$REGISTRY_DIR/packages/acme/sysdep-demo/1.0.0/source/mog.toml" <<'EOF_SYSDEP_MANIFEST'
+cat > "$REGISTRY_DIR/packages/acme/sysdep-demo/1.0.0/source/kelvra.toml" <<'EOF_SYSDEP_MANIFEST'
 kind = "native"
 import_name = "sysdep"
 namespace = "acme"
@@ -2147,7 +2147,7 @@ dependencies = []
 libmagic = { version = ">=1.0", required = true }
 EOF_SYSDEP_MANIFEST
 
-cat > "$REGISTRY_DIR/packages/acme/sysdep-demo/1.0.0/source/package.api.mog" <<'EOF_SYSDEP_API'
+cat > "$REGISTRY_DIR/packages/acme/sysdep-demo/1.0.0/source/package.api.kel" <<'EOF_SYSDEP_API'
 package sysdep
 
 const PACKAGE_ID str
@@ -2212,27 +2212,27 @@ index_path.write_text("\n".join(parts) + "\n", encoding="utf-8")
 PY
 
 if (cd "$NATIVE_SYSDEP_FAIL_DIR" && \
-    MOG_CACHE_DIR="$TEMP_DIR/sysdep-fail-cache" "$MOG" install \
-    >/tmp/mog_native_sysdep_failure.txt 2>&1); then
+    KELVRA_CACHE_DIR="$TEMP_DIR/sysdep-fail-cache" "$KELVRA" install \
+    >/tmp/kelvra_native_sysdep_failure.txt 2>&1); then
     echo "[FAIL] install should report missing declared system dependencies"
-    cat /tmp/mog_native_sysdep_failure.txt
+    cat /tmp/kelvra_native_sysdep_failure.txt
     exit 1
 fi
 
 if ! grep -Fq "could not find required system dependency 'libmagic'" \
-    /tmp/mog_native_sysdep_failure.txt || \
+    /tmp/kelvra_native_sysdep_failure.txt || \
    ! grep -Fq "Required system dependencies: libmagic (>=1.0)." \
-    /tmp/mog_native_sysdep_failure.txt; then
+    /tmp/kelvra_native_sysdep_failure.txt; then
     echo "[FAIL] install should surface declared system dependency diagnostics"
-    cat /tmp/mog_native_sysdep_failure.txt
+    cat /tmp/kelvra_native_sysdep_failure.txt
     exit 1
 fi
 
 mkdir -p "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET"
-cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/mog.toml" \
-   "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/mog.toml"
-cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/package.api.mog" \
-   "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/package.api.mog"
+cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/kelvra.toml" \
+   "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/kelvra.toml"
+cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/package.api.kel" \
+   "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/package.api.kel"
 cp "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/package.so" \
    "$REGISTRY_DIR/packages/examples/counter/0.1.0/$ALT_TARGET/package.so"
 
@@ -2300,7 +2300,7 @@ index_path.write_text("\n".join(parts) + "\n", encoding="utf-8")
 PY
 
 NATIVE_TARGET_DIR="$(mktemp -d)"
-cat > "$NATIVE_TARGET_DIR/mog.toml" <<EOF_NATIVE_TARGET
+cat > "$NATIVE_TARGET_DIR/kelvra.toml" <<EOF_NATIVE_TARGET
 kind = "project"
 name = "native-target-consumer"
 version = "0.1.0"
@@ -2313,21 +2313,21 @@ index = "$REGISTRY_DIR"
 counter = { package = "examples:counter", version = "0.1.0" }
 EOF_NATIVE_TARGET
 
-cp "$NATIVE_CONSUMER_DIR/app.mog" "$NATIVE_TARGET_DIR/app.mog"
+cp "$NATIVE_CONSUMER_DIR/app.kel" "$NATIVE_TARGET_DIR/app.kel"
 
 if ! (cd "$NATIVE_TARGET_DIR" && \
-      "$MOG" install --target "$ALT_TARGET" --prefer-prebuilt >/dev/null); then
+      "$KELVRA" install --target "$ALT_TARGET" --prefer-prebuilt >/dev/null); then
     echo "[FAIL] install should select a non-host native artifact when --target is provided"
     exit 1
 fi
 
-if ! grep -Fq "selected_target = \"$ALT_TARGET\"" "$NATIVE_TARGET_DIR/mog.lock"; then
+if ! grep -Fq "selected_target = \"$ALT_TARGET\"" "$NATIVE_TARGET_DIR/kelvra.lock"; then
     echo "[FAIL] lockfile should pin the explicitly selected native target"
-    cat "$NATIVE_TARGET_DIR/mog.lock"
+    cat "$NATIVE_TARGET_DIR/kelvra.lock"
     exit 1
 fi
 
-ALT_TARGET_OUTPUT="$("$MOG" run --locked --target "$ALT_TARGET" "$NATIVE_TARGET_DIR/app.mog")"
+ALT_TARGET_OUTPUT="$("$KELVRA" run --locked --target "$ALT_TARGET" "$NATIVE_TARGET_DIR/app.kel")"
 if [[ "$ALT_TARGET_OUTPUT" != *"examples:counter"* || "$ALT_TARGET_OUTPUT" != *"15"* ]]; then
     echo "[FAIL] run --locked should use the explicitly selected native target artifact"
     echo "$ALT_TARGET_OUTPUT"
@@ -2335,7 +2335,7 @@ if [[ "$ALT_TARGET_OUTPUT" != *"examples:counter"* || "$ALT_TARGET_OUTPUT" != *"
 fi
 
 NATIVE_TARGET_FAIL_DIR="$(mktemp -d)"
-cat > "$NATIVE_TARGET_FAIL_DIR/mog.toml" <<EOF_NATIVE_TARGET_FAIL
+cat > "$NATIVE_TARGET_FAIL_DIR/kelvra.toml" <<EOF_NATIVE_TARGET_FAIL
 kind = "project"
 name = "native-target-fail"
 version = "0.1.0"
@@ -2349,22 +2349,22 @@ counter = { package = "examples:counter", version = "0.1.0" }
 EOF_NATIVE_TARGET_FAIL
 
 if (cd "$NATIVE_TARGET_FAIL_DIR" && \
-    "$MOG" install --target "unsupported-target" >/tmp/mog_native_target_failure.txt 2>&1); then
+    "$KELVRA" install --target "unsupported-target" >/tmp/kelvra_native_target_failure.txt 2>&1); then
     echo "[FAIL] install should reject unsupported native target selections"
-    cat /tmp/mog_native_target_failure.txt
+    cat /tmp/kelvra_native_target_failure.txt
     exit 1
 fi
 
-if ! grep -Eq "does not publish a prebuilt native artifact for target|source-build fallback currently supports only the host target" /tmp/mog_native_target_failure.txt; then
+if ! grep -Eq "does not publish a prebuilt native artifact for target|source-build fallback currently supports only the host target" /tmp/kelvra_native_target_failure.txt; then
     echo "[FAIL] install should explain unsupported native target selections"
-    cat /tmp/mog_native_target_failure.txt
+    cat /tmp/kelvra_native_target_failure.txt
     exit 1
 fi
 
 printf 'not a valid native package\n' > \
     "$REGISTRY_DIR/packages/examples/counter/0.1.0/$HOST_TARGET/package.so"
-rm -f "$NATIVE_CONSUMER_DIR/.mog/install/registry.toml"
-LOCKED_NATIVE_OUTPUT="$("$MOG" run --locked --target "$HOST_TARGET" "$NATIVE_CONSUMER_DIR/app.mog")"
+rm -f "$NATIVE_CONSUMER_DIR/.kelvra/install/registry.toml"
+LOCKED_NATIVE_OUTPUT="$("$KELVRA" run --locked --target "$HOST_TARGET" "$NATIVE_CONSUMER_DIR/app.kel")"
 if [[ "$LOCKED_NATIVE_OUTPUT" != *"examples:counter"* || "$LOCKED_NATIVE_OUTPUT" != *"15"* ]]; then
     echo "[FAIL] run --locked should continue to use the pinned native artifact"
     echo "$LOCKED_NATIVE_OUTPUT"
@@ -2372,7 +2372,7 @@ if [[ "$LOCKED_NATIVE_OUTPUT" != *"examples:counter"* || "$LOCKED_NATIVE_OUTPUT"
 fi
 
 mkdir -p "$REGISTRY_DIR/packages/examples/counter/0.1.1"
-cat > "$REGISTRY_DIR/packages/examples/counter/0.1.1/mog.toml" <<'EOF_BAD_NATIVE_API_MANIFEST'
+cat > "$REGISTRY_DIR/packages/examples/counter/0.1.1/kelvra.toml" <<'EOF_BAD_NATIVE_API_MANIFEST'
 kind = "native"
 import_name = "counter"
 namespace = "examples"
@@ -2383,7 +2383,7 @@ author = "Registry test"
 description = "Published native package with a bad API."
 dependencies = []
 EOF_BAD_NATIVE_API_MANIFEST
-cat > "$REGISTRY_DIR/packages/examples/counter/0.1.1/package.api.mog" <<'EOF_BAD_NATIVE_API'
+cat > "$REGISTRY_DIR/packages/examples/counter/0.1.1/package.api.kel" <<'EOF_BAD_NATIVE_API'
 package counter
 
 @doc("GC-managed opaque counter handle.")
@@ -2406,7 +2406,7 @@ cp "$PROJECT_ROOT/build/packages/examples/counter/package.so" \
    "$REGISTRY_DIR/packages/examples/counter/0.1.1/package.so"
 
 mkdir -p "$REGISTRY_DIR/packages/acme/native-missing/1.0.0"
-cat > "$REGISTRY_DIR/packages/acme/native-missing/1.0.0/mog.toml" <<'EOF_MISSING_NATIVE_MANIFEST'
+cat > "$REGISTRY_DIR/packages/acme/native-missing/1.0.0/kelvra.toml" <<'EOF_MISSING_NATIVE_MANIFEST'
 kind = "native"
 import_name = "native_missing"
 namespace = "acme"
@@ -2417,7 +2417,7 @@ author = "Registry test"
 description = "Published native package missing its library."
 dependencies = []
 EOF_MISSING_NATIVE_MANIFEST
-cat > "$REGISTRY_DIR/packages/acme/native-missing/1.0.0/package.api.mog" <<'EOF_MISSING_NATIVE_API'
+cat > "$REGISTRY_DIR/packages/acme/native-missing/1.0.0/package.api.kel" <<'EOF_MISSING_NATIVE_API'
 package native_missing
 
 const PACKAGE_ID str
@@ -2485,7 +2485,7 @@ for package in packages:
 index_path.write_text("\n".join(parts) + "\n", encoding="utf-8")
 PY
 
-cat > "$NATIVE_BAD_DIR/mog.toml" <<EOF_BAD_NATIVE_API_CONSUMER
+cat > "$NATIVE_BAD_DIR/kelvra.toml" <<EOF_BAD_NATIVE_API_CONSUMER
 kind = "project"
 name = "bad-native-api"
 version = "0.1.0"
@@ -2498,19 +2498,19 @@ index = "$REGISTRY_DIR"
 counter = { package = "examples:counter", version = "0.1.1" }
 EOF_BAD_NATIVE_API_CONSUMER
 
-if (cd "$NATIVE_BAD_DIR" && "$MOG" install >/tmp/mog_native_bad_api_failure.txt 2>&1); then
+if (cd "$NATIVE_BAD_DIR" && "$KELVRA" install >/tmp/kelvra_native_bad_api_failure.txt 2>&1); then
     echo "[FAIL] install should reject published native packages with invalid APIs"
-    cat /tmp/mog_native_bad_api_failure.txt
+    cat /tmp/kelvra_native_bad_api_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "type mismatch" /tmp/mog_native_bad_api_failure.txt; then
+if ! grep -Fq "type mismatch" /tmp/kelvra_native_bad_api_failure.txt; then
     echo "[FAIL] install should explain native API validation failures"
-    cat /tmp/mog_native_bad_api_failure.txt
+    cat /tmp/kelvra_native_bad_api_failure.txt
     exit 1
 fi
 
-cat > "$NATIVE_BAD_DIR/mog.toml" <<EOF_MISSING_NATIVE_CONSUMER
+cat > "$NATIVE_BAD_DIR/kelvra.toml" <<EOF_MISSING_NATIVE_CONSUMER
 kind = "project"
 name = "missing-native"
 version = "0.1.0"
@@ -2523,15 +2523,15 @@ index = "$REGISTRY_DIR"
 missing = { package = "acme:native-missing", version = "1.0.0" }
 EOF_MISSING_NATIVE_CONSUMER
 
-if (cd "$NATIVE_BAD_DIR" && "$MOG" install >/tmp/mog_native_missing_failure.txt 2>&1); then
+if (cd "$NATIVE_BAD_DIR" && "$KELVRA" install >/tmp/kelvra_native_missing_failure.txt 2>&1); then
     echo "[FAIL] install should reject published native packages without a shared library"
-    cat /tmp/mog_native_missing_failure.txt
+    cat /tmp/kelvra_native_missing_failure.txt
     exit 1
 fi
 
-if ! grep -Eq "built library|shared library" /tmp/mog_native_missing_failure.txt; then
+if ! grep -Eq "built library|shared library" /tmp/kelvra_native_missing_failure.txt; then
     echo "[FAIL] install should explain missing native shared libraries"
-    cat /tmp/mog_native_missing_failure.txt
+    cat /tmp/kelvra_native_missing_failure.txt
     exit 1
 fi
 
@@ -2553,7 +2553,7 @@ EOF_HOSTED_SERVICE
 HOSTED_TRUSTED_KEY="$(trusted_key_spec "$HOSTED_KEY_FILE")"
 HOSTED_PUBLISH_CONFIG="$TEMP_DIR/hosted-publish-config"
 mkdir -p "$HOSTED_PUBLISH_WORKSPACE/pkg/src"
-cat > "$HOSTED_PUBLISH_WORKSPACE/mog.toml" <<EOF_HOSTED_PUBLISH_ROOT
+cat > "$HOSTED_PUBLISH_WORKSPACE/kelvra.toml" <<EOF_HOSTED_PUBLISH_ROOT
 kind = "project"
 name = "hosted-publish-root"
 version = "0.1.0"
@@ -2564,7 +2564,7 @@ index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
 trusted_keys = ["$HOSTED_TRUSTED_KEY"]
 EOF_HOSTED_PUBLISH_ROOT
 
-cat > "$HOSTED_PUBLISH_WORKSPACE/pkg/mog.toml" <<'EOF_HOSTED_PACKAGE'
+cat > "$HOSTED_PUBLISH_WORKSPACE/pkg/kelvra.toml" <<'EOF_HOSTED_PACKAGE'
 kind = "source"
 import_name = "hosted_util"
 namespace = "acme"
@@ -2573,11 +2573,11 @@ version = "1.0.0"
 license = "MIT"
 author = "Hosted registry test"
 description = "Hosted utility package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_HOSTED_PACKAGE
 
-cat > "$HOSTED_PUBLISH_WORKSPACE/pkg/src/main.mog" <<'EOF_HOSTED_PACKAGE_SRC'
+cat > "$HOSTED_PUBLISH_WORKSPACE/pkg/src/main.kel" <<'EOF_HOSTED_PACKAGE_SRC'
 const MESSAGE str = "utility from hosted registry"
 
 fn Name() str {
@@ -2587,30 +2587,30 @@ EOF_HOSTED_PACKAGE_SRC
 
 if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
-    "$MOG" login default --token "$HOSTED_TOKEN" >/dev/null); then
+    "$KELVRA" login default --token "$HOSTED_TOKEN" >/dev/null); then
     echo "[FAIL] login should store a hosted registry token"
     exit 1
 fi
 
-if [[ ! -f "$HOSTED_PUBLISH_CONFIG/mog/registries.toml" ]]; then
+if [[ ! -f "$HOSTED_PUBLISH_CONFIG/kelvra/registries.toml" ]]; then
     echo "[FAIL] login should store hosted registry credentials in registries.toml"
     exit 1
 fi
 
-if [[ -f "$HOSTED_PUBLISH_CONFIG/mog/auth.toml" ]]; then
+if [[ -f "$HOSTED_PUBLISH_CONFIG/kelvra/auth.toml" ]]; then
     echo "[FAIL] login should stop writing new credentials to auth.toml"
     exit 1
 fi
 
-if ! grep -Fq 'token = "'"$HOSTED_TOKEN"'"' "$HOSTED_PUBLISH_CONFIG/mog/registries.toml"; then
+if ! grep -Fq 'token = "'"$HOSTED_TOKEN"'"' "$HOSTED_PUBLISH_CONFIG/kelvra/registries.toml"; then
     echo "[FAIL] login should persist the hosted registry token in registries.toml"
-    cat "$HOSTED_PUBLISH_CONFIG/mog/registries.toml"
+    cat "$HOSTED_PUBLISH_CONFIG/kelvra/registries.toml"
     exit 1
 fi
 
 if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
-    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg >/dev/null); then
+    "$KELVRA" publish --signing-key "$HOSTED_KEY_FILE" pkg >/dev/null); then
     echo "[FAIL] publish should upload a hosted registry package"
     exit 1
 fi
@@ -2623,7 +2623,7 @@ fi
 
 if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
-    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg >/dev/null); then
+    "$KELVRA" publish --signing-key "$HOSTED_KEY_FILE" pkg >/dev/null); then
     echo "[FAIL] repeated hosted publish with identical contents should remain idempotent"
     exit 1
 fi
@@ -2631,34 +2631,34 @@ fi
 touch "$HOSTED_REGISTRY_DIR/conflict-once"
 if (cd "$HOSTED_PUBLISH_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
-    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg \
-    >/tmp/mog_hosted_conflict_failure.txt 2>&1); then
+    "$KELVRA" publish --signing-key "$HOSTED_KEY_FILE" pkg \
+    >/tmp/kelvra_hosted_conflict_failure.txt 2>&1); then
     echo "[FAIL] hosted publish should fail when the registry index changes concurrently"
-    cat /tmp/mog_hosted_conflict_failure.txt
+    cat /tmp/kelvra_hosted_conflict_failure.txt
     exit 1
 fi
 
-if ! grep -Eq "index.toml changed|Rerun 'mog publish'|412" \
-    /tmp/mog_hosted_conflict_failure.txt; then
+if ! grep -Eq "index.toml changed|Rerun 'kelvra publish'|412" \
+    /tmp/kelvra_hosted_conflict_failure.txt; then
     echo "[FAIL] hosted publish conflict should explain the stale registry index"
-    cat /tmp/mog_hosted_conflict_failure.txt
+    cat /tmp/kelvra_hosted_conflict_failure.txt
     exit 1
 fi
 
 touch "$HOSTED_REGISTRY_DIR/disable-index-etag"
 if (cd "$HOSTED_PUBLISH_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
-    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg \
-    >/tmp/mog_hosted_missing_etag_failure.txt 2>&1); then
+    "$KELVRA" publish --signing-key "$HOSTED_KEY_FILE" pkg \
+    >/tmp/kelvra_hosted_missing_etag_failure.txt 2>&1); then
     echo "[FAIL] registry-service.v1 publish should require an ETag on index downloads"
-    cat /tmp/mog_hosted_missing_etag_failure.txt
+    cat /tmp/kelvra_hosted_missing_etag_failure.txt
     exit 1
 fi
 rm -f "$HOSTED_REGISTRY_DIR/disable-index-etag"
 
-if ! grep -Eq "ETag|registry-service.v1" /tmp/mog_hosted_missing_etag_failure.txt; then
+if ! grep -Eq "ETag|registry-service.v1" /tmp/kelvra_hosted_missing_etag_failure.txt; then
     echo "[FAIL] missing ETag failure should mention the hosted protocol requirement"
-    cat /tmp/mog_hosted_missing_etag_failure.txt
+    cat /tmp/kelvra_hosted_missing_etag_failure.txt
     exit 1
 fi
 
@@ -2682,7 +2682,7 @@ EOF_HOSTED_POLICY
 HOSTED_POLICY_WORKSPACE="$(mktemp -d)"
 HOSTED_POLICY_CONFIG="$TEMP_DIR/hosted-policy-config"
 mkdir -p "$HOSTED_POLICY_WORKSPACE/pkg/src"
-cat > "$HOSTED_POLICY_WORKSPACE/mog.toml" <<EOF_HOSTED_POLICY_ROOT
+cat > "$HOSTED_POLICY_WORKSPACE/kelvra.toml" <<EOF_HOSTED_POLICY_ROOT
 kind = "project"
 name = "hosted-policy-root"
 version = "0.1.0"
@@ -2692,7 +2692,7 @@ description = "hosted policy root"
 index = "http://127.0.0.1:$HOSTED_POLICY_PORT/index.toml"
 allow_insecure = true
 EOF_HOSTED_POLICY_ROOT
-cat > "$HOSTED_POLICY_WORKSPACE/pkg/mog.toml" <<'EOF_HOSTED_POLICY_PACKAGE'
+cat > "$HOSTED_POLICY_WORKSPACE/pkg/kelvra.toml" <<'EOF_HOSTED_POLICY_PACKAGE'
 kind = "source"
 import_name = "policy_util"
 namespace = "acme"
@@ -2700,16 +2700,16 @@ name = "policy-util"
 version = "1.0.0"
 license = "MIT"
 description = "Hosted publish policy package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_HOSTED_POLICY_PACKAGE
-cat > "$HOSTED_POLICY_WORKSPACE/pkg/src/main.mog" <<'EOF_HOSTED_POLICY_SRC'
+cat > "$HOSTED_POLICY_WORKSPACE/pkg/src/main.kel" <<'EOF_HOSTED_POLICY_SRC'
 fn Name() str {
     return "policy util"
 }
 EOF_HOSTED_POLICY_SRC
 mkdir -p "$HOSTED_POLICY_WORKSPACE/bad-pkg/src"
-cat > "$HOSTED_POLICY_WORKSPACE/bad-pkg/mog.toml" <<'EOF_HOSTED_POLICY_BAD_PACKAGE'
+cat > "$HOSTED_POLICY_WORKSPACE/bad-pkg/kelvra.toml" <<'EOF_HOSTED_POLICY_BAD_PACKAGE'
 kind = "source"
 import_name = "bad_policy_util"
 namespace = "other"
@@ -2717,79 +2717,79 @@ name = "bad-policy-util"
 version = "1.0.0"
 license = "MIT"
 description = "Hosted publish policy disallowed package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_HOSTED_POLICY_BAD_PACKAGE
-cat > "$HOSTED_POLICY_WORKSPACE/bad-pkg/src/main.mog" <<'EOF_HOSTED_POLICY_BAD_SRC'
+cat > "$HOSTED_POLICY_WORKSPACE/bad-pkg/src/main.kel" <<'EOF_HOSTED_POLICY_BAD_SRC'
 fn Name() str {
     return "bad policy util"
 }
 EOF_HOSTED_POLICY_BAD_SRC
 git -C "$HOSTED_POLICY_WORKSPACE" init >/dev/null
-git -C "$HOSTED_POLICY_WORKSPACE" config user.email "mog@example.invalid"
-git -C "$HOSTED_POLICY_WORKSPACE" config user.name "Mog Test"
+git -C "$HOSTED_POLICY_WORKSPACE" config user.email "kelvra@example.invalid"
+git -C "$HOSTED_POLICY_WORKSPACE" config user.name "Kelvra Test"
 git -C "$HOSTED_POLICY_WORKSPACE" add .
 git -C "$HOSTED_POLICY_WORKSPACE" commit -m "initial hosted policy package" >/dev/null
 git -C "$HOSTED_POLICY_WORKSPACE" tag v1.0.0
 
 if ! (cd "$HOSTED_POLICY_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_POLICY_CONFIG" \
-    "$MOG" login default --token "$HOSTED_TOKEN" >/dev/null); then
+    "$KELVRA" login default --token "$HOSTED_TOKEN" >/dev/null); then
     echo "[FAIL] hosted policy test should store registry credentials"
     exit 1
 fi
 
 if (cd "$HOSTED_POLICY_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_POLICY_CONFIG" \
-    "$MOG" publish --tag v1.0.0 pkg \
-    >/tmp/mog_hosted_policy_unsigned_failure.txt 2>&1); then
+    "$KELVRA" publish --tag v1.0.0 pkg \
+    >/tmp/kelvra_hosted_policy_unsigned_failure.txt 2>&1); then
     echo "[FAIL] hosted publish policy should reject unsigned publishes"
-    cat /tmp/mog_hosted_policy_unsigned_failure.txt
+    cat /tmp/kelvra_hosted_policy_unsigned_failure.txt
     exit 1
 fi
-if ! grep -Fq "requires signed publishes" /tmp/mog_hosted_policy_unsigned_failure.txt; then
+if ! grep -Fq "requires signed publishes" /tmp/kelvra_hosted_policy_unsigned_failure.txt; then
     echo "[FAIL] unsigned publish policy failure should mention signed publishes"
-    cat /tmp/mog_hosted_policy_unsigned_failure.txt
+    cat /tmp/kelvra_hosted_policy_unsigned_failure.txt
     exit 1
 fi
 
 if (cd "$HOSTED_POLICY_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_POLICY_CONFIG" \
-    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg \
-    >/tmp/mog_hosted_policy_tag_failure.txt 2>&1); then
+    "$KELVRA" publish --signing-key "$HOSTED_KEY_FILE" pkg \
+    >/tmp/kelvra_hosted_policy_tag_failure.txt 2>&1); then
     echo "[FAIL] hosted publish policy should require version tags"
-    cat /tmp/mog_hosted_policy_tag_failure.txt
+    cat /tmp/kelvra_hosted_policy_tag_failure.txt
     exit 1
 fi
-if ! grep -Fq "requires a version tag" /tmp/mog_hosted_policy_tag_failure.txt; then
+if ! grep -Fq "requires a version tag" /tmp/kelvra_hosted_policy_tag_failure.txt; then
     echo "[FAIL] tag policy failure should mention --tag"
-    cat /tmp/mog_hosted_policy_tag_failure.txt
+    cat /tmp/kelvra_hosted_policy_tag_failure.txt
     exit 1
 fi
 
 if (cd "$HOSTED_POLICY_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_POLICY_CONFIG" \
-    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" --tag v1.0.0 bad-pkg \
-    >/tmp/mog_hosted_policy_namespace_failure.txt 2>&1); then
+    "$KELVRA" publish --signing-key "$HOSTED_KEY_FILE" --tag v1.0.0 bad-pkg \
+    >/tmp/kelvra_hosted_policy_namespace_failure.txt 2>&1); then
     echo "[FAIL] hosted publish policy should reject disallowed namespaces"
-    cat /tmp/mog_hosted_policy_namespace_failure.txt
+    cat /tmp/kelvra_hosted_policy_namespace_failure.txt
     exit 1
 fi
-if ! grep -Fq "disallows package namespace" /tmp/mog_hosted_policy_namespace_failure.txt; then
+if ! grep -Fq "disallows package namespace" /tmp/kelvra_hosted_policy_namespace_failure.txt; then
     echo "[FAIL] namespace policy failure should mention the disallowed namespace"
-    cat /tmp/mog_hosted_policy_namespace_failure.txt
+    cat /tmp/kelvra_hosted_policy_namespace_failure.txt
     exit 1
 fi
 
 if ! (cd "$HOSTED_POLICY_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_POLICY_CONFIG" \
-    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" --tag v1.0.0 pkg >/dev/null); then
+    "$KELVRA" publish --signing-key "$HOSTED_KEY_FILE" --tag v1.0.0 pkg >/dev/null); then
     echo "[FAIL] hosted publish policy should allow signed clean tagged publishes"
     exit 1
 fi
 
 HOSTED_CONSUMER_DIR="$(mktemp -d)"
-cat > "$HOSTED_CONSUMER_DIR/mog.toml" <<EOF_HOSTED_CONSUMER
+cat > "$HOSTED_CONSUMER_DIR/kelvra.toml" <<EOF_HOSTED_CONSUMER
 kind = "project"
 name = "hosted-consumer"
 version = "0.1.0"
@@ -2803,19 +2803,19 @@ trusted_keys = ["$HOSTED_TRUSTED_KEY"]
 hosted_util = { package = "acme:hosted-util", version = "1.0.0" }
 EOF_HOSTED_CONSUMER
 
-cat > "$HOSTED_CONSUMER_DIR/app.mog" <<'EOF_HOSTED_APP'
+cat > "$HOSTED_CONSUMER_DIR/app.kel" <<'EOF_HOSTED_APP'
 const hosted_util = @import("hosted_util")
 print(hosted_util.Name())
 EOF_HOSTED_APP
 
 if ! (cd "$HOSTED_CONSUMER_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
-    "$MOG" install >/dev/null); then
+    "$KELVRA" install >/dev/null); then
     echo "[FAIL] install should download hosted registry packages"
     exit 1
 fi
 
-HOSTED_OUTPUT="$("$MOG" run "$HOSTED_CONSUMER_DIR/app.mog")"
+HOSTED_OUTPUT="$("$KELVRA" run "$HOSTED_CONSUMER_DIR/app.kel")"
 if [[ "$HOSTED_OUTPUT" != *"utility from hosted registry"* ]]; then
     echo "[FAIL] run should execute hosted registry packages"
     echo "$HOSTED_OUTPUT"
@@ -2824,7 +2824,7 @@ fi
 
 HOSTED_UNTRUSTED_DIR="$TEMP_DIR/hosted-untrusted"
 mkdir -p "$HOSTED_UNTRUSTED_DIR"
-cat > "$HOSTED_UNTRUSTED_DIR/mog.toml" <<EOF_HOSTED_UNTRUSTED
+cat > "$HOSTED_UNTRUSTED_DIR/kelvra.toml" <<EOF_HOSTED_UNTRUSTED
 kind = "project"
 name = "hosted-untrusted"
 version = "0.1.0"
@@ -2836,27 +2836,27 @@ index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
 [dependencies]
 hosted_util = { package = "acme:hosted-util", version = "1.0.0" }
 EOF_HOSTED_UNTRUSTED
-cp "$HOSTED_CONSUMER_DIR/app.mog" "$HOSTED_UNTRUSTED_DIR/app.mog"
+cp "$HOSTED_CONSUMER_DIR/app.kel" "$HOSTED_UNTRUSTED_DIR/app.kel"
 
 if (cd "$HOSTED_UNTRUSTED_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
-    "$MOG" install \
-    >/tmp/mog_hosted_untrusted_failure.txt 2>&1); then
+    "$KELVRA" install \
+    >/tmp/kelvra_hosted_untrusted_failure.txt 2>&1); then
     echo "[FAIL] hosted registries should require trusted_keys by default"
-    cat /tmp/mog_hosted_untrusted_failure.txt
+    cat /tmp/kelvra_hosted_untrusted_failure.txt
     exit 1
 fi
 
-if ! grep -Eq "trusted_keys|signed registry" /tmp/mog_hosted_untrusted_failure.txt; then
+if ! grep -Eq "trusted_keys|signed registry" /tmp/kelvra_hosted_untrusted_failure.txt; then
     echo "[FAIL] hosted trust failure should explain the missing trusted_keys requirement"
-    cat /tmp/mog_hosted_untrusted_failure.txt
+    cat /tmp/kelvra_hosted_untrusted_failure.txt
     exit 1
 fi
 
 HOSTED_BOOTSTRAP_DIR="$TEMP_DIR/hosted-bootstrap"
 HOSTED_BOOTSTRAP_CONFIG="$TEMP_DIR/hosted-bootstrap-config"
 mkdir -p "$HOSTED_BOOTSTRAP_DIR"
-cat > "$HOSTED_BOOTSTRAP_DIR/mog.toml" <<EOF_HOSTED_BOOTSTRAP
+cat > "$HOSTED_BOOTSTRAP_DIR/kelvra.toml" <<EOF_HOSTED_BOOTSTRAP
 kind = "project"
 name = "hosted-bootstrap"
 version = "0.1.0"
@@ -2868,11 +2868,11 @@ index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
 [dependencies]
 hosted_util = { package = "acme:hosted-util", version = "1.0.0" }
 EOF_HOSTED_BOOTSTRAP
-cp "$HOSTED_CONSUMER_DIR/app.mog" "$HOSTED_BOOTSTRAP_DIR/app.mog"
+cp "$HOSTED_CONSUMER_DIR/app.kel" "$HOSTED_BOOTSTRAP_DIR/app.kel"
 
 if ! (cd "$HOSTED_BOOTSTRAP_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
-    "$MOG" registry trust default --bootstrap >/dev/null); then
+    "$KELVRA" registry trust default --bootstrap >/dev/null); then
     echo "[FAIL] registry trust --bootstrap should import hosted registry public keys from the hosted registry root"
     exit 1
 fi
@@ -2880,7 +2880,7 @@ fi
 HOSTED_BOOTSTRAP_STATUS="$(
     cd "$HOSTED_BOOTSTRAP_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
-    "$MOG" registry status default
+    "$KELVRA" registry status default
 )"
 if [[ "$HOSTED_BOOTSTRAP_STATUS" != *"trust = user"* ]] || \
    [[ "$HOSTED_BOOTSTRAP_STATUS" != *"trusted_key_ids = hosted-registry"* ]] || \
@@ -2892,7 +2892,7 @@ fi
 
 if ! (cd "$HOSTED_BOOTSTRAP_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
-    "$MOG" registry login default --token "$HOSTED_TOKEN" >/dev/null); then
+    "$KELVRA" registry login default --token "$HOSTED_TOKEN" >/dev/null); then
     echo "[FAIL] registry login should store hosted registry tokens"
     exit 1
 fi
@@ -2900,7 +2900,7 @@ fi
 HOSTED_LIST_OUTPUT="$(
     cd "$HOSTED_BOOTSTRAP_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
-    "$MOG" registry list
+    "$KELVRA" registry list
 )"
 if [[ "$HOSTED_LIST_OUTPUT" != *"index = http://127.0.0.1:$HOSTED_PORT/index.toml"* ]] || \
    [[ "$HOSTED_LIST_OUTPUT" != *"trusted_key_ids = hosted-registry"* ]] || \
@@ -2912,20 +2912,20 @@ fi
 
 if ! (cd "$HOSTED_BOOTSTRAP_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
-    MOG_CACHE_DIR="$TEMP_DIR/hosted-bootstrap-cache" \
-    "$MOG" install >/dev/null); then
+    KELVRA_CACHE_DIR="$TEMP_DIR/hosted-bootstrap-cache" \
+    "$KELVRA" install >/dev/null); then
     echo "[FAIL] registry trust/login should bootstrap hosted installs without project trusted_keys"
     exit 1
 fi
 
-if [[ "$(cd "$HOSTED_BOOTSTRAP_DIR" && "$MOG" run app.mog)" != *"utility from hosted registry"* ]]; then
+if [[ "$(cd "$HOSTED_BOOTSTRAP_DIR" && "$KELVRA" run app.kel)" != *"utility from hosted registry"* ]]; then
     echo "[FAIL] bootstrap-installed hosted packages should execute normally"
     exit 1
 fi
 
 HOSTED_BOOTSTRAP_MISSING_KEY_DIR="$TEMP_DIR/hosted-bootstrap-missing-key"
 mkdir -p "$HOSTED_BOOTSTRAP_MISSING_KEY_DIR"
-cat > "$HOSTED_BOOTSTRAP_MISSING_KEY_DIR/mog.toml" <<EOF_HOSTED_BOOTSTRAP_MISSING_KEY
+cat > "$HOSTED_BOOTSTRAP_MISSING_KEY_DIR/kelvra.toml" <<EOF_HOSTED_BOOTSTRAP_MISSING_KEY
 kind = "project"
 name = "hosted-bootstrap-missing-key"
 version = "0.1.0"
@@ -2937,17 +2937,17 @@ EOF_HOSTED_BOOTSTRAP_MISSING_KEY
 
 if (cd "$HOSTED_BOOTSTRAP_MISSING_KEY_DIR" && \
     XDG_CONFIG_HOME="$TEMP_DIR/hosted-bootstrap-missing-key-config" \
-    "$MOG" registry trust default --bootstrap \
-    >/tmp/mog_hosted_bootstrap_missing_key_failure.txt 2>&1); then
+    "$KELVRA" registry trust default --bootstrap \
+    >/tmp/kelvra_hosted_bootstrap_missing_key_failure.txt 2>&1); then
     echo "[FAIL] registry trust --bootstrap should fail when registry-public-key.v1 is missing"
-    cat /tmp/mog_hosted_bootstrap_missing_key_failure.txt
+    cat /tmp/kelvra_hosted_bootstrap_missing_key_failure.txt
     exit 1
 fi
 
 if ! grep -Eq "registry-public-key.v1|404|bootstrap trust" \
-    /tmp/mog_hosted_bootstrap_missing_key_failure.txt; then
+    /tmp/kelvra_hosted_bootstrap_missing_key_failure.txt; then
     echo "[FAIL] missing hosted bootstrap key failure should mention the missing hosted key file"
-    cat /tmp/mog_hosted_bootstrap_missing_key_failure.txt
+    cat /tmp/kelvra_hosted_bootstrap_missing_key_failure.txt
     exit 1
 fi
 
@@ -2959,7 +2959,7 @@ EOF_BAD_HOSTED_KEY
 
 HOSTED_BOOTSTRAP_BAD_KEY_DIR="$TEMP_DIR/hosted-bootstrap-bad-key"
 mkdir -p "$HOSTED_BOOTSTRAP_BAD_KEY_DIR"
-cat > "$HOSTED_BOOTSTRAP_BAD_KEY_DIR/mog.toml" <<EOF_HOSTED_BOOTSTRAP_BAD_KEY
+cat > "$HOSTED_BOOTSTRAP_BAD_KEY_DIR/kelvra.toml" <<EOF_HOSTED_BOOTSTRAP_BAD_KEY
 kind = "project"
 name = "hosted-bootstrap-bad-key"
 version = "0.1.0"
@@ -2971,23 +2971,23 @@ EOF_HOSTED_BOOTSTRAP_BAD_KEY
 
 if (cd "$HOSTED_BOOTSTRAP_BAD_KEY_DIR" && \
     XDG_CONFIG_HOME="$TEMP_DIR/hosted-bootstrap-bad-key-config" \
-    "$MOG" registry trust default --bootstrap \
-    >/tmp/mog_hosted_bootstrap_bad_key_failure.txt 2>&1); then
+    "$KELVRA" registry trust default --bootstrap \
+    >/tmp/kelvra_hosted_bootstrap_bad_key_failure.txt 2>&1); then
     echo "[FAIL] registry trust --bootstrap should fail when the hosted public key file is malformed"
-    cat /tmp/mog_hosted_bootstrap_bad_key_failure.txt
+    cat /tmp/kelvra_hosted_bootstrap_bad_key_failure.txt
     exit 1
 fi
 
 if ! grep -Eq "public key|key_id|bootstrap trust" \
-    /tmp/mog_hosted_bootstrap_bad_key_failure.txt; then
+    /tmp/kelvra_hosted_bootstrap_bad_key_failure.txt; then
     echo "[FAIL] malformed hosted bootstrap key failure should explain the invalid public key file"
-    cat /tmp/mog_hosted_bootstrap_bad_key_failure.txt
+    cat /tmp/kelvra_hosted_bootstrap_bad_key_failure.txt
     exit 1
 fi
 
 HOSTED_ALIAS_REUSE_DIR="$TEMP_DIR/hosted-alias-reuse"
 mkdir -p "$HOSTED_ALIAS_REUSE_DIR"
-cat > "$HOSTED_ALIAS_REUSE_DIR/mog.toml" <<EOF_HOSTED_ALIAS
+cat > "$HOSTED_ALIAS_REUSE_DIR/kelvra.toml" <<EOF_HOSTED_ALIAS
 kind = "project"
 name = "hosted-alias-reuse"
 version = "0.1.0"
@@ -2999,12 +2999,12 @@ index = "http://127.0.0.1:$HOSTED_PORT/index.toml"
 [dependencies]
 hosted_util = { package = "acme:hosted-util", version = "1.0.0", registry = "internal" }
 EOF_HOSTED_ALIAS
-cp "$HOSTED_CONSUMER_DIR/app.mog" "$HOSTED_ALIAS_REUSE_DIR/app.mog"
+cp "$HOSTED_CONSUMER_DIR/app.kel" "$HOSTED_ALIAS_REUSE_DIR/app.kel"
 
 if ! (cd "$HOSTED_ALIAS_REUSE_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
-    MOG_CACHE_DIR="$TEMP_DIR/hosted-alias-cache" \
-    "$MOG" install >/dev/null); then
+    KELVRA_CACHE_DIR="$TEMP_DIR/hosted-alias-cache" \
+    "$KELVRA" install >/dev/null); then
     echo "[FAIL] stored hosted trust and tokens should be reused across aliases for the same registry URL"
     exit 1
 fi
@@ -3012,7 +3012,7 @@ fi
 HOSTED_ALIAS_STATUS="$(
     cd "$HOSTED_ALIAS_REUSE_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
-    "$MOG" registry status internal
+    "$KELVRA" registry status internal
 )"
 if [[ "$HOSTED_ALIAS_STATUS" != *"trust = user"* ]] || \
    [[ "$HOSTED_ALIAS_STATUS" != *"token = yes"* ]]; then
@@ -3023,42 +3023,42 @@ fi
 
 if ! (cd "$HOSTED_ALIAS_REUSE_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
-    "$MOG" registry untrust internal --key-id hosted-registry >/dev/null); then
+    "$KELVRA" registry untrust internal --key-id hosted-registry >/dev/null); then
     echo "[FAIL] registry untrust should remove stored user trust"
     exit 1
 fi
 
 HOSTED_AFTER_UNTRUST_DIR="$TEMP_DIR/hosted-after-untrust"
 mkdir -p "$HOSTED_AFTER_UNTRUST_DIR"
-cp "$HOSTED_ALIAS_REUSE_DIR/mog.toml" "$HOSTED_AFTER_UNTRUST_DIR/mog.toml"
-cp "$HOSTED_ALIAS_REUSE_DIR/app.mog" "$HOSTED_AFTER_UNTRUST_DIR/app.mog"
+cp "$HOSTED_ALIAS_REUSE_DIR/kelvra.toml" "$HOSTED_AFTER_UNTRUST_DIR/kelvra.toml"
+cp "$HOSTED_ALIAS_REUSE_DIR/app.kel" "$HOSTED_AFTER_UNTRUST_DIR/app.kel"
 
 if (cd "$HOSTED_AFTER_UNTRUST_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
-    MOG_CACHE_DIR="$TEMP_DIR/hosted-after-untrust-cache" \
-    "$MOG" install >/tmp/mog_hosted_after_untrust_failure.txt 2>&1); then
+    KELVRA_CACHE_DIR="$TEMP_DIR/hosted-after-untrust-cache" \
+    "$KELVRA" install >/tmp/kelvra_hosted_after_untrust_failure.txt 2>&1); then
     echo "[FAIL] registry untrust should cause hosted installs to fail again when no project trust remains"
-    cat /tmp/mog_hosted_after_untrust_failure.txt
+    cat /tmp/kelvra_hosted_after_untrust_failure.txt
     exit 1
 fi
 
-if ! grep -Eq "trusted_keys|unknown key|signed registry" /tmp/mog_hosted_after_untrust_failure.txt; then
+if ! grep -Eq "trusted_keys|unknown key|signed registry" /tmp/kelvra_hosted_after_untrust_failure.txt; then
     echo "[FAIL] hosted installs after untrust should explain the missing registry trust"
-    cat /tmp/mog_hosted_after_untrust_failure.txt
+    cat /tmp/kelvra_hosted_after_untrust_failure.txt
     exit 1
 fi
 
 if ! (cd "$HOSTED_ALIAS_REUSE_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
-    "$MOG" registry trust internal --key-file "$HOSTED_KEY_FILE" >/dev/null); then
+    "$KELVRA" registry trust internal --key-file "$HOSTED_KEY_FILE" >/dev/null); then
     echo "[FAIL] registry trust should also accept registry-key.v1 files"
     exit 1
 fi
 
 if ! (cd "$HOSTED_AFTER_UNTRUST_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_BOOTSTRAP_CONFIG" \
-    MOG_CACHE_DIR="$TEMP_DIR/hosted-restored-trust-cache" \
-    "$MOG" install >/dev/null); then
+    KELVRA_CACHE_DIR="$TEMP_DIR/hosted-restored-trust-cache" \
+    "$KELVRA" install >/dev/null); then
     echo "[FAIL] restoring trust from registry-key.v1 should allow hosted installs again"
     exit 1
 fi
@@ -3076,7 +3076,7 @@ HOSTED_ROTATED_TRUSTED_KEY="$(trusted_key_spec "$HOSTED_ROTATED_KEY_FILE")"
 mkdir -p "$ROTATION_REGISTRY_A" "$ROTATION_REGISTRY_B"
 mkdir -p "$ROTATION_PUBLISH_A/pkg/src" "$ROTATION_PUBLISH_B/pkg/src"
 
-cat > "$ROTATION_PUBLISH_A/mog.toml" <<EOF_ROTATION_PUBLISH_A
+cat > "$ROTATION_PUBLISH_A/kelvra.toml" <<EOF_ROTATION_PUBLISH_A
 kind = "project"
 name = "rotation-publish-a"
 version = "0.1.0"
@@ -3087,7 +3087,7 @@ index = "$ROTATION_REGISTRY_A/index.toml"
 trusted_keys = ["$HOSTED_TRUSTED_KEY"]
 EOF_ROTATION_PUBLISH_A
 
-cat > "$ROTATION_PUBLISH_B/mog.toml" <<EOF_ROTATION_PUBLISH_B
+cat > "$ROTATION_PUBLISH_B/kelvra.toml" <<EOF_ROTATION_PUBLISH_B
 kind = "project"
 name = "rotation-publish-b"
 version = "0.1.0"
@@ -3098,7 +3098,7 @@ index = "$ROTATION_REGISTRY_B/index.toml"
 trusted_keys = ["$HOSTED_ROTATED_TRUSTED_KEY"]
 EOF_ROTATION_PUBLISH_B
 
-cat > "$ROTATION_PUBLISH_A/pkg/mog.toml" <<'EOF_ROTATION_PACKAGE'
+cat > "$ROTATION_PUBLISH_A/pkg/kelvra.toml" <<'EOF_ROTATION_PACKAGE'
 kind = "source"
 import_name = "rotation_util"
 namespace = "acme"
@@ -3107,28 +3107,28 @@ version = "1.0.0"
 license = "MIT"
 author = "Rotation test"
 description = "Rotation utility package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_ROTATION_PACKAGE
-cp "$ROTATION_PUBLISH_A/pkg/mog.toml" "$ROTATION_PUBLISH_B/pkg/mog.toml"
+cp "$ROTATION_PUBLISH_A/pkg/kelvra.toml" "$ROTATION_PUBLISH_B/pkg/kelvra.toml"
 
-cat > "$ROTATION_PUBLISH_A/pkg/src/main.mog" <<'EOF_ROTATION_PACKAGE_SRC'
+cat > "$ROTATION_PUBLISH_A/pkg/src/main.kel" <<'EOF_ROTATION_PACKAGE_SRC'
 const MESSAGE str = "utility from rotated hosted registry"
 
 fn Name() str {
     return MESSAGE
 }
 EOF_ROTATION_PACKAGE_SRC
-cp "$ROTATION_PUBLISH_A/pkg/src/main.mog" "$ROTATION_PUBLISH_B/pkg/src/main.mog"
+cp "$ROTATION_PUBLISH_A/pkg/src/main.kel" "$ROTATION_PUBLISH_B/pkg/src/main.kel"
 
 if ! (cd "$ROTATION_PUBLISH_A" && \
-    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" pkg >/dev/null); then
+    "$KELVRA" publish --signing-key "$HOSTED_KEY_FILE" pkg >/dev/null); then
     echo "[FAIL] rotation test setup should publish a source package signed by the original key"
     exit 1
 fi
 
 if ! (cd "$ROTATION_PUBLISH_B" && \
-    "$MOG" publish --signing-key "$HOSTED_ROTATED_KEY_FILE" pkg >/dev/null); then
+    "$KELVRA" publish --signing-key "$HOSTED_ROTATED_KEY_FILE" pkg >/dev/null); then
     echo "[FAIL] rotation test setup should publish a source package signed by the rotated key"
     exit 1
 fi
@@ -3163,7 +3163,7 @@ ROTATION_NO_METADATA_DIR="$TEMP_DIR/rotation-no-metadata"
 mkdir -p "$ROTATION_AUTO_DIR" "$ROTATION_OFFLINE_DIR" "$ROTATION_REVOKED_DIR" \
     "$ROTATION_REFRESH_DIR" "$ROTATION_REFRESH_USER_DIR" "$ROTATION_NO_METADATA_DIR"
 
-cat > "$ROTATION_AUTO_DIR/mog.toml" <<EOF_ROTATION_AUTO
+cat > "$ROTATION_AUTO_DIR/kelvra.toml" <<EOF_ROTATION_AUTO
 kind = "project"
 name = "rotation-auto"
 version = "0.1.0"
@@ -3176,35 +3176,35 @@ trusted_keys = ["$HOSTED_TRUSTED_KEY"]
 [dependencies]
 rotation_util = { package = "acme:rotation-util", version = "1.0.0" }
 EOF_ROTATION_AUTO
-cp "$ROTATION_AUTO_DIR/mog.toml" "$ROTATION_OFFLINE_DIR/mog.toml"
+cp "$ROTATION_AUTO_DIR/kelvra.toml" "$ROTATION_OFFLINE_DIR/kelvra.toml"
 
-cat > "$ROTATION_AUTO_DIR/app.mog" <<'EOF_ROTATION_APP'
+cat > "$ROTATION_AUTO_DIR/app.kel" <<'EOF_ROTATION_APP'
 const rotation_util = @import("rotation_util")
 print(rotation_util.Name())
 EOF_ROTATION_APP
-cp "$ROTATION_AUTO_DIR/app.mog" "$ROTATION_OFFLINE_DIR/app.mog"
+cp "$ROTATION_AUTO_DIR/app.kel" "$ROTATION_OFFLINE_DIR/app.kel"
 
 if ! (cd "$ROTATION_AUTO_DIR" && \
-    MOG_CACHE_DIR="$ROTATION_CACHE_DIR" \
-    MOG_REGISTRY_TOKEN="$HOSTED_TOKEN" \
-    "$MOG" install >/dev/null); then
+    KELVRA_CACHE_DIR="$ROTATION_CACHE_DIR" \
+    KELVRA_REGISTRY_TOKEN="$HOSTED_TOKEN" \
+    "$KELVRA" install >/dev/null); then
     echo "[FAIL] hosted installs should automatically apply signed trust metadata for rotated keys"
     exit 1
 fi
 
-if [[ "$(cd "$ROTATION_AUTO_DIR" && "$MOG" run app.mog)" != *"utility from rotated hosted registry"* ]]; then
+if [[ "$(cd "$ROTATION_AUTO_DIR" && "$KELVRA" run app.kel)" != *"utility from rotated hosted registry"* ]]; then
     echo "[FAIL] rotated hosted packages should execute normally after automatic trust metadata application"
     exit 1
 fi
 
 if ! (cd "$ROTATION_OFFLINE_DIR" && \
-    MOG_CACHE_DIR="$ROTATION_CACHE_DIR" \
-    "$MOG" install --offline >/dev/null); then
+    KELVRA_CACHE_DIR="$ROTATION_CACHE_DIR" \
+    "$KELVRA" install --offline >/dev/null); then
     echo "[FAIL] offline hosted installs should reuse cached registry trust metadata"
     exit 1
 fi
 
-cat > "$ROTATION_REVOKED_DIR/mog.toml" <<EOF_ROTATION_REVOKED
+cat > "$ROTATION_REVOKED_DIR/kelvra.toml" <<EOF_ROTATION_REVOKED
 kind = "project"
 name = "rotation-revoked"
 version = "0.1.0"
@@ -3217,24 +3217,24 @@ trusted_keys = ["$HOSTED_TRUSTED_KEY"]
 [dependencies]
 rotation_util = { package = "acme:rotation-util", version = "1.0.0" }
 EOF_ROTATION_REVOKED
-cp "$ROTATION_AUTO_DIR/app.mog" "$ROTATION_REVOKED_DIR/app.mog"
+cp "$ROTATION_AUTO_DIR/app.kel" "$ROTATION_REVOKED_DIR/app.kel"
 
 if (cd "$ROTATION_REVOKED_DIR" && \
-    MOG_CACHE_DIR="$TEMP_DIR/rotation-revoked-cache" \
-    MOG_REGISTRY_TOKEN="$HOSTED_TOKEN" \
-    "$MOG" install >/tmp/mog_rotation_revoked_failure.txt 2>&1); then
+    KELVRA_CACHE_DIR="$TEMP_DIR/rotation-revoked-cache" \
+    KELVRA_REGISTRY_TOKEN="$HOSTED_TOKEN" \
+    "$KELVRA" install >/tmp/kelvra_rotation_revoked_failure.txt 2>&1); then
     echo "[FAIL] registry installs should reject indexes signed by revoked keys"
-    cat /tmp/mog_rotation_revoked_failure.txt
+    cat /tmp/kelvra_rotation_revoked_failure.txt
     exit 1
 fi
 
-if ! grep -Eq "revoked key|unknown key" /tmp/mog_rotation_revoked_failure.txt; then
+if ! grep -Eq "revoked key|unknown key" /tmp/kelvra_rotation_revoked_failure.txt; then
     echo "[FAIL] revoked-key install failures should explain the rejected signing key"
-    cat /tmp/mog_rotation_revoked_failure.txt
+    cat /tmp/kelvra_rotation_revoked_failure.txt
     exit 1
 fi
 
-cat > "$ROTATION_NO_METADATA_DIR/mog.toml" <<EOF_ROTATION_NO_METADATA
+cat > "$ROTATION_NO_METADATA_DIR/kelvra.toml" <<EOF_ROTATION_NO_METADATA
 kind = "project"
 name = "rotation-no-metadata"
 version = "0.1.0"
@@ -3247,21 +3247,21 @@ EOF_ROTATION_NO_METADATA
 
 if (cd "$ROTATION_NO_METADATA_DIR" && \
     XDG_CONFIG_HOME="$ROTATION_REFRESH_CONFIG" \
-    "$MOG" registry trust default --refresh \
-    >/tmp/mog_rotation_refresh_missing_failure.txt 2>&1); then
+    "$KELVRA" registry trust default --refresh \
+    >/tmp/kelvra_rotation_refresh_missing_failure.txt 2>&1); then
     echo "[FAIL] registry trust --refresh should fail when registry-trust.v1 is missing"
-    cat /tmp/mog_rotation_refresh_missing_failure.txt
+    cat /tmp/kelvra_rotation_refresh_missing_failure.txt
     exit 1
 fi
 
 if ! grep -Eq "registry-trust.v1|trust refresh" \
-    /tmp/mog_rotation_refresh_missing_failure.txt; then
+    /tmp/kelvra_rotation_refresh_missing_failure.txt; then
     echo "[FAIL] missing trust metadata failures should mention registry-trust.v1"
-    cat /tmp/mog_rotation_refresh_missing_failure.txt
+    cat /tmp/kelvra_rotation_refresh_missing_failure.txt
     exit 1
 fi
 
-cat > "$ROTATION_REFRESH_DIR/mog.toml" <<EOF_ROTATION_REFRESH
+cat > "$ROTATION_REFRESH_DIR/kelvra.toml" <<EOF_ROTATION_REFRESH
 kind = "project"
 name = "rotation-refresh"
 version = "0.1.0"
@@ -3275,7 +3275,7 @@ EOF_ROTATION_REFRESH
 ROTATION_REFRESH_OUTPUT="$(
     cd "$ROTATION_REFRESH_DIR" && \
     XDG_CONFIG_HOME="$ROTATION_REFRESH_CONFIG" \
-    "$MOG" registry trust default --refresh
+    "$KELVRA" registry trust default --refresh
 )"
 if [[ "$ROTATION_REFRESH_OUTPUT" != *"trusted_key_ids = hosted-rotated"* ]] || \
    [[ "$ROTATION_REFRESH_OUTPUT" != *"revoked_key_ids = hosted-registry"* ]]; then
@@ -3284,10 +3284,10 @@ if [[ "$ROTATION_REFRESH_OUTPUT" != *"trusted_key_ids = hosted-rotated"* ]] || \
     exit 1
 fi
 
-if ! grep -Fq 'hosted-rotated' "$ROTATION_REFRESH_CONFIG/mog/registries.toml" || \
-   grep -Fq 'hosted-registry' "$ROTATION_REFRESH_CONFIG/mog/registries.toml"; then
+if ! grep -Fq 'hosted-rotated' "$ROTATION_REFRESH_CONFIG/kelvra/registries.toml" || \
+   grep -Fq 'hosted-registry' "$ROTATION_REFRESH_CONFIG/kelvra/registries.toml"; then
     echo "[FAIL] registry trust --refresh should rewrite stored user trust to the active key set"
-    cat "$ROTATION_REFRESH_CONFIG/mog/registries.toml"
+    cat "$ROTATION_REFRESH_CONFIG/kelvra/registries.toml"
     exit 1
 fi
 
@@ -3298,7 +3298,7 @@ write_signed_registry_trust \
     "$HOSTED_KEY_FILE" \
     "rotated to hosted-rotated"
 
-cat > "$ROTATION_REFRESH_USER_DIR/mog.toml" <<EOF_ROTATION_REFRESH_USER
+cat > "$ROTATION_REFRESH_USER_DIR/kelvra.toml" <<EOF_ROTATION_REFRESH_USER
 kind = "project"
 name = "rotation-refresh-user"
 version = "0.1.0"
@@ -3310,13 +3310,13 @@ index = "http://127.0.0.1:$HOSTED_PORT/rotation-b/index.toml"
 [dependencies]
 rotation_util = { package = "acme:rotation-util", version = "1.0.0" }
 EOF_ROTATION_REFRESH_USER
-cp "$ROTATION_AUTO_DIR/app.mog" "$ROTATION_REFRESH_USER_DIR/app.mog"
+cp "$ROTATION_AUTO_DIR/app.kel" "$ROTATION_REFRESH_USER_DIR/app.kel"
 
 if ! (cd "$ROTATION_REFRESH_USER_DIR" && \
     XDG_CONFIG_HOME="$ROTATION_REFRESH_CONFIG" \
-    MOG_CACHE_DIR="$TEMP_DIR/rotation-refresh-user-cache" \
-    MOG_REGISTRY_TOKEN="$HOSTED_TOKEN" \
-    "$MOG" install >/dev/null); then
+    KELVRA_CACHE_DIR="$TEMP_DIR/rotation-refresh-user-cache" \
+    KELVRA_REGISTRY_TOKEN="$HOSTED_TOKEN" \
+    "$KELVRA" install >/dev/null); then
     echo "[FAIL] refreshed user trust should allow hosted installs without project trusted_keys"
     exit 1
 fi
@@ -3324,7 +3324,7 @@ fi
 ROTATION_REFRESH_STATUS="$(
     cd "$ROTATION_REFRESH_USER_DIR" && \
     XDG_CONFIG_HOME="$ROTATION_REFRESH_CONFIG" \
-    "$MOG" registry status default
+    "$KELVRA" registry status default
 )"
 if [[ "$ROTATION_REFRESH_STATUS" != *"trust = user"* ]] || \
    [[ "$ROTATION_REFRESH_STATUS" != *"trusted_key_ids = hosted-rotated"* ]]; then
@@ -3335,27 +3335,27 @@ fi
 
 if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
-    "$MOG" logout default >/dev/null); then
+    "$KELVRA" logout default >/dev/null); then
     echo "[FAIL] logout should clear a hosted registry token"
     exit 1
 fi
 
 HOSTED_UNAUTH_DIR="$TEMP_DIR/hosted-unauth"
 mkdir -p "$HOSTED_UNAUTH_DIR"
-cp "$HOSTED_CONSUMER_DIR/mog.toml" "$HOSTED_UNAUTH_DIR/mog.toml"
-cp "$HOSTED_CONSUMER_DIR/app.mog" "$HOSTED_UNAUTH_DIR/app.mog"
+cp "$HOSTED_CONSUMER_DIR/kelvra.toml" "$HOSTED_UNAUTH_DIR/kelvra.toml"
+cp "$HOSTED_CONSUMER_DIR/app.kel" "$HOSTED_UNAUTH_DIR/app.kel"
 if (cd "$HOSTED_UNAUTH_DIR" && \
     XDG_CONFIG_HOME="$TEMP_DIR/hosted-empty-config" \
-    MOG_CACHE_DIR="$TEMP_DIR/hosted-empty-cache" \
-    "$MOG" install >/tmp/mog_hosted_auth_failure.txt 2>&1); then
+    KELVRA_CACHE_DIR="$TEMP_DIR/hosted-empty-cache" \
+    "$KELVRA" install >/tmp/kelvra_hosted_auth_failure.txt 2>&1); then
     echo "[FAIL] install should reject hosted registry downloads without credentials"
-    cat /tmp/mog_hosted_auth_failure.txt
+    cat /tmp/kelvra_hosted_auth_failure.txt
     exit 1
 fi
 
-if ! grep -Eq "401|download failed|unauthorized" /tmp/mog_hosted_auth_failure.txt; then
+if ! grep -Eq "401|download failed|unauthorized" /tmp/kelvra_hosted_auth_failure.txt; then
     echo "[FAIL] install should surface hosted registry auth failures"
-    cat /tmp/mog_hosted_auth_failure.txt
+    cat /tmp/kelvra_hosted_auth_failure.txt
     exit 1
 fi
 
@@ -3365,7 +3365,7 @@ strip_registry_index_signature "$HOSTED_REGISTRY_DIR"
 
 HOSTED_INSECURE_DIR="$TEMP_DIR/hosted-insecure"
 mkdir -p "$HOSTED_INSECURE_DIR"
-cat > "$HOSTED_INSECURE_DIR/mog.toml" <<EOF_HOSTED_INSECURE
+cat > "$HOSTED_INSECURE_DIR/kelvra.toml" <<EOF_HOSTED_INSECURE
 kind = "project"
 name = "hosted-insecure"
 version = "0.1.0"
@@ -3378,19 +3378,19 @@ allow_insecure = true
 [dependencies]
 hosted_util = { package = "acme:hosted-util", version = "1.0.0" }
 EOF_HOSTED_INSECURE
-cp "$HOSTED_CONSUMER_DIR/app.mog" "$HOSTED_INSECURE_DIR/app.mog"
+cp "$HOSTED_CONSUMER_DIR/app.kel" "$HOSTED_INSECURE_DIR/app.kel"
 
 if ! (cd "$HOSTED_INSECURE_DIR" && \
     XDG_CONFIG_HOME="$TEMP_DIR/xdg-config" \
-    "$MOG" login default --token "$HOSTED_TOKEN" >/dev/null && \
+    "$KELVRA" login default --token "$HOSTED_TOKEN" >/dev/null && \
     XDG_CONFIG_HOME="$TEMP_DIR/xdg-config" \
-    MOG_CACHE_DIR="$TEMP_DIR/hosted-insecure-cache" \
-    "$MOG" install >/dev/null); then
+    KELVRA_CACHE_DIR="$TEMP_DIR/hosted-insecure-cache" \
+    "$KELVRA" install >/dev/null); then
     echo "[FAIL] allow_insecure should permit unsigned hosted registry installs"
     exit 1
 fi
 
-HOSTED_INSECURE_OUTPUT="$("$MOG" run "$HOSTED_INSECURE_DIR/app.mog")"
+HOSTED_INSECURE_OUTPUT="$("$KELVRA" run "$HOSTED_INSECURE_DIR/app.kel")"
 if [[ "$HOSTED_INSECURE_OUTPUT" != *"utility from hosted registry"* ]]; then
     echo "[FAIL] allow_insecure hosted install should still run downloaded packages"
     echo "$HOSTED_INSECURE_OUTPUT"
@@ -3401,7 +3401,7 @@ cp "$HOSTED_SIGNED_INDEX_BACKUP" "$HOSTED_REGISTRY_DIR/index.toml"
 
 rm -f "$HOSTED_REGISTRY_DIR/registry-service.v1"
 mkdir -p "$HOSTED_PUBLISH_WORKSPACE/legacy-pkg/src"
-cat > "$HOSTED_PUBLISH_WORKSPACE/legacy-pkg/mog.toml" <<'EOF_HOSTED_LEGACY_PACKAGE'
+cat > "$HOSTED_PUBLISH_WORKSPACE/legacy-pkg/kelvra.toml" <<'EOF_HOSTED_LEGACY_PACKAGE'
 kind = "source"
 import_name = "legacy_util"
 namespace = "acme"
@@ -3410,11 +3410,11 @@ version = "1.0.0"
 license = "MIT"
 author = "Hosted registry legacy test"
 description = "Legacy hosted utility package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_HOSTED_LEGACY_PACKAGE
 
-cat > "$HOSTED_PUBLISH_WORKSPACE/legacy-pkg/src/main.mog" <<'EOF_HOSTED_LEGACY_SRC'
+cat > "$HOSTED_PUBLISH_WORKSPACE/legacy-pkg/src/main.kel" <<'EOF_HOSTED_LEGACY_SRC'
 const MESSAGE str = "utility from legacy hosted registry"
 
 fn Name() str {
@@ -3424,8 +3424,8 @@ EOF_HOSTED_LEGACY_SRC
 
 if ! (cd "$HOSTED_PUBLISH_WORKSPACE" && \
     XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
-    "$MOG" login default --token "$HOSTED_TOKEN" >/dev/null && \
-    "$MOG" publish --signing-key "$HOSTED_KEY_FILE" legacy-pkg >/dev/null); then
+    "$KELVRA" login default --token "$HOSTED_TOKEN" >/dev/null && \
+    "$KELVRA" publish --signing-key "$HOSTED_KEY_FILE" legacy-pkg >/dev/null); then
     echo "[FAIL] hosted publish should fall back to the legacy transport when registry-service.v1 is absent"
     exit 1
 fi
@@ -3439,7 +3439,7 @@ fi
 
 HOSTED_LEGACY_CONSUMER_DIR="$TEMP_DIR/hosted-legacy-consumer"
 mkdir -p "$HOSTED_LEGACY_CONSUMER_DIR"
-cat > "$HOSTED_LEGACY_CONSUMER_DIR/mog.toml" <<EOF_HOSTED_LEGACY_CONSUMER
+cat > "$HOSTED_LEGACY_CONSUMER_DIR/kelvra.toml" <<EOF_HOSTED_LEGACY_CONSUMER
 kind = "project"
 name = "hosted-legacy-consumer"
 version = "0.1.0"
@@ -3453,19 +3453,19 @@ trusted_keys = ["$HOSTED_TRUSTED_KEY"]
 legacy_util = { package = "acme:legacy-util", version = "1.0.0" }
 EOF_HOSTED_LEGACY_CONSUMER
 
-cat > "$HOSTED_LEGACY_CONSUMER_DIR/app.mog" <<'EOF_HOSTED_LEGACY_APP'
+cat > "$HOSTED_LEGACY_CONSUMER_DIR/app.kel" <<'EOF_HOSTED_LEGACY_APP'
 const legacy_util = @import("legacy_util")
 print(legacy_util.Name())
 EOF_HOSTED_LEGACY_APP
 
 if ! (cd "$HOSTED_LEGACY_CONSUMER_DIR" && \
     XDG_CONFIG_HOME="$HOSTED_PUBLISH_CONFIG" \
-    "$MOG" install >/dev/null); then
+    "$KELVRA" install >/dev/null); then
     echo "[FAIL] legacy hosted fallback should still produce installable packages"
     exit 1
 fi
 
-if [[ "$(cd "$HOSTED_LEGACY_CONSUMER_DIR" && "$MOG" run app.mog)" != *"utility from legacy hosted registry"* ]]; then
+if [[ "$(cd "$HOSTED_LEGACY_CONSUMER_DIR" && "$KELVRA" run app.kel)" != *"utility from legacy hosted registry"* ]]; then
     echo "[FAIL] legacy hosted fallback packages should execute normally"
     exit 1
 fi
@@ -3480,7 +3480,7 @@ mkdir -p "$AUDIT_REGISTRY_DIR"
 create_signing_key "$AUDIT_KEY_FILE" "audit-registry"
 AUDIT_TRUSTED_KEY="$(trusted_key_spec "$AUDIT_KEY_FILE")"
 
-cat > "$AUDIT_PUBLISH_WORKSPACE/mog.toml" <<EOF_AUDIT_PUBLISH_ROOT
+cat > "$AUDIT_PUBLISH_WORKSPACE/kelvra.toml" <<EOF_AUDIT_PUBLISH_ROOT
 kind = "project"
 name = "audit-publish-root"
 version = "0.1.0"
@@ -3491,7 +3491,7 @@ index = "$AUDIT_REGISTRY_DIR/index.toml"
 trusted_keys = ["$AUDIT_TRUSTED_KEY"]
 EOF_AUDIT_PUBLISH_ROOT
 
-cat > "$AUDIT_PUBLISH_WORKSPACE/pkg/mog.toml" <<'EOF_AUDIT_PACKAGE'
+cat > "$AUDIT_PUBLISH_WORKSPACE/pkg/kelvra.toml" <<'EOF_AUDIT_PACKAGE'
 kind = "source"
 import_name = "audit_util"
 namespace = "acme"
@@ -3500,11 +3500,11 @@ version = "1.0.0"
 license = "MIT"
 author = "Audit registry test"
 description = "Audit utility package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_AUDIT_PACKAGE
 
-cat > "$AUDIT_PUBLISH_WORKSPACE/pkg/src/main.mog" <<'EOF_AUDIT_PACKAGE_SRC'
+cat > "$AUDIT_PUBLISH_WORKSPACE/pkg/src/main.kel" <<'EOF_AUDIT_PACKAGE_SRC'
 const MESSAGE str = "utility from audit registry"
 
 fn Name() str {
@@ -3513,14 +3513,14 @@ fn Name() str {
 EOF_AUDIT_PACKAGE_SRC
 
 if ! (cd "$AUDIT_PUBLISH_WORKSPACE" && \
-    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" pkg >/dev/null); then
+    "$KELVRA" publish --signing-key "$AUDIT_KEY_FILE" pkg >/dev/null); then
     echo "[FAIL] signed local registry publish should succeed for audit tests"
     exit 1
 fi
 
 PUBLISH_GIT_SOURCE_CLEAN="$TEMP_DIR/publish-git-source-clean"
 mkdir -p "$PUBLISH_GIT_SOURCE_CLEAN/pkg/src"
-cat > "$PUBLISH_GIT_SOURCE_CLEAN/mog.toml" <<EOF_PUBLISH_GIT_SOURCE_ROOT
+cat > "$PUBLISH_GIT_SOURCE_CLEAN/kelvra.toml" <<EOF_PUBLISH_GIT_SOURCE_ROOT
 kind = "project"
 name = "publish-git-source-root"
 version = "0.1.0"
@@ -3531,7 +3531,7 @@ index = "$AUDIT_REGISTRY_DIR/index.toml"
 trusted_keys = ["$AUDIT_TRUSTED_KEY"]
 EOF_PUBLISH_GIT_SOURCE_ROOT
 
-cat > "$PUBLISH_GIT_SOURCE_CLEAN/pkg/mog.toml" <<'EOF_PUBLISH_GIT_SOURCE_PACKAGE'
+cat > "$PUBLISH_GIT_SOURCE_CLEAN/pkg/kelvra.toml" <<'EOF_PUBLISH_GIT_SOURCE_PACKAGE'
 kind = "source"
 import_name = "publish_git_source"
 namespace = "acme"
@@ -3540,11 +3540,11 @@ version = "1.2.3"
 license = "MIT"
 author = "Publish git test"
 description = "Git-guarded source publish package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_PUBLISH_GIT_SOURCE_PACKAGE
 
-cat > "$PUBLISH_GIT_SOURCE_CLEAN/pkg/src/main.mog" <<'EOF_PUBLISH_GIT_SOURCE_SRC'
+cat > "$PUBLISH_GIT_SOURCE_CLEAN/pkg/src/main.kel" <<'EOF_PUBLISH_GIT_SOURCE_SRC'
 const MESSAGE str = "publish source"
 
 fn Name() str {
@@ -3553,8 +3553,8 @@ fn Name() str {
 EOF_PUBLISH_GIT_SOURCE_SRC
 
 git -C "$PUBLISH_GIT_SOURCE_CLEAN" init --initial-branch=main >/dev/null
-git -C "$PUBLISH_GIT_SOURCE_CLEAN" config user.email "mog-tests@example.com"
-git -C "$PUBLISH_GIT_SOURCE_CLEAN" config user.name "Mog Tests"
+git -C "$PUBLISH_GIT_SOURCE_CLEAN" config user.email "kelvra-tests@example.com"
+git -C "$PUBLISH_GIT_SOURCE_CLEAN" config user.name "Kelvra Tests"
 git -C "$PUBLISH_GIT_SOURCE_CLEAN" add . >/dev/null
 git -C "$PUBLISH_GIT_SOURCE_CLEAN" commit -m "init" >/dev/null
 git -C "$PUBLISH_GIT_SOURCE_CLEAN" tag v1.2.3
@@ -3564,7 +3564,7 @@ cp -R "$PUBLISH_GIT_SOURCE_CLEAN" "$PUBLISH_GIT_SOURCE_SUCCESS"
 printf '%s\n' "unrelated dirty file" > "$PUBLISH_GIT_SOURCE_SUCCESS/outside.txt"
 
 if ! (cd "$PUBLISH_GIT_SOURCE_SUCCESS" && \
-    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+    "$KELVRA" publish --signing-key "$AUDIT_KEY_FILE" \
       --require-clean-git --tag v1.2.3 pkg >/dev/null); then
     echo "[FAIL] publish --require-clean-git should ignore unrelated dirty files outside the package directory"
     exit 1
@@ -3573,20 +3573,20 @@ fi
 PUBLISH_GIT_SOURCE_TRACKED_DIRTY="$TEMP_DIR/publish-git-source-tracked-dirty"
 cp -R "$PUBLISH_GIT_SOURCE_CLEAN" "$PUBLISH_GIT_SOURCE_TRACKED_DIRTY"
 printf '\nconst EXTRA str = "dirty tracked change"\n' >> \
-    "$PUBLISH_GIT_SOURCE_TRACKED_DIRTY/pkg/src/main.mog"
+    "$PUBLISH_GIT_SOURCE_TRACKED_DIRTY/pkg/src/main.kel"
 
 if (cd "$PUBLISH_GIT_SOURCE_TRACKED_DIRTY" && \
-    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+    "$KELVRA" publish --signing-key "$AUDIT_KEY_FILE" \
       --require-clean-git --tag v1.2.3 pkg \
-      >/tmp/mog_publish_clean_git_tracked_failure.txt 2>&1); then
+      >/tmp/kelvra_publish_clean_git_tracked_failure.txt 2>&1); then
     echo "[FAIL] publish --require-clean-git should reject tracked changes under the package directory"
-    cat /tmp/mog_publish_clean_git_tracked_failure.txt
+    cat /tmp/kelvra_publish_clean_git_tracked_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "clean git tree" /tmp/mog_publish_clean_git_tracked_failure.txt; then
+if ! grep -Fq "clean git tree" /tmp/kelvra_publish_clean_git_tracked_failure.txt; then
     echo "[FAIL] tracked publish clean-tree failures should mention the clean git requirement"
-    cat /tmp/mog_publish_clean_git_tracked_failure.txt
+    cat /tmp/kelvra_publish_clean_git_tracked_failure.txt
     exit 1
 fi
 
@@ -3596,17 +3596,17 @@ printf '%s\n' "untracked package file" > \
     "$PUBLISH_GIT_SOURCE_UNTRACKED_DIRTY/pkg/UNTRACKED.txt"
 
 if (cd "$PUBLISH_GIT_SOURCE_UNTRACKED_DIRTY" && \
-    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+    "$KELVRA" publish --signing-key "$AUDIT_KEY_FILE" \
       --require-clean-git --tag v1.2.3 pkg \
-      >/tmp/mog_publish_clean_git_untracked_failure.txt 2>&1); then
+      >/tmp/kelvra_publish_clean_git_untracked_failure.txt 2>&1); then
     echo "[FAIL] publish --require-clean-git should reject untracked files under the package directory"
-    cat /tmp/mog_publish_clean_git_untracked_failure.txt
+    cat /tmp/kelvra_publish_clean_git_untracked_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "clean git tree" /tmp/mog_publish_clean_git_untracked_failure.txt; then
+if ! grep -Fq "clean git tree" /tmp/kelvra_publish_clean_git_untracked_failure.txt; then
     echo "[FAIL] untracked publish clean-tree failures should mention the clean git requirement"
-    cat /tmp/mog_publish_clean_git_untracked_failure.txt
+    cat /tmp/kelvra_publish_clean_git_untracked_failure.txt
     exit 1
 fi
 
@@ -3614,18 +3614,18 @@ PUBLISH_GIT_SOURCE_MISSING_TAG="$TEMP_DIR/publish-git-source-missing-tag"
 cp -R "$PUBLISH_GIT_SOURCE_CLEAN" "$PUBLISH_GIT_SOURCE_MISSING_TAG"
 
 if (cd "$PUBLISH_GIT_SOURCE_MISSING_TAG" && \
-    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+    "$KELVRA" publish --signing-key "$AUDIT_KEY_FILE" \
       --tag missing-tag pkg \
-      >/tmp/mog_publish_missing_tag_failure.txt 2>&1); then
+      >/tmp/kelvra_publish_missing_tag_failure.txt 2>&1); then
     echo "[FAIL] publish --tag should reject missing git tags"
-    cat /tmp/mog_publish_missing_tag_failure.txt
+    cat /tmp/kelvra_publish_missing_tag_failure.txt
     exit 1
 fi
 
 if ! grep -Fq "Could not resolve git tag 'missing-tag'" \
-    /tmp/mog_publish_missing_tag_failure.txt; then
+    /tmp/kelvra_publish_missing_tag_failure.txt; then
     echo "[FAIL] missing publish tag failures should mention the unresolved tag"
-    cat /tmp/mog_publish_missing_tag_failure.txt
+    cat /tmp/kelvra_publish_missing_tag_failure.txt
     exit 1
 fi
 
@@ -3634,17 +3634,17 @@ cp -R "$PUBLISH_GIT_SOURCE_CLEAN" "$PUBLISH_GIT_SOURCE_VERSION_MISMATCH"
 git -C "$PUBLISH_GIT_SOURCE_VERSION_MISMATCH" tag v9.9.9
 
 if (cd "$PUBLISH_GIT_SOURCE_VERSION_MISMATCH" && \
-    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+    "$KELVRA" publish --signing-key "$AUDIT_KEY_FILE" \
       --tag v9.9.9 pkg \
-      >/tmp/mog_publish_tag_version_failure.txt 2>&1); then
+      >/tmp/kelvra_publish_tag_version_failure.txt 2>&1); then
     echo "[FAIL] publish --tag should reject tags that do not match the manifest version"
-    cat /tmp/mog_publish_tag_version_failure.txt
+    cat /tmp/kelvra_publish_tag_version_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "match manifest version" /tmp/mog_publish_tag_version_failure.txt; then
+if ! grep -Fq "match manifest version" /tmp/kelvra_publish_tag_version_failure.txt; then
     echo "[FAIL] publish tag/version mismatch failures should mention the manifest version"
-    cat /tmp/mog_publish_tag_version_failure.txt
+    cat /tmp/kelvra_publish_tag_version_failure.txt
     exit 1
 fi
 
@@ -3655,17 +3655,17 @@ git -C "$PUBLISH_GIT_SOURCE_STALE_TAG" add commit-after-tag.txt >/dev/null
 git -C "$PUBLISH_GIT_SOURCE_STALE_TAG" commit -m "move head" >/dev/null
 
 if (cd "$PUBLISH_GIT_SOURCE_STALE_TAG" && \
-    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+    "$KELVRA" publish --signing-key "$AUDIT_KEY_FILE" \
       --tag v1.2.3 pkg \
-      >/tmp/mog_publish_stale_tag_failure.txt 2>&1); then
+      >/tmp/kelvra_publish_stale_tag_failure.txt 2>&1); then
     echo "[FAIL] publish --tag should reject tags that are not at HEAD"
-    cat /tmp/mog_publish_stale_tag_failure.txt
+    cat /tmp/kelvra_publish_stale_tag_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "to point at HEAD" /tmp/mog_publish_stale_tag_failure.txt; then
+if ! grep -Fq "to point at HEAD" /tmp/kelvra_publish_stale_tag_failure.txt; then
     echo "[FAIL] stale publish tag failures should mention the HEAD requirement"
-    cat /tmp/mog_publish_stale_tag_failure.txt
+    cat /tmp/kelvra_publish_stale_tag_failure.txt
     exit 1
 fi
 
@@ -3685,7 +3685,7 @@ PUBLISH_GIT_NATIVE="$TEMP_DIR/publish-git-native"
 PUBLISH_GIT_NATIVE_REGISTRY="$TEMP_DIR/publish-git-native-registry"
 mkdir -p "$PUBLISH_GIT_NATIVE_REGISTRY"
 mkdir -p "$PUBLISH_GIT_NATIVE/examples/counter"
-cat > "$PUBLISH_GIT_NATIVE/mog.toml" <<EOF_PUBLISH_GIT_NATIVE_ROOT
+cat > "$PUBLISH_GIT_NATIVE/kelvra.toml" <<EOF_PUBLISH_GIT_NATIVE_ROOT
 kind = "project"
 name = "publish-git-native-root"
 version = "0.1.0"
@@ -3696,22 +3696,22 @@ index = "$PUBLISH_GIT_NATIVE_REGISTRY/index.toml"
 trusted_keys = ["$AUDIT_TRUSTED_KEY"]
 EOF_PUBLISH_GIT_NATIVE_ROOT
 
-cp "$PROJECT_ROOT/packages/examples/counter/mog.toml" \
-    "$PUBLISH_GIT_NATIVE/examples/counter/mog.toml"
-cp "$PROJECT_ROOT/packages/examples/counter/package.api.mog" \
-    "$PUBLISH_GIT_NATIVE/examples/counter/package.api.mog"
+cp "$PROJECT_ROOT/packages/examples/counter/kelvra.toml" \
+    "$PUBLISH_GIT_NATIVE/examples/counter/kelvra.toml"
+cp "$PROJECT_ROOT/packages/examples/counter/package.api.kel" \
+    "$PUBLISH_GIT_NATIVE/examples/counter/package.api.kel"
 cp "$COUNTER_PUBLISH_LIBRARY" \
     "$PUBLISH_GIT_NATIVE/examples/counter/$(basename "$COUNTER_PUBLISH_LIBRARY")"
 
 git -C "$PUBLISH_GIT_NATIVE" init --initial-branch=main >/dev/null
-git -C "$PUBLISH_GIT_NATIVE" config user.email "mog-tests@example.com"
-git -C "$PUBLISH_GIT_NATIVE" config user.name "Mog Tests"
+git -C "$PUBLISH_GIT_NATIVE" config user.email "kelvra-tests@example.com"
+git -C "$PUBLISH_GIT_NATIVE" config user.name "Kelvra Tests"
 git -C "$PUBLISH_GIT_NATIVE" add . >/dev/null
 git -C "$PUBLISH_GIT_NATIVE" commit -m "init" >/dev/null
 git -C "$PUBLISH_GIT_NATIVE" tag v0.1.0
 
 if ! (cd "$PUBLISH_GIT_NATIVE" && \
-    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+    "$KELVRA" publish --signing-key "$AUDIT_KEY_FILE" \
       --require-clean-git --tag v0.1.0 \
       --target "$HOST_TARGET" \
       --native-artifact-dir examples/counter \
@@ -3720,7 +3720,7 @@ if ! (cd "$PUBLISH_GIT_NATIVE" && \
     exit 1
 fi
 
-cat > "$AUDIT_CONSUMER_DIR/mog.toml" <<EOF_AUDIT_CONSUMER
+cat > "$AUDIT_CONSUMER_DIR/kelvra.toml" <<EOF_AUDIT_CONSUMER
 kind = "project"
 name = "audit-consumer"
 version = "0.1.0"
@@ -3734,12 +3734,12 @@ trusted_keys = ["$AUDIT_TRUSTED_KEY"]
 audit_util = { package = "acme:audit-util", version = "1.0.0" }
 EOF_AUDIT_CONSUMER
 
-cat > "$AUDIT_CONSUMER_DIR/app.mog" <<'EOF_AUDIT_APP'
+cat > "$AUDIT_CONSUMER_DIR/app.kel" <<'EOF_AUDIT_APP'
 const audit_util = @import("audit_util")
 print(audit_util.Name())
 EOF_AUDIT_APP
 
-if ! (cd "$AUDIT_CONSUMER_DIR" && "$MOG" install >/dev/null); then
+if ! (cd "$AUDIT_CONSUMER_DIR" && "$KELVRA" install >/dev/null); then
     echo "[FAIL] signed local registry install should succeed for audit tests"
     exit 1
 fi
@@ -3751,17 +3751,17 @@ if ! grep -Fq 'schema_version = "registry.v4"' "$AUDIT_REGISTRY_DIR/index.toml" 
     exit 1
 fi
 
-if ! grep -Fq 'artifact_signature = "' "$AUDIT_CONSUMER_DIR/mog.lock" || \
-   ! grep -Fq 'artifact_signature = "' "$AUDIT_CONSUMER_DIR/.mog/install/registry.toml"; then
+if ! grep -Fq 'artifact_signature = "' "$AUDIT_CONSUMER_DIR/kelvra.lock" || \
+   ! grep -Fq 'artifact_signature = "' "$AUDIT_CONSUMER_DIR/.kelvra/install/registry.toml"; then
     echo "[FAIL] signed registry installs should pin artifact signatures in lock/install metadata"
-    cat "$AUDIT_CONSUMER_DIR/mog.lock"
-    cat "$AUDIT_CONSUMER_DIR/.mog/install/registry.toml"
+    cat "$AUDIT_CONSUMER_DIR/kelvra.lock"
+    cat "$AUDIT_CONSUMER_DIR/.kelvra/install/registry.toml"
     exit 1
 fi
 
 POLICY_SIGNED_DIR="$TEMP_DIR/policy-signed"
 mkdir -p "$POLICY_SIGNED_DIR"
-cat > "$POLICY_SIGNED_DIR/mog.toml" <<EOF_POLICY_SIGNED
+cat > "$POLICY_SIGNED_DIR/kelvra.toml" <<EOF_POLICY_SIGNED
 kind = "project"
 name = "policy-signed-test"
 version = "0.1.0"
@@ -3777,21 +3777,21 @@ index = "$REGISTRY_DIR"
 http = { package = "acme:http", version = "1.0.0" }
 EOF_POLICY_SIGNED
 
-if (cd "$POLICY_SIGNED_DIR" && "$MOG" install >/tmp/mog_policy_signed_failure.txt 2>&1); then
+if (cd "$POLICY_SIGNED_DIR" && "$KELVRA" install >/tmp/kelvra_policy_signed_failure.txt 2>&1); then
     echo "[FAIL] signed-artifact policy should reject unsigned registry packages"
-    cat /tmp/mog_policy_signed_failure.txt
+    cat /tmp/kelvra_policy_signed_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "requires signed artifacts" /tmp/mog_policy_signed_failure.txt; then
+if ! grep -Fq "requires signed artifacts" /tmp/kelvra_policy_signed_failure.txt; then
     echo "[FAIL] signed-artifact policy failures should mention signed artifacts"
-    cat /tmp/mog_policy_signed_failure.txt
+    cat /tmp/kelvra_policy_signed_failure.txt
     exit 1
 fi
 
 POLICY_SIGNED_OK_DIR="$TEMP_DIR/policy-signed-ok"
 mkdir -p "$POLICY_SIGNED_OK_DIR"
-cat > "$POLICY_SIGNED_OK_DIR/mog.toml" <<EOF_POLICY_SIGNED_OK
+cat > "$POLICY_SIGNED_OK_DIR/kelvra.toml" <<EOF_POLICY_SIGNED_OK
 kind = "project"
 name = "policy-signed-ok"
 version = "0.1.0"
@@ -3808,23 +3808,23 @@ trusted_keys = ["$AUDIT_TRUSTED_KEY"]
 audit_util = { package = "acme:audit-util", version = "1.0.0" }
 EOF_POLICY_SIGNED_OK
 
-cat > "$POLICY_SIGNED_OK_DIR/app.mog" <<'EOF_POLICY_SIGNED_OK_APP'
+cat > "$POLICY_SIGNED_OK_DIR/app.kel" <<'EOF_POLICY_SIGNED_OK_APP'
 const audit_util = @import("audit_util")
 print(audit_util.Name())
 EOF_POLICY_SIGNED_OK_APP
 
-if ! (cd "$POLICY_SIGNED_OK_DIR" && "$MOG" install >/dev/null); then
+if ! (cd "$POLICY_SIGNED_OK_DIR" && "$KELVRA" install >/dev/null); then
     echo "[FAIL] signed-artifact policy should allow signed source packages"
     exit 1
 fi
 
-if [[ "$(cd "$POLICY_SIGNED_OK_DIR" && "$MOG" run app.mog)" != *"utility from audit registry"* ]]; then
+if [[ "$(cd "$POLICY_SIGNED_OK_DIR" && "$KELVRA" run app.kel)" != *"utility from audit registry"* ]]; then
     echo "[FAIL] signed-artifact policy should still run signed source packages"
     exit 1
 fi
 
 if ! (cd "$AUDIT_PUBLISH_WORKSPACE" && \
-    "$MOG" publish --signing-key "$AUDIT_KEY_FILE" \
+    "$KELVRA" publish --signing-key "$AUDIT_KEY_FILE" \
       "$NATIVE_PUBLISH_WORKSPACE/packages/examples/counter" >/dev/null); then
     echo "[FAIL] signed local registry publish should support native packages"
     exit 1
@@ -3832,7 +3832,7 @@ fi
 
 POLICY_SIGNED_NATIVE_DIR="$TEMP_DIR/policy-signed-native"
 mkdir -p "$POLICY_SIGNED_NATIVE_DIR"
-cat > "$POLICY_SIGNED_NATIVE_DIR/mog.toml" <<EOF_POLICY_SIGNED_NATIVE
+cat > "$POLICY_SIGNED_NATIVE_DIR/kelvra.toml" <<EOF_POLICY_SIGNED_NATIVE
 kind = "project"
 name = "policy-signed-native"
 version = "0.1.0"
@@ -3849,19 +3849,19 @@ trusted_keys = ["$AUDIT_TRUSTED_KEY"]
 counter = { package = "examples:counter", version = "0.1.0" }
 EOF_POLICY_SIGNED_NATIVE
 
-cat > "$POLICY_SIGNED_NATIVE_DIR/app.mog" <<'EOF_POLICY_SIGNED_NATIVE_APP'
+cat > "$POLICY_SIGNED_NATIVE_DIR/app.kel" <<'EOF_POLICY_SIGNED_NATIVE_APP'
 const counter = @import("counter")
 
 const value = counter.create(10i64)
 print(counter.add(value, 5i64))
 EOF_POLICY_SIGNED_NATIVE_APP
 
-if ! (cd "$POLICY_SIGNED_NATIVE_DIR" && "$MOG" install >/dev/null); then
+if ! (cd "$POLICY_SIGNED_NATIVE_DIR" && "$KELVRA" install >/dev/null); then
     echo "[FAIL] signed-artifact policy should allow signed native packages"
     exit 1
 fi
 
-if [[ "$(cd "$POLICY_SIGNED_NATIVE_DIR" && "$MOG" run app.mog)" != *"15"* ]]; then
+if [[ "$(cd "$POLICY_SIGNED_NATIVE_DIR" && "$KELVRA" run app.kel)" != *"15"* ]]; then
     echo "[FAIL] signed-artifact policy should still run signed native packages"
     exit 1
 fi
@@ -3869,7 +3869,7 @@ fi
 AUDIT_TAMPER_DIR="$AUDIT_ROOT/tamper"
 rm -rf "$AUDIT_TAMPER_DIR"
 cp -R "$AUDIT_CONSUMER_DIR" "$AUDIT_TAMPER_DIR"
-python3 - "$AUDIT_TAMPER_DIR/mog.lock" <<'PY'
+python3 - "$AUDIT_TAMPER_DIR/kelvra.lock" <<'PY'
 from pathlib import Path
 import sys
 
@@ -3885,20 +3885,20 @@ if updated == text:
 path.write_text(updated, encoding="utf-8")
 PY
 
-if (cd "$AUDIT_TAMPER_DIR" && "$MOG" install --locked >/tmp/mog_artifact_signature_failure.txt 2>&1); then
+if (cd "$AUDIT_TAMPER_DIR" && "$KELVRA" install --locked >/tmp/kelvra_artifact_signature_failure.txt 2>&1); then
     echo "[FAIL] locked installs should reject tampered artifact signatures"
-    cat /tmp/mog_artifact_signature_failure.txt
+    cat /tmp/kelvra_artifact_signature_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "artifact signature verification failed" /tmp/mog_artifact_signature_failure.txt; then
+if ! grep -Fq "artifact signature verification failed" /tmp/kelvra_artifact_signature_failure.txt; then
     echo "[FAIL] tampered artifact signature failures should explain signature verification"
-    cat /tmp/mog_artifact_signature_failure.txt
+    cat /tmp/kelvra_artifact_signature_failure.txt
     exit 1
 fi
 
 AUDIT_CLEAN_OUTPUT="$(
-    cd "$AUDIT_CONSUMER_DIR" && "$MOG" audit
+    cd "$AUDIT_CONSUMER_DIR" && "$KELVRA" audit
 )"
 if [[ "$AUDIT_CLEAN_OUTPUT" != *"No known vulnerable packages found."* ]]; then
     echo "[FAIL] audit should report a clean result when no advisories match"
@@ -3909,17 +3909,17 @@ fi
 write_signed_advisories \
     "$AUDIT_REGISTRY_DIR" \
     "$AUDIT_KEY_FILE" \
-    "MOG-2026-0001" \
+    "KELVRA-2026-0001" \
     "acme:audit-util" \
     "1.0.0" \
     "high" \
     "Audit test advisory." \
     "1.0.1" \
-    "https://example.invalid/advisories/MOG-2026-0001"
+    "https://example.invalid/advisories/KELVRA-2026-0001"
 
 set +e
 AUDIT_FINDINGS_OUTPUT="$(
-    cd "$AUDIT_CONSUMER_DIR" && "$MOG" audit
+    cd "$AUDIT_CONSUMER_DIR" && "$KELVRA" audit
 )"
 AUDIT_FINDINGS_STATUS=$?
 set -e
@@ -3930,7 +3930,7 @@ if [[ $AUDIT_FINDINGS_STATUS -eq 0 ]]; then
     exit 1
 fi
 
-if [[ "$AUDIT_FINDINGS_OUTPUT" != *"MOG-2026-0001 [high] acme:audit-util@1.0.0"* ]] || \
+if [[ "$AUDIT_FINDINGS_OUTPUT" != *"KELVRA-2026-0001 [high] acme:audit-util@1.0.0"* ]] || \
    [[ "$AUDIT_FINDINGS_OUTPUT" != *"Fixed in 1.0.1."* ]]; then
     echo "[FAIL] audit should report advisory id, severity, package, and remediation"
     echo "$AUDIT_FINDINGS_OUTPUT"
@@ -3939,7 +3939,7 @@ fi
 
 GIT_REPO_DIR="$(mktemp -d)"
 mkdir -p "$GIT_REPO_DIR/src"
-cat > "$GIT_REPO_DIR/mog.toml" <<'EOF_GIT_PACKAGE'
+cat > "$GIT_REPO_DIR/kelvra.toml" <<'EOF_GIT_PACKAGE'
 kind = "source"
 import_name = "githello"
 namespace = "acme"
@@ -3947,11 +3947,11 @@ name = "git-hello"
 version = "1.0.0"
 author = "Git dependency test"
 description = "Git-sourced package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_GIT_PACKAGE
 
-cat > "$GIT_REPO_DIR/src/main.mog" <<'EOF_GIT_PACKAGE_SRC'
+cat > "$GIT_REPO_DIR/src/main.kel" <<'EOF_GIT_PACKAGE_SRC'
 const MESSAGE str = "hello from git dependency"
 
 fn Name() str {
@@ -3960,13 +3960,13 @@ fn Name() str {
 EOF_GIT_PACKAGE_SRC
 
 git -C "$GIT_REPO_DIR" init --initial-branch=main >/dev/null
-git -C "$GIT_REPO_DIR" config user.email "mog-tests@example.com"
-git -C "$GIT_REPO_DIR" config user.name "Mog Tests"
+git -C "$GIT_REPO_DIR" config user.email "kelvra-tests@example.com"
+git -C "$GIT_REPO_DIR" config user.name "Kelvra Tests"
 git -C "$GIT_REPO_DIR" add . >/dev/null
 git -C "$GIT_REPO_DIR" commit -m "init" >/dev/null
 
 GIT_CONSUMER_DIR="$(mktemp -d)"
-cat > "$GIT_CONSUMER_DIR/mog.toml" <<EOF_GIT_CONSUMER
+cat > "$GIT_CONSUMER_DIR/kelvra.toml" <<EOF_GIT_CONSUMER
 kind = "project"
 name = "git-consumer"
 version = "0.1.0"
@@ -3976,49 +3976,49 @@ description = "git consumer"
 githello = { git = "$GIT_REPO_DIR", branch = "main", package = "acme:git-hello", version = "1.0.0" }
 EOF_GIT_CONSUMER
 
-cat > "$GIT_CONSUMER_DIR/app.mog" <<'EOF_GIT_APP'
+cat > "$GIT_CONSUMER_DIR/app.kel" <<'EOF_GIT_APP'
 const githello = @import("githello")
 print(githello.Name())
 EOF_GIT_APP
 
-if ! (cd "$GIT_CONSUMER_DIR" && "$MOG" install >/dev/null); then
+if ! (cd "$GIT_CONSUMER_DIR" && "$KELVRA" install >/dev/null); then
     echo "[FAIL] install should resolve git dependencies"
     exit 1
 fi
 
-GIT_OUTPUT="$("$MOG" run "$GIT_CONSUMER_DIR/app.mog")"
+GIT_OUTPUT="$("$KELVRA" run "$GIT_CONSUMER_DIR/app.kel")"
 if [[ "$GIT_OUTPUT" != *"hello from git dependency"* ]]; then
     echo "[FAIL] run should execute git dependencies"
     echo "$GIT_OUTPUT"
     exit 1
 fi
 
-if ! grep -Fq 'source_type = "git"' "$GIT_CONSUMER_DIR/mog.lock" || \
-   ! grep -Fq 'git_commit = "' "$GIT_CONSUMER_DIR/mog.lock"; then
-    echo "[FAIL] git dependencies should be recorded in mog.lock"
-    cat "$GIT_CONSUMER_DIR/mog.lock"
+if ! grep -Fq 'source_type = "git"' "$GIT_CONSUMER_DIR/kelvra.lock" || \
+   ! grep -Fq 'git_commit = "' "$GIT_CONSUMER_DIR/kelvra.lock"; then
+    echo "[FAIL] git dependencies should be recorded in kelvra.lock"
+    cat "$GIT_CONSUMER_DIR/kelvra.lock"
     exit 1
 fi
 
-if ! (cd "$GIT_CONSUMER_DIR" && "$MOG" install --offline >/dev/null); then
+if ! (cd "$GIT_CONSUMER_DIR" && "$KELVRA" install --offline >/dev/null); then
     echo "[FAIL] install --offline should succeed for cached git dependencies"
     exit 1
 fi
 
 GIT_OFFLINE_FAIL_DIR="$(mktemp -d)"
-cp "$GIT_CONSUMER_DIR/mog.toml" "$GIT_OFFLINE_FAIL_DIR/mog.toml"
-cp "$GIT_CONSUMER_DIR/app.mog" "$GIT_OFFLINE_FAIL_DIR/app.mog"
+cp "$GIT_CONSUMER_DIR/kelvra.toml" "$GIT_OFFLINE_FAIL_DIR/kelvra.toml"
+cp "$GIT_CONSUMER_DIR/app.kel" "$GIT_OFFLINE_FAIL_DIR/app.kel"
 if (cd "$GIT_OFFLINE_FAIL_DIR" && \
-    MOG_CACHE_DIR="$TEMP_DIR/git-empty-cache" \
-    "$MOG" install --offline >/tmp/mog_git_offline_failure.txt 2>&1); then
+    KELVRA_CACHE_DIR="$TEMP_DIR/git-empty-cache" \
+    "$KELVRA" install --offline >/tmp/kelvra_git_offline_failure.txt 2>&1); then
     echo "[FAIL] install --offline should reject uncached git dependencies"
-    cat /tmp/mog_git_offline_failure.txt
+    cat /tmp/kelvra_git_offline_failure.txt
     exit 1
 fi
 
-if ! grep -Eq "offline|cached locally" /tmp/mog_git_offline_failure.txt; then
+if ! grep -Eq "offline|cached locally" /tmp/kelvra_git_offline_failure.txt; then
     echo "[FAIL] install --offline should explain missing cached git dependencies"
-    cat /tmp/mog_git_offline_failure.txt
+    cat /tmp/kelvra_git_offline_failure.txt
     exit 1
 fi
 
@@ -4027,11 +4027,11 @@ GIT_MODULE_CONSUMER_DIR="$TEMP_DIR/git-module-consumer"
 GIT_MODULE_ADD_DIR="$TEMP_DIR/git-module-add"
 GIT_MODULE_CONFIG="$TEMP_DIR/git-module-config"
 mkdir -p "$GIT_MODULE_REPO_DIR/src" "$GIT_MODULE_CONSUMER_DIR" "$GIT_MODULE_ADD_DIR"
-cat > "$GIT_MODULE_REPO_DIR/mog.toml" <<'EOF_GIT_MODULE_PACKAGE'
+cat > "$GIT_MODULE_REPO_DIR/kelvra.toml" <<'EOF_GIT_MODULE_PACKAGE'
 kind = "source"
 module = "github.com/example/math"
 version = "v0.1.0"
-entry = "src/main.mog"
+entry = "src/main.kel"
 import_name = "math"
 namespace = "github.com/example"
 name = "math"
@@ -4040,7 +4040,7 @@ description = "Go-style Git module package."
 dependencies = []
 EOF_GIT_MODULE_PACKAGE
 
-cat > "$GIT_MODULE_REPO_DIR/src/main.mog" <<'EOF_GIT_MODULE_PACKAGE_SRC'
+cat > "$GIT_MODULE_REPO_DIR/src/main.kel" <<'EOF_GIT_MODULE_PACKAGE_SRC'
 const VALUE i64 = 42
 
 fn Add(left i64, right i64) i64 {
@@ -4049,8 +4049,8 @@ fn Add(left i64, right i64) i64 {
 EOF_GIT_MODULE_PACKAGE_SRC
 
 git -C "$GIT_MODULE_REPO_DIR" init --initial-branch=main >/dev/null
-git -C "$GIT_MODULE_REPO_DIR" config user.email "mog-tests@example.com"
-git -C "$GIT_MODULE_REPO_DIR" config user.name "Mog Tests"
+git -C "$GIT_MODULE_REPO_DIR" config user.email "kelvra-tests@example.com"
+git -C "$GIT_MODULE_REPO_DIR" config user.name "Kelvra Tests"
 git -C "$GIT_MODULE_REPO_DIR" add . >/dev/null
 git -C "$GIT_MODULE_REPO_DIR" commit -m "init module" >/dev/null
 git -C "$GIT_MODULE_REPO_DIR" tag v0.1.0
@@ -4060,7 +4060,7 @@ git config --file "$GIT_MODULE_CONFIG" \
     url."file://$GIT_MODULE_REPO_DIR".insteadOf \
     "https://github.com/example/math.git"
 
-cat > "$GIT_MODULE_CONSUMER_DIR/mog.toml" <<'EOF_GIT_MODULE_CONSUMER'
+cat > "$GIT_MODULE_CONSUMER_DIR/kelvra.toml" <<'EOF_GIT_MODULE_CONSUMER'
 kind = "project"
 name = "git-module-consumer"
 version = "0.1.0"
@@ -4070,71 +4070,71 @@ description = "git module consumer"
 "github.com/example/math" = { version = "v0.1.0" }
 EOF_GIT_MODULE_CONSUMER
 
-cat > "$GIT_MODULE_CONSUMER_DIR/app.mog" <<'EOF_GIT_MODULE_APP'
+cat > "$GIT_MODULE_CONSUMER_DIR/app.kel" <<'EOF_GIT_MODULE_APP'
 const math = @import("github.com/example/math")
 print(math.Add(math.VALUE, 8))
 EOF_GIT_MODULE_APP
 
 if ! (cd "$GIT_MODULE_CONSUMER_DIR" && \
-    GIT_CONFIG_GLOBAL="$GIT_MODULE_CONFIG" "$MOG" install >/dev/null); then
+    GIT_CONFIG_GLOBAL="$GIT_MODULE_CONFIG" "$KELVRA" install >/dev/null); then
     echo "[FAIL] install should resolve Go-style Git module dependencies"
     exit 1
 fi
 
-GIT_MODULE_OUTPUT="$(cd "$GIT_MODULE_CONSUMER_DIR" && "$MOG" run app.mog)"
+GIT_MODULE_OUTPUT="$(cd "$GIT_MODULE_CONSUMER_DIR" && "$KELVRA" run app.kel)"
 if [[ "$GIT_MODULE_OUTPUT" != *"50"* ]]; then
     echo "[FAIL] run should execute installed Go-style Git module imports"
     echo "$GIT_MODULE_OUTPUT"
     exit 1
 fi
 
-if ! grep -Fq 'module = "github.com/example/math"' "$GIT_MODULE_CONSUMER_DIR/mog.lock" || \
-   ! grep -Fq 'git = "https://github.com/example/math.git"' "$GIT_MODULE_CONSUMER_DIR/mog.lock" || \
-   ! grep -Fq 'git_commit = "' "$GIT_MODULE_CONSUMER_DIR/mog.lock"; then
+if ! grep -Fq 'module = "github.com/example/math"' "$GIT_MODULE_CONSUMER_DIR/kelvra.lock" || \
+   ! grep -Fq 'git = "https://github.com/example/math.git"' "$GIT_MODULE_CONSUMER_DIR/kelvra.lock" || \
+   ! grep -Fq 'git_commit = "' "$GIT_MODULE_CONSUMER_DIR/kelvra.lock"; then
     echo "[FAIL] Go-style Git module lock metadata should record module, git URL, and commit"
-    cat "$GIT_MODULE_CONSUMER_DIR/mog.lock"
+    cat "$GIT_MODULE_CONSUMER_DIR/kelvra.lock"
     exit 1
 fi
 
 if ! grep -Fq 'module = "github.com/example/math"' \
-    "$GIT_MODULE_CONSUMER_DIR/.mog/install/registry.toml" || \
+    "$GIT_MODULE_CONSUMER_DIR/.kelvra/install/registry.toml" || \
    ! grep -Fq 'git = "https://github.com/example/math.git"' \
-    "$GIT_MODULE_CONSUMER_DIR/.mog/install/registry.toml" || \
+    "$GIT_MODULE_CONSUMER_DIR/.kelvra/install/registry.toml" || \
    ! grep -Fq 'git_commit = "' \
-    "$GIT_MODULE_CONSUMER_DIR/.mog/install/registry.toml"; then
+    "$GIT_MODULE_CONSUMER_DIR/.kelvra/install/registry.toml"; then
     echo "[FAIL] Go-style Git module install metadata should record module, git URL, and commit"
-    cat "$GIT_MODULE_CONSUMER_DIR/.mog/install/registry.toml"
+    cat "$GIT_MODULE_CONSUMER_DIR/.kelvra/install/registry.toml"
     exit 1
 fi
 
-if [[ ! -f "$GIT_MODULE_CONSUMER_DIR/.mog/install/packages/github.com/example/math/src/main.mog" ]]; then
+if [[ ! -f "$GIT_MODULE_CONSUMER_DIR/.kelvra/install/packages/github.com/example/math/src/main.kel" ]]; then
     echo "[FAIL] Go-style Git module should install under the hosted module path"
-    find "$GIT_MODULE_CONSUMER_DIR/.mog/install" -maxdepth 6 -type f | sort
+    find "$GIT_MODULE_CONSUMER_DIR/.kelvra/install" -maxdepth 6 -type f | sort
     exit 1
 fi
 
-cat > "$GIT_MODULE_ADD_DIR/mog.toml" <<'EOF_GIT_MODULE_ADD_PROJECT'
+cat > "$GIT_MODULE_ADD_DIR/kelvra.toml" <<'EOF_GIT_MODULE_ADD_PROJECT'
 kind = "project"
 name = "git-module-add"
 version = "0.1.0"
 description = "git module add"
 EOF_GIT_MODULE_ADD_PROJECT
 
-if ! (cd "$GIT_MODULE_ADD_DIR" && "$MOG" add github.com/example/math@v0.1.0 >/dev/null); then
+if ! (cd "$GIT_MODULE_ADD_DIR" && "$KELVRA" add github.com/example/math@v0.1.0 >/dev/null); then
     echo "[FAIL] add should accept Go-style Git module specifiers"
     exit 1
 fi
 
 if ! grep -Fq '"github.com/example/math" = { version = "v0.1.0" }' \
-    "$GIT_MODULE_ADD_DIR/mog.toml"; then
+    "$GIT_MODULE_ADD_DIR/kelvra.toml"; then
     echo "[FAIL] add should write Go-style Git module dependency keys"
-    cat "$GIT_MODULE_ADD_DIR/mog.toml"
+    cat "$GIT_MODULE_ADD_DIR/kelvra.toml"
     exit 1
 fi
 
 GIT_MODULE_MISMATCH_DIR="$TEMP_DIR/git-module-tag-mismatch"
 mkdir -p "$GIT_MODULE_MISMATCH_DIR"
-cat > "$GIT_MODULE_MISMATCH_DIR/mog.toml" <<'EOF_GIT_MODULE_MISMATCH'
+cat > "$GIT_MODULE_MISMATCH_DIR/kelvra.toml" <<'EOF_GIT_MODULE_MISMATCH'
 kind = "project"
 name = "git-module-tag-mismatch"
 version = "0.1.0"
@@ -4145,41 +4145,41 @@ description = "git module tag mismatch"
 EOF_GIT_MODULE_MISMATCH
 
 if (cd "$GIT_MODULE_MISMATCH_DIR" && \
-    GIT_CONFIG_GLOBAL="$GIT_MODULE_CONFIG" "$MOG" install \
-        >/tmp/mog_git_tag_manifest_mismatch.txt 2>&1); then
+    GIT_CONFIG_GLOBAL="$GIT_MODULE_CONFIG" "$KELVRA" install \
+        >/tmp/kelvra_git_tag_manifest_mismatch.txt 2>&1); then
     echo "[FAIL] install should reject Git tags that disagree with package manifest versions"
     exit 1
 fi
-if ! grep -Fq "package manifest reports version" /tmp/mog_git_tag_manifest_mismatch.txt; then
+if ! grep -Fq "package manifest reports version" /tmp/kelvra_git_tag_manifest_mismatch.txt; then
     echo "[FAIL] Git tag/version mismatch should explain the manifest discrepancy"
-    cat /tmp/mog_git_tag_manifest_mismatch.txt
+    cat /tmp/kelvra_git_tag_manifest_mismatch.txt
     exit 1
 fi
 
 GIT_MODULE_MISSING_DIR="$TEMP_DIR/git-module-missing"
 mkdir -p "$GIT_MODULE_MISSING_DIR"
-cat > "$GIT_MODULE_MISSING_DIR/mog.toml" <<'EOF_GIT_MODULE_MISSING_PROJECT'
+cat > "$GIT_MODULE_MISSING_DIR/kelvra.toml" <<'EOF_GIT_MODULE_MISSING_PROJECT'
 kind = "project"
 name = "git-module-missing"
 version = "0.1.0"
 description = "missing git module import"
 EOF_GIT_MODULE_MISSING_PROJECT
 
-cat > "$GIT_MODULE_MISSING_DIR/app.mog" <<'EOF_GIT_MODULE_MISSING_APP'
+cat > "$GIT_MODULE_MISSING_DIR/app.kel" <<'EOF_GIT_MODULE_MISSING_APP'
 const math = @import("github.com/example/math")
 print(math.VALUE)
 EOF_GIT_MODULE_MISSING_APP
 
-if (cd "$GIT_MODULE_MISSING_DIR" && "$MOG" app.mog >/tmp/mog_git_module_missing_failure.txt 2>&1); then
+if (cd "$GIT_MODULE_MISSING_DIR" && "$KELVRA" app.kel >/tmp/kelvra_git_module_missing_failure.txt 2>&1); then
     echo "[FAIL] missing Go-style Git module imports should fail before install"
-    cat /tmp/mog_git_module_missing_failure.txt
+    cat /tmp/kelvra_git_module_missing_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "Package 'github.com/example/math' is not installed. Run 'mog install'." \
-    /tmp/mog_git_module_missing_failure.txt; then
-    echo "[FAIL] missing Go-style Git module imports should suggest mog install"
-    cat /tmp/mog_git_module_missing_failure.txt
+if ! grep -Fq "Package 'github.com/example/math' is not installed. Run 'kelvra install'." \
+    /tmp/kelvra_git_module_missing_failure.txt; then
+    echo "[FAIL] missing Go-style Git module imports should suggest kelvra install"
+    cat /tmp/kelvra_git_module_missing_failure.txt
     exit 1
 fi
 
@@ -4190,14 +4190,14 @@ mkdir -p "$GIT_NATIVE_MODULE_REPO_DIR" "$GIT_NATIVE_MODULE_CONSUMER_DIR"
 
 cp "$PROJECT_ROOT/packages/examples/math/package.cpp" \
     "$GIT_NATIVE_MODULE_REPO_DIR/package.cpp"
-cp "$PROJECT_ROOT/packages/examples/math/package.api.mog" \
-    "$GIT_NATIVE_MODULE_REPO_DIR/package.api.mog"
-sed -i 's/^package math$/package native_math/' "$GIT_NATIVE_MODULE_REPO_DIR/package.api.mog"
+cp "$PROJECT_ROOT/packages/examples/math/package.api.kel" \
+    "$GIT_NATIVE_MODULE_REPO_DIR/package.api.kel"
+sed -i 's/^package math$/package native_math/' "$GIT_NATIVE_MODULE_REPO_DIR/package.api.kel"
 cp "$PROJECT_ROOT/src/NativePackageAPI.hpp" \
     "$GIT_NATIVE_MODULE_REPO_DIR/NativePackageAPI.hpp"
 sed -i 's/"examples"/"github"/; s/"math"/"native-math"/' \
     "$GIT_NATIVE_MODULE_REPO_DIR/package.cpp"
-cat > "$GIT_NATIVE_MODULE_REPO_DIR/mog.toml" <<'EOF_GIT_NATIVE_MODULE_PACKAGE'
+cat > "$GIT_NATIVE_MODULE_REPO_DIR/kelvra.toml" <<'EOF_GIT_NATIVE_MODULE_PACKAGE'
 kind = "native"
 module = "github.com/example/native-math"
 import_name = "native_math"
@@ -4206,7 +4206,7 @@ name = "native-math"
 version = "v0.1.0"
 license = "MIT"
 abi_version = 3
-mog_runtime = "^0.1.0"
+kelvra_runtime = "^0.2.0"
 description = "Git-native package test."
 dependencies = []
 
@@ -4216,8 +4216,8 @@ targets = ["linux-x86_64-gnu", "linux-arm64-gnu", "macos-arm64"]
 EOF_GIT_NATIVE_MODULE_PACKAGE
 
 git -C "$GIT_NATIVE_MODULE_REPO_DIR" init --initial-branch=main >/dev/null
-git -C "$GIT_NATIVE_MODULE_REPO_DIR" config user.email "mog-tests@example.com"
-git -C "$GIT_NATIVE_MODULE_REPO_DIR" config user.name "Mog Tests"
+git -C "$GIT_NATIVE_MODULE_REPO_DIR" config user.email "kelvra-tests@example.com"
+git -C "$GIT_NATIVE_MODULE_REPO_DIR" config user.name "Kelvra Tests"
 git -C "$GIT_NATIVE_MODULE_REPO_DIR" add . >/dev/null
 git -C "$GIT_NATIVE_MODULE_REPO_DIR" commit -m "init native module" >/dev/null
 git -C "$GIT_NATIVE_MODULE_REPO_DIR" tag v0.1.0
@@ -4226,7 +4226,7 @@ git config --file "$GIT_NATIVE_MODULE_CONFIG" \
     url."file://$GIT_NATIVE_MODULE_REPO_DIR".insteadOf \
     "https://github.com/example/native-math.git"
 
-cat > "$GIT_NATIVE_MODULE_CONSUMER_DIR/mog.toml" <<'EOF_GIT_NATIVE_MODULE_CONSUMER'
+cat > "$GIT_NATIVE_MODULE_CONSUMER_DIR/kelvra.toml" <<'EOF_GIT_NATIVE_MODULE_CONSUMER'
 kind = "project"
 name = "git-native-module-consumer"
 version = "0.1.0"
@@ -4236,33 +4236,33 @@ description = "Git-native module consumer"
 "github.com/example/native-math" = { version = "v0.1.0" }
 EOF_GIT_NATIVE_MODULE_CONSUMER
 
-cat > "$GIT_NATIVE_MODULE_CONSUMER_DIR/app.mog" <<'EOF_GIT_NATIVE_MODULE_APP'
+cat > "$GIT_NATIVE_MODULE_CONSUMER_DIR/app.kel" <<'EOF_GIT_NATIVE_MODULE_APP'
 const native_math = @import("github.com/example/native-math")
 print(native_math.MEANING_OF_LIFE)
 EOF_GIT_NATIVE_MODULE_APP
 
 if ! (cd "$GIT_NATIVE_MODULE_CONSUMER_DIR" && \
-    GIT_CONFIG_GLOBAL="$GIT_NATIVE_MODULE_CONFIG" "$MOG" install >/dev/null); then
+    GIT_CONFIG_GLOBAL="$GIT_NATIVE_MODULE_CONFIG" "$KELVRA" install >/dev/null); then
     echo "[FAIL] install should source-build Go-style Git native module dependencies"
     exit 1
 fi
 
-GIT_NATIVE_MODULE_OUTPUT="$(cd "$GIT_NATIVE_MODULE_CONSUMER_DIR" && "$MOG" run app.mog)"
+GIT_NATIVE_MODULE_OUTPUT="$(cd "$GIT_NATIVE_MODULE_CONSUMER_DIR" && "$KELVRA" run app.kel)"
 if [[ "$GIT_NATIVE_MODULE_OUTPUT" != *"42"* ]]; then
     echo "[FAIL] run should load a source-built Go-style Git native module"
     echo "$GIT_NATIVE_MODULE_OUTPUT"
     exit 1
 fi
 
-if ! grep -Fq 'build_from_source = true' "$GIT_NATIVE_MODULE_CONSUMER_DIR/mog.lock" || \
-   [[ ! -f "$GIT_NATIVE_MODULE_CONSUMER_DIR/.mog/install/packages/github.com/example/native-math/package.so" && \
-      ! -f "$GIT_NATIVE_MODULE_CONSUMER_DIR/.mog/install/packages/github.com/example/native-math/package.dylib" ]]; then
+if ! grep -Fq 'build_from_source = true' "$GIT_NATIVE_MODULE_CONSUMER_DIR/kelvra.lock" || \
+   [[ ! -f "$GIT_NATIVE_MODULE_CONSUMER_DIR/.kelvra/install/packages/github.com/example/native-math/package.so" && \
+      ! -f "$GIT_NATIVE_MODULE_CONSUMER_DIR/.kelvra/install/packages/github.com/example/native-math/package.dylib" ]]; then
     echo "[FAIL] Go-style Git native module install should record and materialize a source build"
     exit 1
 fi
 
 POLICY_REGISTRY_DIR="$(mktemp -d)"
-cat > "$POLICY_REGISTRY_DIR/mog.toml" <<EOF_POLICY_REGISTRY
+cat > "$POLICY_REGISTRY_DIR/kelvra.toml" <<EOF_POLICY_REGISTRY
 kind = "project"
 name = "policy-registry-test"
 version = "0.1.0"
@@ -4278,46 +4278,46 @@ index = "$REGISTRY_DIR"
 http = { package = "acme:http", version = "1.0.0" }
 EOF_POLICY_REGISTRY
 
-if (cd "$POLICY_REGISTRY_DIR" && "$MOG" install >/tmp/mog_policy_registry_failure.txt 2>&1); then
+if (cd "$POLICY_REGISTRY_DIR" && "$KELVRA" install >/tmp/kelvra_policy_registry_failure.txt 2>&1); then
     echo "[FAIL] install should reject dependencies from registries outside policy allowlists"
-    cat /tmp/mog_policy_registry_failure.txt
+    cat /tmp/kelvra_policy_registry_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "Project policy disallows registry 'default' for package 'acme:http'." /tmp/mog_policy_registry_failure.txt; then
+if ! grep -Fq "Project policy disallows registry 'default' for package 'acme:http'." /tmp/kelvra_policy_registry_failure.txt; then
     echo "[FAIL] registry policy failure should name the rejected registry and package"
-    cat /tmp/mog_policy_registry_failure.txt
+    cat /tmp/kelvra_policy_registry_failure.txt
     exit 1
 fi
 
 POLICY_NATIVE_DIR="$(mktemp -d)"
-cat > "$POLICY_NATIVE_DIR/mog.toml" <<EOF_POLICY_NATIVE
+cat > "$POLICY_NATIVE_DIR/kelvra.toml" <<EOF_POLICY_NATIVE
 kind = "project"
 name = "policy-native-test"
 version = "0.1.0"
 description = "policy native test"
 
 [policy]
-allowed_native_namespaces = ["mog"]
+allowed_native_namespaces = ["kelvra"]
 
 [dependencies]
 math = { path = "$PROJECT_ROOT/packages/examples/math", package = "examples:math", version = "0.1.0" }
 EOF_POLICY_NATIVE
 
-if (cd "$POLICY_NATIVE_DIR" && "$MOG" install >/tmp/mog_policy_native_failure.txt 2>&1); then
+if (cd "$POLICY_NATIVE_DIR" && "$KELVRA" install >/tmp/kelvra_policy_native_failure.txt 2>&1); then
     echo "[FAIL] install should reject native packages outside allowed namespaces"
-    cat /tmp/mog_policy_native_failure.txt
+    cat /tmp/kelvra_policy_native_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "Project policy disallows native package 'examples:math' from namespace 'examples'." /tmp/mog_policy_native_failure.txt; then
+if ! grep -Fq "Project policy disallows native package 'examples:math' from namespace 'examples'." /tmp/kelvra_policy_native_failure.txt; then
     echo "[FAIL] native namespace policy failure should name the rejected package"
-    cat /tmp/mog_policy_native_failure.txt
+    cat /tmp/kelvra_policy_native_failure.txt
     exit 1
 fi
 
 POLICY_CI_DIR="$(mktemp -d)"
-cat > "$POLICY_CI_DIR/mog.toml" <<EOF_POLICY_CI
+cat > "$POLICY_CI_DIR/kelvra.toml" <<EOF_POLICY_CI
 kind = "project"
 name = "policy-ci-test"
 version = "0.1.0"
@@ -4330,46 +4330,46 @@ require_locked_in_ci = true
 hello = { path = "$PROJECT_ROOT/packages/examples/hello", package = "examples:hello", version = "0.1.0" }
 EOF_POLICY_CI
 
-cat > "$POLICY_CI_DIR/app.mog" <<'EOF_POLICY_CI_APP'
+cat > "$POLICY_CI_DIR/app.kel" <<'EOF_POLICY_CI_APP'
 const hello = @import("hello")
 print(hello.Greet())
 EOF_POLICY_CI_APP
 
-if ! (cd "$POLICY_CI_DIR" && CI= "$MOG" install >/dev/null); then
+if ! (cd "$POLICY_CI_DIR" && CI= "$KELVRA" install >/dev/null); then
     echo "[FAIL] baseline install should succeed before CI locked policy is enforced"
     exit 1
 fi
 
-if (cd "$POLICY_CI_DIR" && CI=1 "$MOG" install >/tmp/mog_policy_ci_install_failure.txt 2>&1); then
+if (cd "$POLICY_CI_DIR" && CI=1 "$KELVRA" install >/tmp/kelvra_policy_ci_install_failure.txt 2>&1); then
     echo "[FAIL] CI installs should require --locked when policy enables it"
-    cat /tmp/mog_policy_ci_install_failure.txt
+    cat /tmp/kelvra_policy_ci_install_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "Project policy requires --locked installs when CI is set in the environment." /tmp/mog_policy_ci_install_failure.txt; then
+if ! grep -Fq "Project policy requires --locked installs when CI is set in the environment." /tmp/kelvra_policy_ci_install_failure.txt; then
     echo "[FAIL] CI locked-policy failure should explain the required flag"
-    cat /tmp/mog_policy_ci_install_failure.txt
+    cat /tmp/kelvra_policy_ci_install_failure.txt
     exit 1
 fi
 
-if ! (cd "$POLICY_CI_DIR" && CI=1 "$MOG" install --locked >/dev/null); then
+if ! (cd "$POLICY_CI_DIR" && CI=1 "$KELVRA" install --locked >/dev/null); then
     echo "[FAIL] install --locked should satisfy the CI locked policy"
     exit 1
 fi
 
-if (cd "$POLICY_CI_DIR" && CI=1 "$MOG" run app.mog >/tmp/mog_policy_ci_run_failure.txt 2>&1); then
+if (cd "$POLICY_CI_DIR" && CI=1 "$KELVRA" run app.kel >/tmp/kelvra_policy_ci_run_failure.txt 2>&1); then
     echo "[FAIL] CI runs should require --locked when policy enables it"
-    cat /tmp/mog_policy_ci_run_failure.txt
+    cat /tmp/kelvra_policy_ci_run_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "Project policy requires --locked installs when CI is set in the environment." /tmp/mog_policy_ci_run_failure.txt; then
+if ! grep -Fq "Project policy requires --locked installs when CI is set in the environment." /tmp/kelvra_policy_ci_run_failure.txt; then
     echo "[FAIL] CI run failure should explain the required flag"
-    cat /tmp/mog_policy_ci_run_failure.txt
+    cat /tmp/kelvra_policy_ci_run_failure.txt
     exit 1
 fi
 
-if [[ "$(cd "$POLICY_CI_DIR" && CI=1 "$MOG" run --locked app.mog)" != *"hello from source package"* ]]; then
+if [[ "$(cd "$POLICY_CI_DIR" && CI=1 "$KELVRA" run --locked app.kel)" != *"hello from source package"* ]]; then
     echo "[FAIL] run --locked should satisfy the CI locked policy"
     exit 1
 fi
@@ -4377,15 +4377,15 @@ fi
 SCRIPT_WORKFLOW_DIR="$(mktemp -d)"
 mkdir -p "$SCRIPT_WORKFLOW_DIR/tests" "$SCRIPT_WORKFLOW_DIR/tools" \
     "$SCRIPT_WORKFLOW_DIR/packages/examples/build-helper/src"
-cat > "$SCRIPT_WORKFLOW_DIR/mog.toml" <<EOF_SCRIPTS
+cat > "$SCRIPT_WORKFLOW_DIR/kelvra.toml" <<EOF_SCRIPTS
 kind = "project"
 name = "script-workflow"
 version = "0.1.0"
 description = "script workflow test"
 
 [scripts]
-test = "./tests/main.mog"
-build = "tools/build.mog"
+test = "./tests/main.kel"
+build = "tools/build.kel"
 
 [dependencies]
 math = { path = "$PROJECT_ROOT/packages/examples/math", package = "examples:math", version = "0.1.0" }
@@ -4397,13 +4397,13 @@ hello = { path = "$PROJECT_ROOT/packages/examples/hello", package = "examples:he
 build_helper = { path = "packages/examples/build-helper", package = "examples:build-helper", version = "0.1.0" }
 EOF_SCRIPTS
 
-cat > "$SCRIPT_WORKFLOW_DIR/packages/examples/build-helper/src/main.mog" <<'EOF_BUILD_HELPER_SRC'
+cat > "$SCRIPT_WORKFLOW_DIR/packages/examples/build-helper/src/main.kel" <<'EOF_BUILD_HELPER_SRC'
 fn Name() str {
     return "build-helper"
 }
 EOF_BUILD_HELPER_SRC
 
-cat > "$SCRIPT_WORKFLOW_DIR/packages/examples/build-helper/mog.toml" <<'EOF_BUILD_HELPER_MANIFEST'
+cat > "$SCRIPT_WORKFLOW_DIR/packages/examples/build-helper/kelvra.toml" <<'EOF_BUILD_HELPER_MANIFEST'
 kind = "source"
 import_name = "build_helper"
 namespace = "examples"
@@ -4411,110 +4411,110 @@ name = "build-helper"
 version = "0.1.0"
 license = "MIT"
 description = "Build-only helper package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_BUILD_HELPER_MANIFEST
 
-cat > "$SCRIPT_WORKFLOW_DIR/tests/main.mog" <<'EOF_SCRIPT_TEST'
+cat > "$SCRIPT_WORKFLOW_DIR/tests/main.kel" <<'EOF_SCRIPT_TEST'
 const hello = @import("hello")
 print("script test")
 print(hello.Greet())
 EOF_SCRIPT_TEST
 
-cat > "$SCRIPT_WORKFLOW_DIR/tools/build.mog" <<'EOF_SCRIPT_BUILD'
+cat > "$SCRIPT_WORKFLOW_DIR/tools/build.kel" <<'EOF_SCRIPT_BUILD'
 const build_helper = @import("build_helper")
 print("script build")
 print(build_helper.Name())
 EOF_SCRIPT_BUILD
 
-if ! (cd "$SCRIPT_WORKFLOW_DIR" && "$MOG" remove math >/dev/null); then
+if ! (cd "$SCRIPT_WORKFLOW_DIR" && "$KELVRA" remove math >/dev/null); then
     echo "[FAIL] script workflow setup should preserve [scripts] through manifest rewrites"
     exit 1
 fi
 
-if ! grep -Fq '[scripts]' "$SCRIPT_WORKFLOW_DIR/mog.toml" || \
-   ! grep -Fq 'test = "tests/main.mog"' "$SCRIPT_WORKFLOW_DIR/mog.toml" || \
-   ! grep -Fq 'build = "tools/build.mog"' "$SCRIPT_WORKFLOW_DIR/mog.toml"; then
+if ! grep -Fq '[scripts]' "$SCRIPT_WORKFLOW_DIR/kelvra.toml" || \
+   ! grep -Fq 'test = "tests/main.kel"' "$SCRIPT_WORKFLOW_DIR/kelvra.toml" || \
+   ! grep -Fq 'build = "tools/build.kel"' "$SCRIPT_WORKFLOW_DIR/kelvra.toml"; then
     echo "[FAIL] project manifest rewrites should round-trip the [scripts] table"
-    cat "$SCRIPT_WORKFLOW_DIR/mog.toml"
+    cat "$SCRIPT_WORKFLOW_DIR/kelvra.toml"
     exit 1
 fi
 
-SCRIPT_TEST_OUTPUT="$(cd "$SCRIPT_WORKFLOW_DIR" && "$MOG" test)"
+SCRIPT_TEST_OUTPUT="$(cd "$SCRIPT_WORKFLOW_DIR" && "$KELVRA" test)"
 if [[ "$SCRIPT_TEST_OUTPUT" != *"script test"* || \
       "$SCRIPT_TEST_OUTPUT" != *"hello from source package"* ]]; then
-    echo "[FAIL] mog test should run the configured script and install dev dependencies"
+    echo "[FAIL] kelvra test should run the configured script and install dev dependencies"
     echo "$SCRIPT_TEST_OUTPUT"
     exit 1
 fi
-if grep -Fq 'examples:build-helper' "$SCRIPT_WORKFLOW_DIR/.mog/install/registry.toml"; then
-    echo "[FAIL] mog test should not install build-only dependencies"
-    cat "$SCRIPT_WORKFLOW_DIR/.mog/install/registry.toml"
+if grep -Fq 'examples:build-helper' "$SCRIPT_WORKFLOW_DIR/.kelvra/install/registry.toml"; then
+    echo "[FAIL] kelvra test should not install build-only dependencies"
+    cat "$SCRIPT_WORKFLOW_DIR/.kelvra/install/registry.toml"
     exit 1
 fi
-if ! (cd "$SCRIPT_WORKFLOW_DIR" && "$MOG" install --offline >/dev/null); then
-    echo "[FAIL] mog install should restore build-only dependencies for the full developer graph"
+if ! (cd "$SCRIPT_WORKFLOW_DIR" && "$KELVRA" install --offline >/dev/null); then
+    echo "[FAIL] kelvra install should restore build-only dependencies for the full developer graph"
     exit 1
 fi
 
-SCRIPT_BUILD_OUTPUT="$(cd "$SCRIPT_WORKFLOW_DIR" && "$MOG" build --locked --offline)"
+SCRIPT_BUILD_OUTPUT="$(cd "$SCRIPT_WORKFLOW_DIR" && "$KELVRA" build --locked --offline)"
 if [[ "$SCRIPT_BUILD_OUTPUT" != *"script build"* || \
       "$SCRIPT_BUILD_OUTPUT" != *"build-helper"* ]]; then
-    echo "[FAIL] mog build should honor locked/offline execution for configured scripts"
+    echo "[FAIL] kelvra build should honor locked/offline execution for configured scripts"
     echo "$SCRIPT_BUILD_OUTPUT"
     exit 1
 fi
-if ! grep -Fq 'examples:build-helper' "$SCRIPT_WORKFLOW_DIR/.mog/install/registry.toml"; then
-    echo "[FAIL] mog build should install build-only dependencies"
-    cat "$SCRIPT_WORKFLOW_DIR/.mog/install/registry.toml"
+if ! grep -Fq 'examples:build-helper' "$SCRIPT_WORKFLOW_DIR/.kelvra/install/registry.toml"; then
+    echo "[FAIL] kelvra build should install build-only dependencies"
+    cat "$SCRIPT_WORKFLOW_DIR/.kelvra/install/registry.toml"
     exit 1
 fi
 
 SCRIPT_MISSING_DIR="$(mktemp -d)"
-cat > "$SCRIPT_MISSING_DIR/mog.toml" <<'EOF_SCRIPT_MISSING'
+cat > "$SCRIPT_MISSING_DIR/kelvra.toml" <<'EOF_SCRIPT_MISSING'
 kind = "project"
 name = "script-missing"
 version = "0.1.0"
 description = "missing script"
 EOF_SCRIPT_MISSING
 
-if (cd "$SCRIPT_MISSING_DIR" && "$MOG" test >/tmp/mog_script_missing_failure.txt 2>&1); then
-    echo "[FAIL] mog test should reject projects without [scripts].test"
-    cat /tmp/mog_script_missing_failure.txt
+if (cd "$SCRIPT_MISSING_DIR" && "$KELVRA" test >/tmp/kelvra_script_missing_failure.txt 2>&1); then
+    echo "[FAIL] kelvra test should reject projects without [scripts].test"
+    cat /tmp/kelvra_script_missing_failure.txt
     exit 1
 fi
 
-if ! grep -Fq '[scripts].test' /tmp/mog_script_missing_failure.txt; then
+if ! grep -Fq '[scripts].test' /tmp/kelvra_script_missing_failure.txt; then
     echo "[FAIL] missing test-script failures should mention [scripts].test"
-    cat /tmp/mog_script_missing_failure.txt
+    cat /tmp/kelvra_script_missing_failure.txt
     exit 1
 fi
 
 SCRIPT_INVALID_ABS_DIR="$(mktemp -d)"
-cat > "$SCRIPT_INVALID_ABS_DIR/mog.toml" <<EOF_SCRIPT_INVALID_ABS
+cat > "$SCRIPT_INVALID_ABS_DIR/kelvra.toml" <<EOF_SCRIPT_INVALID_ABS
 kind = "project"
 name = "script-invalid-abs"
 version = "0.1.0"
 description = "invalid absolute script"
 
 [scripts]
-test = "$PROJECT_ROOT/tests/sample.mog"
+test = "$PROJECT_ROOT/tests/sample.kel"
 EOF_SCRIPT_INVALID_ABS
 
-if (cd "$SCRIPT_INVALID_ABS_DIR" && "$MOG" test >/tmp/mog_script_abs_failure.txt 2>&1); then
+if (cd "$SCRIPT_INVALID_ABS_DIR" && "$KELVRA" test >/tmp/kelvra_script_abs_failure.txt 2>&1); then
     echo "[FAIL] absolute script paths should be rejected"
-    cat /tmp/mog_script_abs_failure.txt
+    cat /tmp/kelvra_script_abs_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "must be a relative path" /tmp/mog_script_abs_failure.txt; then
+if ! grep -Fq "must be a relative path" /tmp/kelvra_script_abs_failure.txt; then
     echo "[FAIL] absolute script failures should explain the relative-path requirement"
-    cat /tmp/mog_script_abs_failure.txt
+    cat /tmp/kelvra_script_abs_failure.txt
     exit 1
 fi
 
 SCRIPT_INVALID_EXT_DIR="$(mktemp -d)"
-cat > "$SCRIPT_INVALID_EXT_DIR/mog.toml" <<'EOF_SCRIPT_INVALID_EXT'
+cat > "$SCRIPT_INVALID_EXT_DIR/kelvra.toml" <<'EOF_SCRIPT_INVALID_EXT'
 kind = "project"
 name = "script-invalid-ext"
 version = "0.1.0"
@@ -4524,52 +4524,52 @@ description = "invalid extension script"
 test = "tests/main.txt"
 EOF_SCRIPT_INVALID_EXT
 
-if (cd "$SCRIPT_INVALID_EXT_DIR" && "$MOG" test >/tmp/mog_script_ext_failure.txt 2>&1); then
-    echo "[FAIL] script paths with non-.mog extensions should be rejected"
-    cat /tmp/mog_script_ext_failure.txt
+if (cd "$SCRIPT_INVALID_EXT_DIR" && "$KELVRA" test >/tmp/kelvra_script_ext_failure.txt 2>&1); then
+    echo "[FAIL] script paths with non-.kel extensions should be rejected"
+    cat /tmp/kelvra_script_ext_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "must use the .mog extension" /tmp/mog_script_ext_failure.txt; then
-    echo "[FAIL] invalid script-extension failures should explain the .mog requirement"
-    cat /tmp/mog_script_ext_failure.txt
+if ! grep -Fq "must use the .kel extension" /tmp/kelvra_script_ext_failure.txt; then
+    echo "[FAIL] invalid script-extension failures should explain the .kel requirement"
+    cat /tmp/kelvra_script_ext_failure.txt
     exit 1
 fi
 
 SCRIPT_INVALID_ESCAPE_DIR="$(mktemp -d)"
-cat > "$SCRIPT_INVALID_ESCAPE_DIR/mog.toml" <<'EOF_SCRIPT_INVALID_ESCAPE'
+cat > "$SCRIPT_INVALID_ESCAPE_DIR/kelvra.toml" <<'EOF_SCRIPT_INVALID_ESCAPE'
 kind = "project"
 name = "script-invalid-escape"
 version = "0.1.0"
 description = "invalid escaping script"
 
 [scripts]
-test = "../outside.mog"
+test = "../outside.kel"
 EOF_SCRIPT_INVALID_ESCAPE
 
-if (cd "$SCRIPT_INVALID_ESCAPE_DIR" && "$MOG" test >/tmp/mog_script_escape_failure.txt 2>&1); then
+if (cd "$SCRIPT_INVALID_ESCAPE_DIR" && "$KELVRA" test >/tmp/kelvra_script_escape_failure.txt 2>&1); then
     echo "[FAIL] script paths that escape the project root should be rejected"
-    cat /tmp/mog_script_escape_failure.txt
+    cat /tmp/kelvra_script_escape_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "must stay within the project root" /tmp/mog_script_escape_failure.txt; then
+if ! grep -Fq "must stay within the project root" /tmp/kelvra_script_escape_failure.txt; then
     echo "[FAIL] escaping script failures should explain the project-root restriction"
-    cat /tmp/mog_script_escape_failure.txt
+    cat /tmp/kelvra_script_escape_failure.txt
     exit 1
 fi
 
 CACHE_STATUS_DIR="$(mktemp -d)"
 EXPECTED_CACHE_ROOT="$TEMP_DIR/cache-root"
 EXPECTED_USER_CACHE="$EXPECTED_CACHE_ROOT/packages"
-EXPECTED_PROJECT_CACHE="$CACHE_STATUS_DIR/.mog/cache/packages/local"
+EXPECTED_PROJECT_CACHE="$CACHE_STATUS_DIR/.kelvra/cache/packages/local"
 EXPECTED_REGISTRY_CACHE="$EXPECTED_CACHE_ROOT/registry"
 EXPECTED_GIT_CACHE="$EXPECTED_CACHE_ROOT/git"
 
-CACHE_PATH_USER="$(cd "$CACHE_STATUS_DIR" && MOG_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$MOG" cache path user)"
-CACHE_PATH_PROJECT="$(cd "$CACHE_STATUS_DIR" && MOG_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$MOG" cache path project)"
-CACHE_PATH_REGISTRY="$(cd "$CACHE_STATUS_DIR" && MOG_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$MOG" cache path registry)"
-CACHE_PATH_GIT="$(cd "$CACHE_STATUS_DIR" && MOG_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$MOG" cache path git)"
+CACHE_PATH_USER="$(cd "$CACHE_STATUS_DIR" && KELVRA_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$KELVRA" cache path user)"
+CACHE_PATH_PROJECT="$(cd "$CACHE_STATUS_DIR" && KELVRA_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$KELVRA" cache path project)"
+CACHE_PATH_REGISTRY="$(cd "$CACHE_STATUS_DIR" && KELVRA_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$KELVRA" cache path registry)"
+CACHE_PATH_GIT="$(cd "$CACHE_STATUS_DIR" && KELVRA_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$KELVRA" cache path git)"
 
 if [[ "$CACHE_PATH_USER" != "$EXPECTED_USER_CACHE" || \
       "$CACHE_PATH_PROJECT" != "$EXPECTED_PROJECT_CACHE" || \
@@ -4581,7 +4581,7 @@ if [[ "$CACHE_PATH_USER" != "$EXPECTED_USER_CACHE" || \
     exit 1
 fi
 
-CACHE_STATUS_OUTPUT="$(cd "$CACHE_STATUS_DIR" && MOG_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$MOG" cache status)"
+CACHE_STATUS_OUTPUT="$(cd "$CACHE_STATUS_DIR" && KELVRA_CACHE_DIR="$EXPECTED_CACHE_ROOT" "$KELVRA" cache status)"
 if [[ "$CACHE_STATUS_OUTPUT" != *"user_packages = $EXPECTED_USER_CACHE"* || \
       "$CACHE_STATUS_OUTPUT" != *"project_fallback_packages = $EXPECTED_PROJECT_CACHE"* || \
       "$CACHE_STATUS_OUTPUT" != *"registry = $EXPECTED_REGISTRY_CACHE"* || \
@@ -4592,7 +4592,7 @@ if [[ "$CACHE_STATUS_OUTPUT" != *"user_packages = $EXPECTED_USER_CACHE"* || \
 fi
 
 CACHE_PRUNE_DIR="$(mktemp -d)"
-cat > "$CACHE_PRUNE_DIR/mog.toml" <<EOF_CACHE_PRUNE
+cat > "$CACHE_PRUNE_DIR/kelvra.toml" <<EOF_CACHE_PRUNE
 kind = "project"
 name = "cache-prune"
 version = "0.1.0"
@@ -4602,13 +4602,13 @@ description = "cache prune test"
 hello = { path = "$PROJECT_ROOT/packages/examples/hello", package = "examples:hello", version = "0.1.0" }
 EOF_CACHE_PRUNE
 
-cat > "$CACHE_PRUNE_DIR/app.mog" <<'EOF_CACHE_PRUNE_APP'
+cat > "$CACHE_PRUNE_DIR/app.kel" <<'EOF_CACHE_PRUNE_APP'
 const hello = @import("hello")
 print(hello.Greet())
 EOF_CACHE_PRUNE_APP
 
 CACHE_PRUNE_ROOT="$TEMP_DIR/cache-prune-root"
-if ! (cd "$CACHE_PRUNE_DIR" && MOG_CACHE_DIR="$CACHE_PRUNE_ROOT" "$MOG" install >/dev/null); then
+if ! (cd "$CACHE_PRUNE_DIR" && KELVRA_CACHE_DIR="$CACHE_PRUNE_ROOT" "$KELVRA" install >/dev/null); then
     echo "[FAIL] cache prune setup install should succeed"
     exit 1
 fi
@@ -4619,7 +4619,7 @@ if [[ -z "$CACHE_LOCAL_ENTRY" ]]; then
     exit 1
 fi
 
-CACHE_PRUNE_DRY_RUN_OUTPUT="$(cd "$CACHE_PRUNE_DIR" && MOG_CACHE_DIR="$CACHE_PRUNE_ROOT" "$MOG" cache prune --dry-run)"
+CACHE_PRUNE_DRY_RUN_OUTPUT="$(cd "$CACHE_PRUNE_DIR" && KELVRA_CACHE_DIR="$CACHE_PRUNE_ROOT" "$KELVRA" cache prune --dry-run)"
 if [[ "$CACHE_PRUNE_DRY_RUN_OUTPUT" != *"Would remove"* || \
       "$CACHE_PRUNE_DRY_RUN_OUTPUT" != *"$CACHE_LOCAL_ENTRY"* ]]; then
     echo "[FAIL] cache prune --dry-run should report removable cache entries"
@@ -4631,7 +4631,7 @@ if [[ ! -d "$CACHE_LOCAL_ENTRY" ]]; then
     exit 1
 fi
 
-CACHE_PRUNE_OUTPUT="$(cd "$CACHE_PRUNE_DIR" && MOG_CACHE_DIR="$CACHE_PRUNE_ROOT" "$MOG" cache prune)"
+CACHE_PRUNE_OUTPUT="$(cd "$CACHE_PRUNE_DIR" && KELVRA_CACHE_DIR="$CACHE_PRUNE_ROOT" "$KELVRA" cache prune)"
 if [[ "$CACHE_PRUNE_OUTPUT" != *"Removed"* ]]; then
     echo "[FAIL] cache prune should report removed cache entries"
     echo "$CACHE_PRUNE_OUTPUT"
@@ -4641,11 +4641,11 @@ if [[ -d "$CACHE_LOCAL_ENTRY" ]]; then
     echo "[FAIL] cache prune should remove stale local cache entries"
     exit 1
 fi
-if [[ ! -f "$CACHE_PRUNE_DIR/.mog/install/registry.toml" ]]; then
+if [[ ! -f "$CACHE_PRUNE_DIR/.kelvra/install/registry.toml" ]]; then
     echo "[FAIL] cache prune should not touch active install metadata"
     exit 1
 fi
-if [[ "$(cd "$CACHE_PRUNE_DIR" && MOG_CACHE_DIR="$CACHE_PRUNE_ROOT" "$MOG" run app.mog)" != *"hello from source package"* ]]; then
+if [[ "$(cd "$CACHE_PRUNE_DIR" && KELVRA_CACHE_DIR="$CACHE_PRUNE_ROOT" "$KELVRA" run app.kel)" != *"hello from source package"* ]]; then
     echo "[FAIL] cache prune should leave the active install runnable"
     exit 1
 fi
@@ -4653,7 +4653,7 @@ fi
 WORKSPACE_DIR="$(mktemp -d)"
 mkdir -p "$WORKSPACE_DIR/apps/demo" "$WORKSPACE_DIR/members/hello-local/src"
 
-cat > "$WORKSPACE_DIR/mog.toml" <<'EOF_WORKSPACE'
+cat > "$WORKSPACE_DIR/kelvra.toml" <<'EOF_WORKSPACE'
 kind = "project"
 name = "workspace-root"
 version = "0.1.0"
@@ -4666,19 +4666,19 @@ members = ["members/hello-local"]
 hello = { workspace = true, package = "examples:hello-local", version = "0.1.0" }
 EOF_WORKSPACE
 
-cat > "$WORKSPACE_DIR/members/hello-local/mog.toml" <<'EOF_MEMBER'
+cat > "$WORKSPACE_DIR/members/hello-local/kelvra.toml" <<'EOF_MEMBER'
 kind = "source"
 import_name = "hello"
 namespace = "examples"
 name = "hello-local"
 version = "0.1.0"
-author = "Mog runtime"
+author = "Kelvra runtime"
 description = "Workspace hello package."
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_MEMBER
 
-cat > "$WORKSPACE_DIR/members/hello-local/src/main.mog" <<'EOF_MEMBER_SRC'
+cat > "$WORKSPACE_DIR/members/hello-local/src/main.kel" <<'EOF_MEMBER_SRC'
 const MESSAGE str = "hello from workspace package"
 
 fn Greet() str {
@@ -4686,14 +4686,14 @@ fn Greet() str {
 }
 EOF_MEMBER_SRC
 
-cat > "$WORKSPACE_DIR/apps/demo/app.mog" <<'EOF_WORKSPACE_APP'
+cat > "$WORKSPACE_DIR/apps/demo/app.kel" <<'EOF_WORKSPACE_APP'
 const hello = @import("hello")
 print(hello.Greet())
 EOF_WORKSPACE_APP
 
 pushd "$WORKSPACE_DIR/apps/demo" >/dev/null
-"$MOG" install >/dev/null
-WORKSPACE_RUN_OUTPUT="$("$MOG" run app.mog)"
+"$KELVRA" install >/dev/null
+WORKSPACE_RUN_OUTPUT="$("$KELVRA" run app.kel)"
 popd >/dev/null
 
 if [[ "$WORKSPACE_RUN_OUTPUT" != *"hello from workspace package"* ]]; then
@@ -4702,20 +4702,20 @@ if [[ "$WORKSPACE_RUN_OUTPUT" != *"hello from workspace package"* ]]; then
     exit 1
 fi
 
-if [[ ! -f "$WORKSPACE_DIR/.mog/install/registry.toml" || ! -f "$WORKSPACE_DIR/mog.lock" ]]; then
+if [[ ! -f "$WORKSPACE_DIR/.kelvra/install/registry.toml" || ! -f "$WORKSPACE_DIR/kelvra.lock" ]]; then
     echo "[FAIL] workspace-root commands should write install metadata at the workspace root"
     find "$WORKSPACE_DIR" -maxdepth 4 -print
     exit 1
 fi
 
-if ! grep -Fq 'source_type = "workspace"' "$WORKSPACE_DIR/mog.lock"; then
+if ! grep -Fq 'source_type = "workspace"' "$WORKSPACE_DIR/kelvra.lock"; then
     echo "[FAIL] workspace dependencies should be recorded as workspace sources"
-    cat "$WORKSPACE_DIR/mog.lock"
+    cat "$WORKSPACE_DIR/kelvra.lock"
     exit 1
 fi
 
 REMOVE_DIR="$(mktemp -d)"
-cat > "$REMOVE_DIR/mog.toml" <<EOF_REMOVE
+cat > "$REMOVE_DIR/kelvra.toml" <<EOF_REMOVE
 kind = "project"
 name = "remove-test"
 version = "0.1.0"
@@ -4725,49 +4725,49 @@ description = "remove dependency test"
 hello = { path = "$PROJECT_ROOT/packages/examples/hello", package = "examples:hello", version = "0.1.0" }
 EOF_REMOVE
 
-cat > "$REMOVE_DIR/app.mog" <<'EOF_REMOVE_APP'
+cat > "$REMOVE_DIR/app.kel" <<'EOF_REMOVE_APP'
 const hello = @import("hello")
 print(hello.Greet())
 EOF_REMOVE_APP
 
-if [[ "$(cd "$REMOVE_DIR" && "$MOG" run app.mog)" != *"hello from source package"* ]]; then
+if [[ "$(cd "$REMOVE_DIR" && "$KELVRA" run app.kel)" != *"hello from source package"* ]]; then
     echo "[FAIL] remove test setup should run before the dependency is removed"
     exit 1
 fi
 
-if ! (cd "$REMOVE_DIR" && "$MOG" remove hello >/dev/null); then
+if ! (cd "$REMOVE_DIR" && "$KELVRA" remove hello >/dev/null); then
     echo "[FAIL] remove should delete a direct dependency and refresh install metadata"
     exit 1
 fi
 
-if grep -Fq 'hello = {' "$REMOVE_DIR/mog.toml"; then
-    echo "[FAIL] remove should delete the dependency entry from mog.toml"
-    cat "$REMOVE_DIR/mog.toml"
+if grep -Fq 'hello = {' "$REMOVE_DIR/kelvra.toml"; then
+    echo "[FAIL] remove should delete the dependency entry from kelvra.toml"
+    cat "$REMOVE_DIR/kelvra.toml"
     exit 1
 fi
 
-if grep -Fq 'examples:hello' "$REMOVE_DIR/mog.lock" || \
-   grep -Fq 'examples:hello' "$REMOVE_DIR/.mog/install/registry.toml"; then
-    echo "[FAIL] remove should refresh mog.lock and install metadata after deletion"
-    cat "$REMOVE_DIR/mog.lock"
-    cat "$REMOVE_DIR/.mog/install/registry.toml"
+if grep -Fq 'examples:hello' "$REMOVE_DIR/kelvra.lock" || \
+   grep -Fq 'examples:hello' "$REMOVE_DIR/.kelvra/install/registry.toml"; then
+    echo "[FAIL] remove should refresh kelvra.lock and install metadata after deletion"
+    cat "$REMOVE_DIR/kelvra.lock"
+    cat "$REMOVE_DIR/.kelvra/install/registry.toml"
     exit 1
 fi
 
-if (cd "$REMOVE_DIR" && "$MOG" run app.mog >/tmp/mog_remove_run_failure.txt 2>&1); then
+if (cd "$REMOVE_DIR" && "$KELVRA" run app.kel >/tmp/kelvra_remove_run_failure.txt 2>&1); then
     echo "[FAIL] removed dependencies should no longer resolve during run"
-    cat /tmp/mog_remove_run_failure.txt
+    cat /tmp/kelvra_remove_run_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "hello" /tmp/mog_remove_run_failure.txt; then
+if ! grep -Fq "hello" /tmp/kelvra_remove_run_failure.txt; then
     echo "[FAIL] run failures after remove should still reference the missing import"
-    cat /tmp/mog_remove_run_failure.txt
+    cat /tmp/kelvra_remove_run_failure.txt
     exit 1
 fi
 
 REMOVE_DEV_DIR="$(mktemp -d)"
-cat > "$REMOVE_DEV_DIR/mog.toml" <<EOF_REMOVE_DEV
+cat > "$REMOVE_DEV_DIR/kelvra.toml" <<EOF_REMOVE_DEV
 kind = "project"
 name = "remove-dev-test"
 version = "0.1.0"
@@ -4777,34 +4777,34 @@ description = "remove dev dependency test"
 hello = { path = "$PROJECT_ROOT/packages/examples/hello", package = "examples:hello", version = "0.1.0" }
 EOF_REMOVE_DEV
 
-if ! (cd "$REMOVE_DEV_DIR" && "$MOG" remove hello >/dev/null); then
+if ! (cd "$REMOVE_DEV_DIR" && "$KELVRA" remove hello >/dev/null); then
     echo "[FAIL] remove should delete dev-dependencies when no normal dependency matches"
     exit 1
 fi
 
-if grep -Fq 'hello = {' "$REMOVE_DEV_DIR/mog.toml"; then
+if grep -Fq 'hello = {' "$REMOVE_DEV_DIR/kelvra.toml"; then
     echo "[FAIL] remove should delete the alias from [dev-dependencies]"
-    cat "$REMOVE_DEV_DIR/mog.toml"
+    cat "$REMOVE_DEV_DIR/kelvra.toml"
     exit 1
 fi
 
-if grep -Fq 'examples:hello' "$REMOVE_DEV_DIR/mog.lock" || \
-   grep -Fq 'examples:hello' "$REMOVE_DEV_DIR/.mog/install/registry.toml"; then
+if grep -Fq 'examples:hello' "$REMOVE_DEV_DIR/kelvra.lock" || \
+   grep -Fq 'examples:hello' "$REMOVE_DEV_DIR/.kelvra/install/registry.toml"; then
     echo "[FAIL] remove should refresh metadata after deleting a dev-dependency"
-    cat "$REMOVE_DEV_DIR/mog.lock"
-    cat "$REMOVE_DEV_DIR/.mog/install/registry.toml"
+    cat "$REMOVE_DEV_DIR/kelvra.lock"
+    cat "$REMOVE_DEV_DIR/.kelvra/install/registry.toml"
     exit 1
 fi
 
-if (cd "$REMOVE_DEV_DIR" && "$MOG" remove hello >/tmp/mog_remove_missing_failure.txt 2>&1); then
+if (cd "$REMOVE_DEV_DIR" && "$KELVRA" remove hello >/tmp/kelvra_remove_missing_failure.txt 2>&1); then
     echo "[FAIL] remove should reject aliases that are no longer present"
-    cat /tmp/mog_remove_missing_failure.txt
+    cat /tmp/kelvra_remove_missing_failure.txt
     exit 1
 fi
 
-if ! grep -Fq "No dependency named 'hello'" /tmp/mog_remove_missing_failure.txt; then
+if ! grep -Fq "No dependency named 'hello'" /tmp/kelvra_remove_missing_failure.txt; then
     echo "[FAIL] remove missing-alias failures should name the requested alias"
-    cat /tmp/mog_remove_missing_failure.txt
+    cat /tmp/kelvra_remove_missing_failure.txt
     exit 1
 fi
 

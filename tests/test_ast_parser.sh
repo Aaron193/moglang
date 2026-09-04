@@ -12,7 +12,7 @@ if [[ ! -x "$SMOKE_BIN" ]]; then
 fi
 
 "$SMOKE_BIN" \
-    "$SCRIPT_DIR/types/parser/sample_typed_parser.mog" \
-    "$SCRIPT_DIR/types/parser/sample_ast_full_parser.mog" \
-    "$SCRIPT_DIR/types/parser/sample_import_typed_binding_parser.mog" \
-    "$SCRIPT_DIR/types/parser/sample_type_inference_parser.mog"
+    "$SCRIPT_DIR/types/parser/sample_typed_parser.kel" \
+    "$SCRIPT_DIR/types/parser/sample_ast_full_parser.kel" \
+    "$SCRIPT_DIR/types/parser/sample_import_typed_binding_parser.kel" \
+    "$SCRIPT_DIR/types/parser/sample_type_inference_parser.kel"

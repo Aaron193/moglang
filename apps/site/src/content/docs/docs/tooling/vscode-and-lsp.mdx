@@ -1,16 +1,16 @@
 ---
 title: VS Code and LSP
-description: Install and use the official Mog extension, its bundled language server, and recovery tools.
+description: Install and use the official Kelvra extension, its bundled language server, and recovery tools.
 ---
 
-The official **Moglang Developer Tools** extension pairs language syntax and
-snippets with the `mog-lsp` server.
+The official **Kelvra Developer Tools** extension pairs language syntax and
+snippets with the `kelvra-lsp` server.
 
 ## Install from the Marketplace
 
 Install the extension from the
-[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=moglang.vscode-mog),
-or search for **Moglang Developer Tools** in VS Code's Extensions view.
+[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=kelvralang.vscode-kelvra),
+or search for **Kelvra Developer Tools** in VS Code's Extensions view.
 
 Platform-specific packages for Linux x64, Apple Silicon macOS, and Windows x64
 include a tested language server. The extension does not download executables
@@ -20,7 +20,7 @@ at activation time and does not collect telemetry.
 
 The shipped extension and language server provide:
 
-- syntax highlighting, snippets, bracket/comment behavior, and a `.mog` file icon
+- syntax highlighting, snippets, bracket/comment behavior, and a `.kel` file icon
 - diagnostics, completion, and hover information
 - go to definition, references, rename, and workspace symbols
 - document formatting and semantic highlighting
@@ -30,7 +30,7 @@ For source declarations, a contiguous `//` comment group or `/* ... */` comment
 immediately above a declaration appears when hovering its references. A blank
 line detaches the comment.
 
-Package `package.api.mog` files also drive hover documentation from `@doc(...)`,
+Package `package.api.kel` files also drive hover documentation from `@doc(...)`,
 navigation to opaque package types, and readable imported signatures.
 
 ## Server discovery
@@ -38,12 +38,12 @@ navigation to opaque package types, and readable imported signatures.
 Normally, the bundled server starts automatically. For source checkouts and
 generic development VSIX files, discovery checks these locations in order:
 
-1. the explicit `mog.serverPath` setting
+1. the explicit `kelvra.serverPath` setting
 2. the server bundled with the extension
-3. an installed Mog runtime selected with `mog.runtimePath`
+3. an installed Kelvra runtime selected with `kelvra.runtimePath`
 4. the active project's build directory
 5. each workspace folder's build directory
-6. `mog-lsp` on `PATH`
+6. `kelvra-lsp` on `PATH`
 
 Relative settings resolve from the relevant workspace folder. An invalid
 explicit override is reported instead of being silently ignored.
@@ -52,18 +52,18 @@ explicit override is reported instead of being silently ignored.
 
 Open the Command Palette and run:
 
-- **Mog: Show Language Server Status** to see the executable, working directory,
+- **Kelvra: Show Language Server Status** to see the executable, working directory,
   server version, tooling protocol, and current state
-- **Mog: Open Language Server Log** to inspect every discovery candidate and
+- **Kelvra: Open Language Server Log** to inspect every discovery candidate and
   rejection
-- **Mog: Select Language Server** to validate and save an executable override
-- **Mog: Restart Language Server** after rebuilding or changing configuration
-- **Mog: Install Project Dependencies** to run package installation with explicit
+- **Kelvra: Select Language Server** to validate and save an executable override
+- **Kelvra: Restart Language Server** after rebuilding or changing configuration
+- **Kelvra: Install Project Dependencies** to run package installation with explicit
   consent and visible progress
 
 If a relocated CMake build is selected, its cached source path may be invalid.
 Remove that dedicated build directory, configure it again from the current
-checkout, rebuild `mog-lsp`, and restart the server. Repeated server crashes are
+checkout, rebuild `kelvra-lsp`, and restart the server. Repeated server crashes are
 bounded and remain visible instead of causing an endless restart loop.
 
 ## Extension development
@@ -71,22 +71,22 @@ bounded and remain visible instead of causing an endless restart loop.
 From the repository root:
 
 ```bash
-npm --prefix tooling/vscode-mog ci
-npm --prefix tooling/vscode-mog run compile
+npm --prefix tooling/vscode-kelvra ci
+npm --prefix tooling/vscode-kelvra run compile
 ./build.sh
 ```
 
-Use the repository's **Mog: Extension Development Host** launch configuration.
+Use the repository's **Kelvra: Extension Development Host** launch configuration.
 It opens an isolated development host with a development-only server path and
 does not alter personal VS Code settings.
 
 ```bash
-npm --prefix tooling/vscode-mog run check
-npm --prefix tooling/vscode-mog run test:extension
+npm --prefix tooling/vscode-kelvra run check
+npm --prefix tooling/vscode-kelvra run test:extension
 ```
 
 ## Related pages
 
-- [Install Mog](/docs/getting-started/install/)
+- [Install Kelvra](/docs/getting-started/install/)
 - [Authoring Native Packages](/docs/packages/authoring-native-packages/)
 - [Release Notes](/docs/reference/releases/)

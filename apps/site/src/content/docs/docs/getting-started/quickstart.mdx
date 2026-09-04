@@ -1,19 +1,19 @@
 ---
 title: Quickstart
-description: Write and run a first Mog program.
+description: Write and run a first Kelvra program.
 ---
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 
-This walkthrough gets you from an installed runtime to a real `.mog` file with
-functions, locals, and output. If `mog --version` does not work yet, follow
-[Install Mog](/docs/getting-started/install/) first.
+This walkthrough gets you from an installed runtime to a real `.kel` file with
+functions, locals, and output. If `kelvra --version` does not work yet, follow
+[Install Kelvra](/docs/getting-started/install/) first.
 
 ## First Program
 
-Create a file named `hello.mog`:
+Create a file named `hello.kel`:
 
-```mog
+```kelvra
 fn applyTwice(f fn(i32) i32, value i32) i32 {
   return f(f(value))
 }
@@ -26,7 +26,7 @@ print(applyTwice(addOne, 40))
 Run it:
 
 ```bash
-mog run hello.mog
+kelvra run hello.kel
 ```
 
 ## What This Shows
@@ -39,9 +39,9 @@ mog run hello.mog
 
 ## Next Sample
 
-Mog already supports structs, methods, and inferred locals:
+Kelvra already supports structs, methods, and inferred locals:
 
-```mog
+```kelvra
 type Counter struct {
   value i32
 

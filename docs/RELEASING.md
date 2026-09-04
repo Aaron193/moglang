@@ -1,8 +1,8 @@
-# Releasing Mog runtime and editor tooling
+# Releasing Kelvra runtime and editor tooling
 
-Mog has independent, immutable release streams:
+Kelvra has independent, immutable release streams:
 
-- `runtime/vX.Y.Z` publishes the CLI/runtime archives and `mog-lsp` for CLI
+- `runtime/vX.Y.Z` publishes the CLI/runtime archives and `kelvra-lsp` for CLI
   users.
 - `vscode/vX.Y.Z` publishes target-specific VSIX packages with a bundled,
   tested server.
@@ -36,24 +36,24 @@ Before either release:
 
 ## Runtime release
 
-Mog uses semantic versioning:
+Kelvra uses semantic versioning:
 
 - Patch: backward-compatible runtime or tooling improvements.
 - Minor: backwards-compatible language or tooling feature.
 - Major: breaking language, CLI, or package compatibility change.
 
-Update `MOG_VERSION`, the runtime version declaration, and `CHANGELOG.md`, then
+Update `KELVRA_VERSION`, the runtime version declaration, and `CHANGELOG.md`, then
 create the tag on the exact reviewed commit:
 
 ```bash
-git tag -a runtime/v0.2.0 -m "Mog runtime 0.2.0"
+git tag -a runtime/v0.2.0 -m "Kelvra runtime 0.2.0"
 git push origin runtime/v0.2.0
 ```
 
-The `Release Mog Runtime` workflow validates version metadata, core regressions,
+The `Release Kelvra Runtime` workflow validates version metadata, core regressions,
 all editor/LSP protocol suites, and the initialize/shutdown smoke test before
 packaging starts. Each platform job then extracts every generated archive,
-executes the archived `mog` and `mog-lsp`, and inspects native dependencies from
+executes the archived `kelvra` and `kelvra-lsp`, and inspects native dependencies from
 the extracted location. Checksums are generated only after every package job
 passes.
 
@@ -64,7 +64,7 @@ a dependency resolves only from a build directory.
 ## VS Code extension release
 
 Update both extension versions (`package.json` and the lockfile root) and add a
-matching heading to `tooling/vscode-mog/CHANGELOG.md`. Publish breaking protocol
+matching heading to `tooling/vscode-kelvra/CHANGELOG.md`. Publish breaking protocol
 changes as a prerelease first.
 
 Create and push a normal `vscode/vX.Y.Z` tag. Tag pushes publish stable. To
@@ -86,9 +86,9 @@ stable uses a new stable version/tag after the prerelease artifacts have passed
 verification. Do not republish a prerelease VSIX as stable under the same
 version.
 
-`mog-lsp` currently links `interpreter_core`; package-manager support in that
+`kelvra-lsp` currently links `interpreter_core`; package-manager support in that
 library reaches the registry signature implementation in OpenSSL. CMake's
-`MOG_STATIC_OPENSSL` option therefore defaults to `ON` for self-contained
+`KELVRA_STATIC_OPENSSL` option therefore defaults to `ON` for self-contained
 artifacts. Release jobs request that mode explicitly and reject dynamic OpenSSL
 or unresolved dependencies from the extracted artifact. Dependency reports are
 retained in the job log.
@@ -116,15 +116,15 @@ stable extension release cycle, the immediately previous major for migration.
 
 Users normally upgrade or roll back the extension through VS Code's extension
 version menu. A target-specific VSIX can also be installed from the GitHub
-release. After changing versions, run **Mog: Show Language Server Status** and
+release. After changing versions, run **Kelvra: Show Language Server Status** and
 verify the server path and protocol version.
 
 If startup fails:
 
-1. Open **Mog Language Support** output with **Mog: Open Language Server Log**.
-2. Remove an invalid `mog.serverPath` override or deliberately select a valid
+1. Open **Kelvra Language Support** output with **Kelvra: Open Language Server Log**.
+2. Remove an invalid `kelvra.serverPath` override or deliberately select a valid
    executable. The override takes precedence over the bundled server.
-3. Run **Mog: Restart Language Server** after correcting configuration.
+3. Run **Kelvra: Restart Language Server** after correcting configuration.
 4. If a source checkout was moved, delete or rename only
    `build/tooling-debug`, then run `bash scripts/configure_tooling_build.sh`.
    Never reuse a `CMakeCache.txt` whose `CMAKE_HOME_DIRECTORY` names another
@@ -141,7 +141,7 @@ public issue.
 
 - Confirm Marketplace reports the intended stable or pre-release version for
   all targets.
-- Install one published VSIX in a clean profile and open a `.mog` file.
+- Install one published VSIX in a clean profile and open a `.kel` file.
 - Verify completion, hover, diagnostics, navigation, formatting, and rename.
 - Verify published checksums and archive/VSIX filenames.
 - Record startup and crash regressions plus completion/hover/diagnostic/indexing

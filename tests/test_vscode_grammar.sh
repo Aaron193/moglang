@@ -12,14 +12,14 @@ const projectRoot = process.argv[2];
 const grammarPath = path.join(
   projectRoot,
   "tooling",
-  "vscode-mog",
+  "vscode-kelvra",
   "syntaxes",
-  "mog.tmLanguage.json"
+  "kelvra.tmLanguage.json"
 );
 const languageConfigPath = path.join(
   projectRoot,
   "tooling",
-  "vscode-mog",
+  "vscode-kelvra",
   "language-configuration.json"
 );
 const grammar = JSON.parse(fs.readFileSync(grammarPath, "utf8"));
@@ -41,7 +41,7 @@ function compileMatch(pattern) {
 }
 
 function collectTypeCaptureRanges(line) {
-  return collectCaptureRanges(line, "entity.name.type.mog");
+  return collectCaptureRanges(line, "entity.name.type.kel");
 }
 
 function collectCaptureRanges(line, scopeName) {
@@ -104,15 +104,15 @@ function collectCaptureRanges(line, scopeName) {
 }
 
 function collectParameterCaptureRanges(line) {
-  return collectCaptureRanges(line, "variable.parameter.mog");
+  return collectCaptureRanges(line, "variable.parameter.kel");
 }
 
 function collectConstantCaptureRanges(line) {
-  return collectCaptureRanges(line, "variable.other.constant.mog");
+  return collectCaptureRanges(line, "variable.other.constant.kel");
 }
 
 function collectReadwriteCaptureRanges(line) {
-  return collectCaptureRanges(line, "variable.other.readwrite.mog");
+  return collectCaptureRanges(line, "variable.other.readwrite.kel");
 }
 
 function typeRangesForText(line, text) {
@@ -140,7 +140,7 @@ function hasPattern(patternText) {
 requireCondition(
   !grammar.patterns.some(
     (pattern) =>
-      pattern.name === "entity.name.type.mog" &&
+      pattern.name === "entity.name.type.kel" &&
       pattern.match === "\\b[A-Z][A-Za-z0-9_]*\\b"
   ),
   "grammar should not classify every uppercase identifier as a type"
@@ -153,7 +153,7 @@ requireCondition(
 );
 
 const blockCommentPattern = grammar.patterns.find(
-  (pattern) => pattern.name === "comment.block.mog"
+  (pattern) => pattern.name === "comment.block.kel"
 );
 requireCondition(
   blockCommentPattern !== undefined &&
@@ -179,7 +179,7 @@ requireCondition(
 );
 
 const propertyRegex = new RegExp(
-  grammar.patterns.find((pattern) => pattern.name === "variable.other.property.mog").match,
+  grammar.patterns.find((pattern) => pattern.name === "variable.other.property.kel").match,
   "g"
 );
 const propertyMatches = [...reproLine.matchAll(propertyRegex)].map((match) => match[0]);
@@ -206,7 +206,7 @@ const postfixCastLine = "    var pipeX i64 = floor(pipe.x) as i64";
 requireCondition(
   grammar.patterns.some(
     (pattern) =>
-      pattern.name === "entity.name.type.mog" &&
+      pattern.name === "entity.name.type.kel" &&
       pattern.match === "\\b(?:i8|i16|i32|i64|u8|u16|u32|u64|u|usize|f32|f64|bool|str|void|null|fn)\\b"
   ),
   "built-in types should still be highlighted without a cast-specific rule"
@@ -232,8 +232,8 @@ requireCondition(
 );
 const returnTypePattern = grammar.repository["type-context-expression"].patterns.find(
   (pattern) =>
-    pattern.captures?.["1"]?.name === "punctuation.section.group.end.mog" &&
-    pattern.captures?.["2"]?.name === "entity.name.type.mog"
+    pattern.captures?.["1"]?.name === "punctuation.section.group.end.kel" &&
+    pattern.captures?.["2"]?.name === "entity.name.type.kel"
 );
 requireCondition(
   returnTypePattern !== undefined,
@@ -280,7 +280,7 @@ requireCondition(
 );
 
 const keywordPattern = grammar.patterns.find(
-  (pattern) => pattern.name === "keyword.control.mog"
+  (pattern) => pattern.name === "keyword.control.kel"
 );
 requireCondition(
   keywordPattern !== undefined && !new RegExp(keywordPattern.match, "g").test("print"),
@@ -296,7 +296,7 @@ requireCondition(
 );
 
 const annotationPattern = grammar.patterns.find(
-  (pattern) => pattern.name === "storage.modifier.annotation.mog"
+  (pattern) => pattern.name === "storage.modifier.annotation.kel"
 );
 requireCondition(
   annotationPattern !== undefined &&
@@ -322,7 +322,7 @@ requireCondition(
 );
 
 const functionPattern = grammar.patterns.find(
-  (pattern) => pattern.name === "entity.name.function.mog"
+  (pattern) => pattern.name === "entity.name.function.kel"
 );
 requireCondition(
   functionPattern !== undefined && new RegExp(functionPattern.match, "g").test("print("),
@@ -472,11 +472,11 @@ requireCondition(
 );
 
 const genericCollectionPattern = grammar.repository["type-angle-expression"].patterns.find(
-  (pattern) => pattern.name === "meta.type.generic.collection.mog"
+  (pattern) => pattern.name === "meta.type.generic.collection.kel"
 );
 const qualifiedGenericTypePattern = genericCollectionPattern?.patterns.find(
   (pattern) =>
-    pattern.name === "entity.name.type.mog" &&
+    pattern.name === "entity.name.type.kel" &&
     pattern.match === "\\b(?:[A-Za-z_][A-Za-z0-9_]*\\.)+[A-Za-z_][A-Za-z0-9_]*\\b"
 );
 requireCondition(

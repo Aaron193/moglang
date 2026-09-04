@@ -3,12 +3,12 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LSP_BIN="${1:-$PROJECT_ROOT/build/mog-lsp}"
+LSP_BIN="${1:-$PROJECT_ROOT/build/kelvra-lsp}"
 if [[ -d "$LSP_BIN" ]]; then
-    if [[ -x "$LSP_BIN/mog-lsp.exe" ]]; then
-        LSP_BIN="$LSP_BIN/mog-lsp.exe"
+    if [[ -x "$LSP_BIN/kelvra-lsp.exe" ]]; then
+        LSP_BIN="$LSP_BIN/kelvra-lsp.exe"
     else
-        LSP_BIN="$LSP_BIN/mog-lsp"
+        LSP_BIN="$LSP_BIN/kelvra-lsp"
     fi
 fi
 
@@ -76,13 +76,13 @@ def fixture_file_identity(uri, fixture_directory):
     return normalized[offset:].lower()
 
 
-workspace = pathlib.Path(tempfile.mkdtemp(prefix="mog_lsp_import_diag_"))
+workspace = pathlib.Path(tempfile.mkdtemp(prefix="kelvra_lsp_import_diag_"))
 try:
-    dep_path = workspace / "dep.mog"
-    importer_path = workspace / "main.mog"
+    dep_path = workspace / "dep.kel"
+    importer_path = workspace / "main.kel"
     dep_path.write_text("var broken i32 = 1;\n", encoding="utf-8")
     importer_path.write_text(
-        "const { broken } = @import(\"./dep.mog\")\nprint(broken)\n",
+        "const { broken } = @import(\"./dep.kel\")\nprint(broken)\n",
         encoding="utf-8",
     )
 
@@ -114,7 +114,7 @@ try:
         "params": {
             "textDocument": {
                 "uri": importer_uri,
-                "languageId": "mog",
+                "languageId": "kelvra",
                 "version": 1,
                 "text": importer_path.read_text(encoding="utf-8"),
             }
@@ -145,7 +145,7 @@ try:
         "params": {
             "textDocument": {
                 "uri": dep_uri,
-                "languageId": "mog",
+                "languageId": "kelvra",
                 "version": 1,
                 "text": dep_path.read_text(encoding="utf-8"),
             }
@@ -165,9 +165,9 @@ try:
     if dep_diag["range"]["start"]["line"] != 0 or dep_diag["range"]["start"]["character"] != 18:
         raise AssertionError(f"dependency diagnostic should point at the semicolon token: {dep_diag}")
 
-    malformed_path = workspace / "malformed_import.mog"
+    malformed_path = workspace / "malformed_import.kel"
     malformed_path.write_text(
-        "const value = @import(@ASDAS\"./dep.mog\")\n",
+        "const value = @import(@ASDAS\"./dep.kel\")\n",
         encoding="utf-8",
     )
     malformed_uri = "file://" + str(malformed_path)
@@ -178,7 +178,7 @@ try:
         "params": {
             "textDocument": {
                 "uri": malformed_uri,
-                "languageId": "mog",
+                "languageId": "kelvra",
                 "version": 1,
                 "text": malformed_path.read_text(encoding="utf-8"),
             }

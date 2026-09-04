@@ -1,3 +1,0 @@
-const a = @import("./cycle_a.mog")
-
-const B i32 = a.A + 1

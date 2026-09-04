@@ -34,8 +34,8 @@ case "$(uname -s)" in
         ;;
 esac
 
-if [[ "${MOG_REQUIRE_STATIC_OPENSSL:-0}" == 1 ]] && \
+if [[ "${KELVRA_REQUIRE_STATIC_OPENSSL:-0}" == 1 ]] && \
    grep -Eiq '(^|[/\\])lib(ssl|crypto)[^/\\]*\.(so|dylib|dll)' <<<"${dependencies:-}"; then
-    echo "release binary dynamically links OpenSSL despite MOG_STATIC_OPENSSL" >&2
+    echo "release binary dynamically links OpenSSL despite KELVRA_STATIC_OPENSSL" >&2
     exit 1
 fi

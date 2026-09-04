@@ -11,14 +11,14 @@ if [[ ! -x "$INTERPRETER" ]]; then
     exit 1
 fi
 
-FILTER="${1:-$SCRIPT_DIR/*.mog}"
+FILTER="${1:-$SCRIPT_DIR/*.kel}"
 
 shopt -s nullglob
 FILES=( $FILTER )
 shopt -u nullglob
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
-    echo "No .mog files matched: $FILTER"
+    echo "No .kel files matched: $FILTER"
     exit 1
 fi
 
@@ -26,7 +26,7 @@ passed=0
 failed=0
 
 for file in "${FILES[@]}"; do
-    if [[ ! -f "$file" || "${file##*.}" != "mog" ]]; then
+    if [[ ! -f "$file" || "${file##*.}" != "kelvra" ]]; then
         continue
     fi
 
@@ -37,10 +37,10 @@ for file in "${FILES[@]}"; do
     if [[ "$base_name" == sample_native_error_* ]]; then
         continue
     fi
-    if [[ "$base_name" == "sample_compile_multi_error.mog" || "$base_name" == "sample_runtime_stacktrace.mog" || "$base_name" == "sample_invalid_logical_word_sequence.mog" ]]; then
+    if [[ "$base_name" == "sample_compile_multi_error.kel" || "$base_name" == "sample_runtime_stacktrace.kel" || "$base_name" == "sample_invalid_logical_word_sequence.kel" ]]; then
         continue
     fi
-    if [[ "$base_name" == "sample_import_cycle.mog" || "$base_name" == "sample_export_scoped_error.mog" || "$base_name" == "sample_import_native_missing.mog" || "$base_name" == "sample_import_native_type_mismatch.mog" || "$base_name" == "sample_import_native_invalid_id.mog" || "$base_name" == "sample_import_native_bare_invalid.mog" || "$base_name" == "sample_import_native_metadata_mismatch.mog" ]]; then
+    if [[ "$base_name" == "sample_import_cycle.kel" || "$base_name" == "sample_export_scoped_error.kel" || "$base_name" == "sample_import_native_missing.kel" || "$base_name" == "sample_import_native_type_mismatch.kel" || "$base_name" == "sample_import_native_invalid_id.kel" || "$base_name" == "sample_import_native_bare_invalid.kel" || "$base_name" == "sample_import_native_metadata_mismatch.kel" ]]; then
         continue
     fi
 

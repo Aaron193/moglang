@@ -3,7 +3,7 @@
 #include <string>
 #include <string_view>
 
-inline constexpr std::string_view kSourceModuleExtension = ".mog";
+inline constexpr std::string_view kSourceModuleExtension = ".kel";
 
 enum class ImportSpecifierKind {
     LocalSource,

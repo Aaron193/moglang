@@ -114,7 +114,7 @@ bool testDiagnosticsAndSymbols() {
         "var broken i32 = \"oops\"\n";
 
     ToolingAnalyzeOptions options;
-    options.sourcePath = "tooling_regression.mog";
+    options.sourcePath = "tooling_regression.kel";
     ToolingDocumentAnalysis analysis =
         analyzeDocumentForTooling(source, options);
 
@@ -192,7 +192,7 @@ bool testDiagnosticsAndSymbols() {
     }
 
     const std::string importSource =
-                "const {Answer as FinalAnswer: i32} = @import(\"./dep.mog\")\n";
+                "const {Answer as FinalAnswer: i32} = @import(\"./dep.kel\")\n";
     ToolingDocumentAnalysis importAnalysis =
         analyzeDocumentForTooling(importSource, options);
     if (!require(importAnalysis.documentSymbols.size() == 1,
@@ -220,7 +220,7 @@ bool testDiagnosticsAndSymbols() {
         "    app.update(1)\n"
         "    asdasdas.update(1)\n"
         "}\n";
-    options.sourcePath = "tooling_undefined_identifier_regression.mog";
+    options.sourcePath = "tooling_undefined_identifier_regression.kel";
     ToolingDocumentAnalysis undefinedAnalysis =
         analyzeDocumentForTooling(undefinedSource, options);
     if (!require(undefinedAnalysis.status == AstFrontendBuildStatus::SemanticError,
@@ -260,7 +260,7 @@ bool testDiagnosticsAndSymbols() {
                 "var keys Set<str> = Set()\n"
         "var text str = str(42)\n"
         "print(type(text))\n";
-    options.sourcePath = "tooling_special_builtin_regression.mog";
+    options.sourcePath = "tooling_special_builtin_regression.kel";
     ToolingDocumentAnalysis specialBuiltinAnalysis =
         analyzeDocumentForTooling(specialBuiltinSource, options);
     if (!require(specialBuiltinAnalysis.status == AstFrontendBuildStatus::Success,
@@ -275,11 +275,11 @@ bool testDiagnosticsAndSymbols() {
 
 bool testPackageApiDiagnosticsAndSymbols() {
     const std::filesystem::path apiPath =
-        std::filesystem::current_path() / "packages" / "mog" / "window" /
-        "package.api.mog";
+        std::filesystem::current_path() / "packages" / "kelvra" / "window" /
+        "package.api.kel";
     const auto source = readFileText(apiPath);
     if (!require(source.has_value(),
-                 "package api regression should load package.api.mog")) {
+                 "package api regression should load package.api.kel")) {
         return false;
     }
 
@@ -329,7 +329,7 @@ bool testPackageApiDiagnosticsAndSymbols() {
 
 bool testImportedDiagnosticPaths() {
     const std::filesystem::path tempRoot =
-        std::filesystem::temp_directory_path() / "mog_tooling_import_diagnostics";
+        std::filesystem::temp_directory_path() / "kelvra_tooling_import_diagnostics";
     std::error_code ec;
     std::filesystem::create_directories(tempRoot, ec);
     if (!require(!ec,
@@ -337,12 +337,12 @@ bool testImportedDiagnosticPaths() {
         return false;
     }
 
-    const std::filesystem::path depPath = tempRoot / "dep.mog";
-    const std::filesystem::path importerPath = tempRoot / "main.mog";
+    const std::filesystem::path depPath = tempRoot / "dep.kel";
+    const std::filesystem::path importerPath = tempRoot / "main.kel";
     if (!require(writeFile(depPath, "var broken i32 = 1;\n"),
                  "import diagnostic regression should write the dependency sample") ||
         !require(writeFile(importerPath,
-                           "const { broken } = @import(\"./dep.mog\")\nprint(broken)\n"),
+                           "const { broken } = @import(\"./dep.kel\")\nprint(broken)\n"),
                  "import diagnostic regression should write the importer sample")) {
         return false;
     }
@@ -400,10 +400,10 @@ bool testImportedDiagnosticPaths() {
 
 bool testMalformedImportArgumentDiagnostic() {
     const std::string source =
-        "const value = @import(@ASDAS\"./constants.mog\")\n";
+        "const value = @import(@ASDAS\"./constants.kel\")\n";
 
     ToolingAnalyzeOptions options;
-    options.sourcePath = "tooling_malformed_import_arg_regression.mog";
+    options.sourcePath = "tooling_malformed_import_arg_regression.kel";
     ToolingDocumentAnalysis analysis =
         analyzeDocumentForTooling(source, options);
     if (!require(analysis.status == AstFrontendBuildStatus::ParseFailed,
@@ -435,7 +435,7 @@ bool testInlineSemicolonDiagnostics() {
     const std::string source = "const state GameState ;= GameState()\n";
 
     ToolingAnalyzeOptions options;
-    options.sourcePath = "tooling_inline_semicolon_regression.mog";
+    options.sourcePath = "tooling_inline_semicolon_regression.kel";
     ToolingDocumentAnalysis analysis =
         analyzeDocumentForTooling(source, options);
     if (!require(analysis.status == AstFrontendBuildStatus::ParseFailed,
@@ -465,7 +465,7 @@ bool testLexerDiagnostics() {
     const std::string source = "const value i32 = 1$\n";
 
     ToolingAnalyzeOptions options;
-    options.sourcePath = "tooling_lexer_regression.mog";
+    options.sourcePath = "tooling_lexer_regression.kel";
     ToolingDocumentAnalysis analysis =
         analyzeDocumentForTooling(source, options);
     if (!require(analysis.status == AstFrontendBuildStatus::ParseFailed,
@@ -495,7 +495,7 @@ bool testUnterminatedBlockCommentDiagnostic() {
         "/* unterminated block comment\n";
 
     ToolingAnalyzeOptions options;
-    options.sourcePath = "tooling_unterminated_block_comment_regression.mog";
+    options.sourcePath = "tooling_unterminated_block_comment_regression.kel";
     ToolingDocumentAnalysis analysis =
         analyzeDocumentForTooling(source, options);
     if (!require(analysis.status == AstFrontendBuildStatus::ParseFailed,
@@ -524,7 +524,7 @@ bool testUnterminatedBlockCommentDiagnostic() {
 
 bool testDefinitionLookup() {
     ToolingAnalyzeOptions options;
-    options.sourcePath = "tooling_definition_regression.mog";
+    options.sourcePath = "tooling_definition_regression.kel";
     const std::string sourceWithTypeError =
                 "fn add(x i32) i32 {\n"
         "    var local i32 = x\n"
@@ -568,10 +568,10 @@ bool testDefinitionLookup() {
     }
 
     const std::string importSource =
-                "const { Answer, Get } = @import(\"./modules/frontend_identity_module.mog\")\n"
+                "const { Answer, Get } = @import(\"./modules/frontend_identity_module.kel\")\n"
         "print(Get())\n"
         "print(Answer)\n";
-    options.sourcePath = "tests/sample_import_frontend_identity.mog";
+    options.sourcePath = "tests/sample_import_frontend_identity.kel";
     ToolingDocumentAnalysis importAnalysis =
         analyzeDocumentForTooling(importSource, options);
     const auto importDefinition =
@@ -581,7 +581,7 @@ bool testDefinitionLookup() {
         return false;
     }
 
-    if (!require(importDefinition->path.find("frontend_identity_module.mog") !=
+    if (!require(importDefinition->path.find("frontend_identity_module.kel") !=
                      std::string::npos,
                  "import definition should resolve to the imported module path")) {
         return false;
@@ -598,7 +598,7 @@ bool testDefinitionLookup() {
     const std::string nativeMemberSource =
                 "const counter = @import(\"counter\")\n"
         "print(counter.create)\n";
-    options.sourcePath = "tooling_native_member_definition_regression.mog";
+    options.sourcePath = "tooling_native_member_definition_regression.kel";
     ToolingDocumentAnalysis nativeMemberAnalysis =
         analyzeDocumentForTooling(nativeMemberSource, options);
     if (!require(nativeMemberAnalysis.status == AstFrontendBuildStatus::Success,
@@ -611,7 +611,7 @@ bool testDefinitionLookup() {
                  "native package member use should resolve to package api declaration")) {
         return false;
     }
-    if (!require(nativeMemberDefinition->path.find("package.api.mog") !=
+    if (!require(nativeMemberDefinition->path.find("package.api.kel") !=
                      std::string::npos,
                  "native package member definition should resolve to the package api file")) {
         return false;
@@ -625,7 +625,7 @@ bool testDefinitionLookup() {
         "fn read(box Box) i32 {\n"
         "    return box.value\n"
         "}\n";
-    options.sourcePath = "tooling_member_definition_regression.mog";
+    options.sourcePath = "tooling_member_definition_regression.kel";
     ToolingDocumentAnalysis memberAnalysis =
         analyzeDocumentForTooling(memberSource, options);
     const auto memberDefinition =
@@ -643,7 +643,7 @@ bool testDefinitionLookup() {
 
     const std::filesystem::path importedMemberDefinitionTempRoot =
         std::filesystem::temp_directory_path() /
-        "mog_tooling_member_definition_regression";
+        "kelvra_tooling_member_definition_regression";
     std::error_code importedMemberDefinitionEc;
     std::filesystem::create_directories(importedMemberDefinitionTempRoot,
                                         importedMemberDefinitionEc);
@@ -653,16 +653,16 @@ bool testDefinitionLookup() {
     }
 
     const std::filesystem::path importedStatePath =
-        importedMemberDefinitionTempRoot / "state.mog";
+        importedMemberDefinitionTempRoot / "state.kel";
     const std::filesystem::path importedLogicPath =
-        importedMemberDefinitionTempRoot / "logic.mog";
+        importedMemberDefinitionTempRoot / "logic.kel";
     const std::string importedStateSource =
                 "type GameState struct {\n"
         "    running bool\n"
         "    dead bool\n"
         "}\n";
     const std::string importedLogicSource =
-                "const { GameState } = @import(\"./state.mog\")\n"
+                "const { GameState } = @import(\"./state.kel\")\n"
         "fn step(state GameState) void {\n"
         "    if (state.running == false) {\n"
         "        return\n"
@@ -706,7 +706,7 @@ bool testDefinitionLookup() {
         "fn makePipe(x f64) Pipe {\n"
         "    return makePipe(x)\n"
         "}\n";
-    options.sourcePath = "tooling_type_definition_regression.mog";
+    options.sourcePath = "tooling_type_definition_regression.kel";
     ToolingDocumentAnalysis typeUseAnalysis =
         analyzeDocumentForTooling(typeUseSource, options);
     if (!require(typeUseAnalysis.hasParse,
@@ -731,7 +731,7 @@ bool testDefinitionLookup() {
 
 bool testReferencesAndHover() {
     ToolingAnalyzeOptions options;
-    options.sourcePath = "tooling_references_hover_regression.mog";
+    options.sourcePath = "tooling_references_hover_regression.kel";
     const std::string source =
                 "fn add(x i32) i32 {\n"
         "    var local i32 = x\n"
@@ -790,7 +790,7 @@ bool testReferencesAndHover() {
         "// This comment is separated and must not attach.\n"
         "\n"
         "const Result i32 = Add(2, Multiply(3, 4))\n";
-    options.sourcePath = "tooling_doc_comment_hover_regression.mog";
+    options.sourcePath = "tooling_doc_comment_hover_regression.kel";
     ToolingDocumentAnalysis documentedAnalysis =
         analyzeDocumentForTooling(documentedSource, options);
     if (!require(documentedAnalysis.status == AstFrontendBuildStatus::Success,
@@ -829,10 +829,10 @@ bool testReferencesAndHover() {
     }
 
     const std::string importSource =
-                "const { Answer, Get } = @import(\"./modules/frontend_identity_module.mog\")\n"
+                "const { Answer, Get } = @import(\"./modules/frontend_identity_module.kel\")\n"
         "print(Get())\n"
         "print(Answer)\n";
-    options.sourcePath = "tests/sample_import_frontend_identity.mog";
+    options.sourcePath = "tests/sample_import_frontend_identity.kel";
     ToolingDocumentAnalysis importAnalysis =
         analyzeDocumentForTooling(importSource, options);
     const auto importHover =
@@ -858,7 +858,7 @@ bool testReferencesAndHover() {
     if (!require(importedFunctionHover->kind == "import" &&
                      importedFunctionHover->role == "function" &&
                      importedFunctionHover->detail == "fn Get() i32",
-                 "imported source functions should preserve Mog declaration syntax")) {
+                 "imported source functions should preserve Kelvra declaration syntax")) {
         return false;
     }
 
@@ -868,7 +868,7 @@ bool testReferencesAndHover() {
                 "const counter = @import(\"counter\")\n"
         "print(counter)\n"
         "print(counter.create)\n";
-    options.sourcePath = "tooling_native_import_hover_regression.mog";
+    options.sourcePath = "tooling_native_import_hover_regression.kel";
     ToolingDocumentAnalysis nativeImportAnalysis =
         analyzeDocumentForTooling(nativeImportSource, options);
     if (!require(nativeImportAnalysis.status == AstFrontendBuildStatus::Success,
@@ -909,7 +909,7 @@ bool testReferencesAndHover() {
         "fn draw(win window.Window) void {\n"
         "    window.fillRect(win, 0i64, 0i64, 16i64, 16i64, 255i64, 0i64, 0i64)\n"
         "}\n";
-    options.sourcePath = "tooling_native_window_hover_regression.mog";
+    options.sourcePath = "tooling_native_window_hover_regression.kel";
     ToolingDocumentAnalysis nativeWindowHoverAnalysis =
         analyzeDocumentForTooling(nativeWindowHoverSource, options);
     if (!require(nativeWindowHoverAnalysis.status ==
@@ -936,7 +936,7 @@ bool testReferencesAndHover() {
         "fn make() void {\n"
         "    var value counter.Counter = counter.create(1i64)\n"
         "}\n";
-    options.sourcePath = "tooling_native_import_type_qualifier_hover_regression.mog";
+    options.sourcePath = "tooling_native_import_type_qualifier_hover_regression.kel";
     ToolingDocumentAnalysis nativeTypeQualifierAnalysis =
         analyzeDocumentForTooling(nativeTypeQualifierSource, options);
     const auto nativeTypeQualifierHover =
@@ -974,7 +974,7 @@ bool testReferencesAndHover() {
         return false;
     }
     if (!require(nativeTypeQualifierDefinition->path.find(
-                         "packages/examples/counter/package.api.mog") !=
+                         "packages/examples/counter/package.api.kel") !=
                          std::string::npos &&
                      nativeTypeQualifierDefinition->range.start.line == 0 &&
                      nativeTypeQualifierDefinition->range.start.character == 0,
@@ -990,7 +990,7 @@ bool testReferencesAndHover() {
         "fn read(box Box) i32 {\n"
         "    return box.value\n"
         "}\n";
-    options.sourcePath = "tooling_member_hover_regression.mog";
+    options.sourcePath = "tooling_member_hover_regression.kel";
     ToolingDocumentAnalysis memberAnalysis =
         analyzeDocumentForTooling(memberSource, options);
     const auto memberHover = findHoverForTooling(memberAnalysis, ToolingPosition{4, 15});
@@ -1008,7 +1008,7 @@ bool testReferencesAndHover() {
 
     const std::filesystem::path importedMemberHoverTempRoot =
         std::filesystem::temp_directory_path() /
-        "mog_tooling_member_hover_regression";
+        "kelvra_tooling_member_hover_regression";
     std::error_code importedMemberHoverEc;
     std::filesystem::create_directories(importedMemberHoverTempRoot,
                                         importedMemberHoverEc);
@@ -1018,16 +1018,16 @@ bool testReferencesAndHover() {
     }
 
     const std::filesystem::path importedHoverStatePath =
-        importedMemberHoverTempRoot / "state.mog";
+        importedMemberHoverTempRoot / "state.kel";
     const std::filesystem::path importedHoverLogicPath =
-        importedMemberHoverTempRoot / "logic.mog";
+        importedMemberHoverTempRoot / "logic.kel";
     const std::string importedHoverStateSource =
                 "type GameState struct {\n"
         "    // running reports whether the game is active.\n"
         "    running bool\n"
         "}\n";
     const std::string importedHoverLogicSource =
-                "const { GameState } = @import(\"./state.mog\")\n"
+                "const { GameState } = @import(\"./state.kel\")\n"
         "fn step(state GameState) void {\n"
         "    if (state.running == false) {\n"
         "        return\n"
@@ -1065,7 +1065,7 @@ bool testReferencesAndHover() {
 
     const std::filesystem::path importedFunctionHoverTempRoot =
         std::filesystem::temp_directory_path() /
-        "mog_tooling_imported_function_hover_regression";
+        "kelvra_tooling_imported_function_hover_regression";
     std::error_code importedFunctionHoverEc;
     std::filesystem::create_directories(importedFunctionHoverTempRoot,
                                         importedFunctionHoverEc);
@@ -1075,15 +1075,15 @@ bool testReferencesAndHover() {
     }
 
     const std::filesystem::path importedFunctionStatePath =
-        importedFunctionHoverTempRoot / "state.mog";
+        importedFunctionHoverTempRoot / "state.kel";
     const std::filesystem::path importedFunctionRenderPath =
-        importedFunctionHoverTempRoot / "render.mog";
+        importedFunctionHoverTempRoot / "render.kel";
     const std::string importedFunctionStateSource =
                 "type GameState struct {\n"
         "    score i32\n"
         "}\n";
     const std::string importedFunctionRenderSource =
-                "const { GameState } = @import(\"./state.mog\")\n"
+                "const { GameState } = @import(\"./state.kel\")\n"
         "fn renderScore(win i64, state GameState) void {\n"
         "    print(state.score)\n"
         "}\n"
@@ -1125,7 +1125,7 @@ bool testReferencesAndHover() {
                 "fn tick(dt f64) void {\n"
         "    print(dt)\n"
         "}\n";
-    options.sourcePath = "tooling_parameter_hover_regression.mog";
+    options.sourcePath = "tooling_parameter_hover_regression.kel";
     ToolingDocumentAnalysis parameterAnalysis =
         analyzeDocumentForTooling(parameterSource, options);
     const auto parameterHover =
@@ -1145,7 +1145,7 @@ bool testReferencesAndHover() {
     const std::string builtinSource =
                 "const value f64 = sqrt(9.0)\n"
         "print(value)\n";
-    options.sourcePath = "tooling_builtin_hover_regression.mog";
+    options.sourcePath = "tooling_builtin_hover_regression.kel";
     ToolingDocumentAnalysis builtinAnalysis =
         analyzeDocumentForTooling(builtinSource, options);
     const auto builtinHover =
@@ -1168,7 +1168,7 @@ bool testReferencesAndHover() {
         "    var players Dict<usize, i32> = Dict<usize, i32>()\n"
         "    var keys Set<str> = Set<str>()\n"
         "}\n";
-    options.sourcePath = "tooling_collection_builtin_hover_regression.mog";
+    options.sourcePath = "tooling_collection_builtin_hover_regression.kel";
     ToolingDocumentAnalysis collectionBuiltinAnalysis =
         analyzeDocumentForTooling(collectionBuiltinSource, options);
     if (!require(collectionBuiltinAnalysis.status == AstFrontendBuildStatus::Success,
@@ -1211,7 +1211,7 @@ bool testReferencesAndHover() {
         "fn main() void {\n"
         "    var players Dict<usize, Player> = Dict<usize, Player>()\n"
         "}\n";
-    options.sourcePath = "tooling_constructor_type_hover_regression.mog";
+    options.sourcePath = "tooling_constructor_type_hover_regression.kel";
     ToolingDocumentAnalysis constructorTypeAnalysis =
         analyzeDocumentForTooling(constructorTypeSource, options);
     if (!require(constructorTypeAnalysis.status == AstFrontendBuildStatus::Success,
@@ -1243,7 +1243,7 @@ bool testReferencesAndHover() {
 
 bool testSemanticTokens() {
     ToolingAnalyzeOptions options;
-    options.sourcePath = "tooling_semantic_tokens_regression.mog";
+    options.sourcePath = "tooling_semantic_tokens_regression.kel";
     const std::string source =
                 "type Pipe struct {\n"
         "    value f64\n"
@@ -1343,7 +1343,7 @@ bool testSemanticTokens() {
         "fn reset() void {\n"
         "    var pipes Array<Pipe> = Array<Pipe>()\n"
         "}\n";
-    options.sourcePath = "tooling_semantic_tokens_generics_regression.mog";
+    options.sourcePath = "tooling_semantic_tokens_generics_regression.kel";
     ToolingDocumentAnalysis genericAnalysis =
         analyzeDocumentForTooling(genericSource, options);
     if (!require(genericAnalysis.status == AstFrontendBuildStatus::Success,
@@ -1379,7 +1379,7 @@ bool testSemanticTokens() {
         "fn main() void {\n"
         "    sqrtValue()\n"
         "}\n";
-    options.sourcePath = "tooling_semantic_tokens_ordinary_call_regression.mog";
+    options.sourcePath = "tooling_semantic_tokens_ordinary_call_regression.kel";
     ToolingDocumentAnalysis ordinaryCallAnalysis =
         analyzeDocumentForTooling(ordinaryCallSource, options);
     if (!require(ordinaryCallAnalysis.status == AstFrontendBuildStatus::Success,
@@ -1398,13 +1398,13 @@ bool testSemanticTokens() {
     }
 
     const std::string importSource =
-                "const { Answer, Get } = @import(\"./modules/frontend_identity_module.mog\")\n"
+                "const { Answer, Get } = @import(\"./modules/frontend_identity_module.kel\")\n"
         "const value i32 = Get()\n"
         "print(Answer)\n"
-        "const math = @import(\"./modules/math.mog\")\n"
+        "const math = @import(\"./modules/math.kel\")\n"
         "print(math.PI)\n"
         "print(math.Add(1, 2))\n";
-    options.sourcePath = "tests/sample_import_frontend_identity.mog";
+    options.sourcePath = "tests/sample_import_frontend_identity.kel";
     ToolingDocumentAnalysis importAnalysis =
         analyzeDocumentForTooling(importSource, options);
     if (!require(importAnalysis.status == AstFrontendBuildStatus::Success,
@@ -1473,7 +1473,7 @@ bool testSemanticTokens() {
         "        return\n"
         "    }\n"
         "}\n";
-    options.sourcePath = "tooling_semantic_tokens_operator_cast_regression.mog";
+    options.sourcePath = "tooling_semantic_tokens_operator_cast_regression.kel";
     ToolingDocumentAnalysis operatorAndCastAnalysis =
         analyzeDocumentForTooling(operatorAndCastSource, options);
     if (!require(operatorAndCastAnalysis.status == AstFrontendBuildStatus::Success,
@@ -1521,7 +1521,7 @@ bool testSemanticTokens() {
     const std::string builtinSource =
                 "const value f64 = sqrt(9.0)\n"
         "print(value)\n";
-    options.sourcePath = "tooling_semantic_tokens_builtin_regression.mog";
+    options.sourcePath = "tooling_semantic_tokens_builtin_regression.kel";
     ToolingDocumentAnalysis builtinAnalysis =
         analyzeDocumentForTooling(builtinSource, options);
     if (!require(builtinAnalysis.status == AstFrontendBuildStatus::Success,
@@ -1550,7 +1550,7 @@ bool testCompletions() {
         "}\n"
         "\n"
         "const Later i32 = 2\n";
-    options.sourcePath = "tooling_completion_top_level_regression.mog";
+    options.sourcePath = "tooling_completion_top_level_regression.kel";
     ToolingDocumentAnalysis topLevelAnalysis =
         analyzeDocumentForTooling(topLevelSource, options);
     if (!require(topLevelAnalysis.status == AstFrontendBuildStatus::Success,
@@ -1586,7 +1586,7 @@ bool testCompletions() {
         "    }\n"
         "\n"
         "}\n";
-    options.sourcePath = "tooling_completion_local_regression.mog";
+    options.sourcePath = "tooling_completion_local_regression.kel";
     ToolingDocumentAnalysis localAnalysis =
         analyzeDocumentForTooling(localSource, options);
     if (!require(localAnalysis.status == AstFrontendBuildStatus::Success,
@@ -1615,13 +1615,13 @@ bool testCompletions() {
     }
 
     const std::string importSemanticErrorSource =
-                "const { Answer, Get } = @import(\"./modules/frontend_identity_module.mog\")\n"
+                "const { Answer, Get } = @import(\"./modules/frontend_identity_module.kel\")\n"
         "fn use(x i32) i32 {\n"
         "    var local i32 = x\n"
         "    return local\n"
         "}\n"
         "var broken i32 = \"oops\"\n";
-    options.sourcePath = "tests/sample_import_frontend_identity.mog";
+    options.sourcePath = "tests/sample_import_frontend_identity.kel";
     ToolingDocumentAnalysis importAnalysis =
         analyzeDocumentForTooling(importSemanticErrorSource, options);
     if (!require(importAnalysis.status == AstFrontendBuildStatus::SemanticError &&
@@ -1645,7 +1645,7 @@ bool testCompletions() {
 
     const std::string parseFailSource =
                 "fn broken(\n";
-    options.sourcePath = "tooling_completion_parse_fail_regression.mog";
+    options.sourcePath = "tooling_completion_parse_fail_regression.kel";
     ToolingDocumentAnalysis parseFailAnalysis =
         analyzeDocumentForTooling(parseFailSource, options);
     if (!require(parseFailAnalysis.status == AstFrontendBuildStatus::ParseFailed,
@@ -1673,7 +1673,7 @@ bool testCompletions() {
         "}\n"
         "const value str = \"\"\n"
         "\n";
-    options.sourcePath = "tooling_completion_builtin_shadow_regression.mog";
+    options.sourcePath = "tooling_completion_builtin_shadow_regression.kel";
     ToolingDocumentAnalysis shadowedBuiltinAnalysis =
         analyzeDocumentForTooling(shadowedBuiltinSource, options);
     if (!require(shadowedBuiltinAnalysis.status == AstFrontendBuildStatus::Success,
@@ -1702,7 +1702,7 @@ bool testCompletions() {
         "fn read(box Box) i32 {\n"
         "    return box.value + box.get()\n"
         "}\n";
-    options.sourcePath = "tooling_completion_member_regression.mog";
+    options.sourcePath = "tooling_completion_member_regression.kel";
     ToolingDocumentAnalysis memberAnalysis =
         analyzeDocumentForTooling(memberSource, options);
     if (!require(memberAnalysis.status == AstFrontendBuildStatus::Success,
@@ -1743,7 +1743,7 @@ bool testCompletions() {
         "fn read(box Box) i32 {\n"
         "    return box.\n"
         "}\n";
-    options.sourcePath = "tooling_completion_member_incomplete_regression.mog";
+    options.sourcePath = "tooling_completion_member_incomplete_regression.kel";
     ToolingDocumentAnalysis incompleteMemberAnalysis =
         analyzeDocumentForTooling(incompleteMemberSource, options);
 
@@ -1797,7 +1797,7 @@ bool testCompletions() {
         "    return state\n"
         "}\n";
     options.sourcePath =
-        "tooling_completion_member_before_call_regression.mog";
+        "tooling_completion_member_before_call_regression.kel";
     ToolingDocumentAnalysis incompleteMemberBeforeCallAnalysis =
         analyzeDocumentForTooling(incompleteMemberBeforeCallSource, options);
 
@@ -1821,7 +1821,7 @@ bool testCompletions() {
     }
 
     const std::filesystem::path completionTempRoot =
-        std::filesystem::temp_directory_path() / "mog_tooling_completion_regression";
+        std::filesystem::temp_directory_path() / "kelvra_tooling_completion_regression";
     std::error_code completionEc;
     std::filesystem::create_directories(completionTempRoot, completionEc);
     if (!require(!completionEc,
@@ -1829,15 +1829,15 @@ bool testCompletions() {
         return false;
     }
 
-    const std::filesystem::path importedStatePath = completionTempRoot / "state.mog";
-    const std::filesystem::path importedLogicPath = completionTempRoot / "logic.mog";
+    const std::filesystem::path importedStatePath = completionTempRoot / "state.kel";
+    const std::filesystem::path importedLogicPath = completionTempRoot / "logic.kel";
     const std::string importedStateSource =
                 "type GameState struct {\n"
         "    birdY f64\n"
         "    spawnTimer f64\n"
         "}\n";
     const std::string importedLogicSource =
-                "const { GameState } = @import(\"./state.mog\")\n"
+                "const { GameState } = @import(\"./state.kel\")\n"
         "fn update(state GameState) void {\n"
         "    state.\n"
         "}\n";
@@ -1872,9 +1872,9 @@ bool testCompletions() {
     }
 
     const std::string moduleMemberSource =
-                "const math = @import(\"./modules/math.mog\")\n"
+                "const math = @import(\"./modules/math.kel\")\n"
         "print(math.Ad)\n";
-    options.sourcePath = "tests/sample_import_basic.mog";
+    options.sourcePath = "tests/sample_import_basic.kel";
     ToolingDocumentAnalysis moduleMemberAnalysis =
         analyzeDocumentForTooling(moduleMemberSource, options);
     if (!require((moduleMemberAnalysis.status ==
@@ -1903,8 +1903,8 @@ bool testCompletions() {
     }
 
     const std::string importExportSource =
-                "const { Add, PI } = @import(\"./modules/math.mog\")\n";
-    options.sourcePath = "tests/sample_import_named.mog";
+                "const { Add, PI } = @import(\"./modules/math.kel\")\n";
+    options.sourcePath = "tests/sample_import_named.kel";
     ToolingDocumentAnalysis importExportAnalysis =
         analyzeDocumentForTooling(importExportSource, options);
     if (!require((importExportAnalysis.status == AstFrontendBuildStatus::Success ||
@@ -1932,7 +1932,7 @@ bool testCompletions() {
         "fn use(value Loc) LocalA {\n"
         "    return 1\n"
         "}\n";
-    options.sourcePath = "tooling_completion_type_context_regression.mog";
+    options.sourcePath = "tooling_completion_type_context_regression.kel";
     ToolingDocumentAnalysis typeContextAnalysis =
         analyzeDocumentForTooling(typeContextSource, options);
     if (!require(typeContextAnalysis.status == AstFrontendBuildStatus::SemanticError,
@@ -1955,11 +1955,11 @@ bool testCompletions() {
     }
 
     const std::string importedTypeContextSource =
-                "const { Counter } = @import(\"./modules/class_mod.mog\")\n"
+                "const { Counter } = @import(\"./modules/class_mod.kel\")\n"
         "fn make() void {\n"
         "    var value Cou = Counter()\n"
         "}\n";
-    options.sourcePath = "tests/sample_import_class.mog";
+    options.sourcePath = "tests/sample_import_class.kel";
     ToolingDocumentAnalysis importedTypeContextAnalysis =
         analyzeDocumentForTooling(importedTypeContextSource, options);
     if (!require(importedTypeContextAnalysis.status ==
@@ -1980,7 +1980,7 @@ bool testCompletions() {
     const std::string nativeMemberCompletionSource =
                 "const counter = @import(\"counter\")\n"
         "print(counter.cre)\n";
-    options.sourcePath = "tooling_completion_native_member_regression.mog";
+    options.sourcePath = "tooling_completion_native_member_regression.kel";
     ToolingDocumentAnalysis nativeMemberCompletionAnalysis =
         analyzeDocumentForTooling(nativeMemberCompletionSource, options);
     const auto nativeMemberCompletions = findCompletionsForTooling(
@@ -1997,7 +1997,7 @@ bool testCompletions() {
         "fn make() void {\n"
         "    var value counter.Cou = counter.create(1i64)\n"
         "}\n";
-    options.sourcePath = "tooling_completion_native_type_regression.mog";
+    options.sourcePath = "tooling_completion_native_type_regression.kel";
     ToolingDocumentAnalysis nativeTypeCompletionAnalysis =
         analyzeDocumentForTooling(nativeTypeCompletionSource, options);
     const auto nativeTypeCompletions = findCompletionsForTooling(
@@ -2025,7 +2025,7 @@ bool testCompletions() {
         "fn main() void {\n"
         "    sq()\n"
         "}\n";
-    options.sourcePath = "tooling_completion_ordinary_call_regression.mog";
+    options.sourcePath = "tooling_completion_ordinary_call_regression.kel";
     ToolingDocumentAnalysis ordinaryCallCompletionAnalysis =
         analyzeDocumentForTooling(ordinaryCallCompletionSource, options);
     if (!require(ordinaryCallCompletionAnalysis.status ==
@@ -2058,7 +2058,7 @@ bool testSignatureHelp() {
         "    return a + b\n"
         "}\n"
         "const value i32 = Add(1, 2)\n";
-    options.sourcePath = "tooling_signature_help_direct_regression.mog";
+    options.sourcePath = "tooling_signature_help_direct_regression.kel";
     ToolingDocumentAnalysis directAnalysis =
         analyzeDocumentForTooling(directSource, options);
     if (!require(directAnalysis.status == AstFrontendBuildStatus::Success,
@@ -2081,14 +2081,14 @@ bool testSignatureHelp() {
                          "a i32" &&
                      directHelp->signatures.front().parameters[1].label ==
                          "b i32",
-                 "signature help should preserve parameter labels in Mog syntax")) {
+                 "signature help should preserve parameter labels in Kelvra syntax")) {
         return false;
     }
 
     const std::string moduleSource =
-                "const math = @import(\"./modules/math.mog\")\n"
+                "const math = @import(\"./modules/math.kel\")\n"
         "const value i32 = math.Add(1, 2)\n";
-    options.sourcePath = "tests/sample_import_basic.mog";
+    options.sourcePath = "tests/sample_import_basic.kel";
     ToolingDocumentAnalysis moduleAnalysis =
         analyzeDocumentForTooling(moduleSource, options);
     if (!require(moduleAnalysis.status == AstFrontendBuildStatus::Success,
@@ -2114,7 +2114,7 @@ bool testSignatureHelp() {
         "fn draw(win window.Window) void {\n"
         "    window.fillRect(win, 0i64, 0i64, 16i64, 16i64, 255i64, 0i64, 0i64)\n"
         "}\n";
-    options.sourcePath = "tooling_signature_help_native_window_regression.mog";
+    options.sourcePath = "tooling_signature_help_native_window_regression.kel";
     ToolingDocumentAnalysis nativeWindowAnalysis =
         analyzeDocumentForTooling(nativeWindowSource, options);
     if (!require(nativeWindowAnalysis.status == AstFrontendBuildStatus::Success,
@@ -2142,7 +2142,7 @@ bool testSignatureHelp() {
     const std::string builtinSource =
                 "const value f64 = sqrt(9.0)\n"
         "print(1)\n";
-    options.sourcePath = "tooling_signature_help_builtin_regression.mog";
+    options.sourcePath = "tooling_signature_help_builtin_regression.kel";
     ToolingDocumentAnalysis builtinAnalysis =
         analyzeDocumentForTooling(builtinSource, options);
     if (!require(builtinAnalysis.status == AstFrontendBuildStatus::Success,
@@ -2177,7 +2177,7 @@ bool testSignatureHelp() {
         "    return a + b\n"
         "}\n"
         "const value i32 = Add(1,\n";
-    options.sourcePath = "tooling_signature_help_parse_fail_regression.mog";
+    options.sourcePath = "tooling_signature_help_parse_fail_regression.kel";
     ToolingDocumentAnalysis parseFailAnalysis =
         analyzeDocumentForTooling(parseFailSource, options);
     if (!require(parseFailAnalysis.status == AstFrontendBuildStatus::ParseFailed,
@@ -2204,7 +2204,7 @@ bool testWorkspaceSymbolsAndRename() {
         "    var local i32 = x\n"
         "    return local + local\n"
         "}\n";
-    options.sourcePath = "tooling_rename_local_regression.mog";
+    options.sourcePath = "tooling_rename_local_regression.kel";
     ToolingDocumentAnalysis localAnalysis =
         analyzeDocumentForTooling(localSource, options);
     if (!require(localAnalysis.status == AstFrontendBuildStatus::Success,
@@ -2251,7 +2251,7 @@ bool testWorkspaceSymbolsAndRename() {
         "fn read(box Box) i32 {\n"
         "    return box.value\n"
         "}\n";
-    options.sourcePath = "tooling_prepare_rename_member_regression.mog";
+    options.sourcePath = "tooling_prepare_rename_member_regression.kel";
     ToolingDocumentAnalysis memberAnalysis =
         analyzeDocumentForTooling(memberSource, options);
     if (!require(!prepareRenameForTooling(memberAnalysis, ToolingPosition{4, 15})
@@ -2261,7 +2261,7 @@ bool testWorkspaceSymbolsAndRename() {
     }
 
     const std::filesystem::path tempRoot =
-        std::filesystem::temp_directory_path() / "mog_tooling_rename_regression";
+        std::filesystem::temp_directory_path() / "kelvra_tooling_rename_regression";
     std::error_code ec;
     std::filesystem::create_directories(tempRoot, ec);
     if (!require(!ec,
@@ -2269,9 +2269,9 @@ bool testWorkspaceSymbolsAndRename() {
         return false;
     }
 
-    const std::filesystem::path depPath = tempRoot / "dep.mog";
-    const std::filesystem::path importerPath = tempRoot / "importer.mog";
-    const std::filesystem::path aliasPath = tempRoot / "alias_importer.mog";
+    const std::filesystem::path depPath = tempRoot / "dep.kel";
+    const std::filesystem::path importerPath = tempRoot / "importer.kel";
+    const std::filesystem::path aliasPath = tempRoot / "alias_importer.kel";
 
     if (!require(writeFile(depPath,
                                                       "fn Get() i32 {\n"
@@ -2281,12 +2281,12 @@ bool testWorkspaceSymbolsAndRename() {
                            "const privateValue i32 = 1\n"),
                  "rename regression should write the dependency module") ||
         !require(writeFile(importerPath,
-                                                      "const { Answer, Get } = @import(\"./dep.mog\")\n"
+                                                      "const { Answer, Get } = @import(\"./dep.kel\")\n"
                            "print(Get())\n"
                            "print(Answer)\n"),
                  "rename regression should write the importer module") ||
         !require(writeFile(aliasPath,
-                                                      "const { Answer as Alias } = @import(\"./dep.mog\")\n"
+                                                      "const { Answer as Alias } = @import(\"./dep.kel\")\n"
                            "print(Alias)\n"),
                  "rename regression should write the aliased importer module")) {
         return false;
@@ -2438,14 +2438,14 @@ bool testWorkspaceSymbolsAndRename() {
 bool testFormatting() {
     const std::string source =
         "// file header\n"
-        "const { Answer as Result: i32 } = @import(\"./dep.mog\") // import note\n"
+        "const { Answer as Result: i32 } = @import(\"./dep.kel\") // import note\n"
         "fn add(x i32,y i32)i32{\n"
         "var total i32= x+y // trailing\n"
         "return total\n"
         "}\n";
 
     ToolingAnalyzeOptions options;
-    options.sourcePath = "tooling_format_regression.mog";
+    options.sourcePath = "tooling_format_regression.kel";
     ToolingDocumentAnalysis analysis =
         analyzeDocumentForTooling(source, options);
     if (!require(analysis.hasParse,
@@ -2461,13 +2461,13 @@ bool testFormatting() {
 
     const std::string expected =
         "// file header\n"
-        "const { Answer as Result: i32 } = @import(\"./dep.mog\") // import note\n"
+        "const { Answer as Result: i32 } = @import(\"./dep.kel\") // import note\n"
         "fn add(x i32, y i32) i32 {\n"
         "    var total i32 = x + y // trailing\n"
         "    return total\n"
         "}\n";
     if (!require(*formatted == expected,
-                 "formatter should normalize Mog source to the canonical style")) {
+                 "formatter should normalize Kelvra source to the canonical style")) {
         return false;
     }
 
@@ -2482,7 +2482,7 @@ bool testFormatting() {
         "    )\n"
         "}\n";
     ToolingAnalyzeOptions multilineOptions;
-    multilineOptions.sourcePath = "tooling_multiline_call_regression.mog";
+    multilineOptions.sourcePath = "tooling_multiline_call_regression.kel";
     ToolingDocumentAnalysis multilineAnalysis =
         analyzeDocumentForTooling(multilineCallSource, multilineOptions);
     if (!require(multilineAnalysis.hasParse,
@@ -2510,7 +2510,7 @@ bool testFormatting() {
         "    const second i32 = 2\n"
         "}\n";
     ToolingAnalyzeOptions blankLineOptions;
-    blankLineOptions.sourcePath = "tooling_blank_line_cap_regression.mog";
+    blankLineOptions.sourcePath = "tooling_blank_line_cap_regression.kel";
     ToolingDocumentAnalysis blankLineAnalysis =
         analyzeDocumentForTooling(blankLineCapSource, blankLineOptions);
     if (!require(blankLineAnalysis.hasParse,
@@ -2540,7 +2540,7 @@ bool testFormatting() {
         "    player.init(0usize, \"Aaron\", Vec2().init(0f32, 0f32), Vec2().init(0f32, 0f32), Vec2().init(1920f32, 1080f32))\n"
         "}\n";
     ToolingAnalyzeOptions widthWrappedCallOptions;
-    widthWrappedCallOptions.sourcePath = "tooling_width_wrap_call_regression.mog";
+    widthWrappedCallOptions.sourcePath = "tooling_width_wrap_call_regression.kel";
     ToolingDocumentAnalysis widthWrappedCallAnalysis =
         analyzeDocumentForTooling(widthWrappedCallSource, widthWrappedCallOptions);
     if (!require(widthWrappedCallAnalysis.hasParse,
@@ -2575,7 +2575,7 @@ bool testFormatting() {
         "}\n";
     ToolingAnalyzeOptions widthWrappedSignatureOptions;
     widthWrappedSignatureOptions.sourcePath =
-        "tooling_width_wrap_signature_regression.mog";
+        "tooling_width_wrap_signature_regression.kel";
     ToolingDocumentAnalysis widthWrappedSignatureAnalysis =
         analyzeDocumentForTooling(widthWrappedSignatureSource,
                                   widthWrappedSignatureOptions);
@@ -2611,7 +2611,7 @@ bool testFormatting() {
         "}\n";
     ToolingAnalyzeOptions widthWrappedAssignmentOptions;
     widthWrappedAssignmentOptions.sourcePath =
-        "tooling_width_wrap_assignment_regression.mog";
+        "tooling_width_wrap_assignment_regression.kel";
     ToolingDocumentAnalysis widthWrappedAssignmentAnalysis =
         analyzeDocumentForTooling(widthWrappedAssignmentSource,
                                   widthWrappedAssignmentOptions);
@@ -2639,9 +2639,9 @@ bool testFormatting() {
     const std::filesystem::path projectRoot =
         std::filesystem::path(__FILE__).parent_path().parent_path();
     const std::filesystem::path fixtureSourcePath =
-        projectRoot / "examples" / "test" / "main.mog";
+        projectRoot / "examples" / "test" / "main.kel";
     const std::filesystem::path fixtureExpectedPath =
-        projectRoot / "examples" / "test" / "main-formatted.mog";
+        projectRoot / "examples" / "test" / "main-formatted.kel";
     const auto fixtureSource = readFileText(fixtureSourcePath);
     if (!require(fixtureSource.has_value(),
                  "formatter fixture source should be readable")) {

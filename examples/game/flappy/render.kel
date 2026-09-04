@@ -1,0 +1,48 @@
+const window = @import("github.com/kelvralang/window")
+const C = @import("./constants.kel")
+const { GameState, Pipe } = @import("./state.kel")
+
+fn renderPipes(win window.Window, pipes Array<Pipe>) void {
+    var groundTop i64 = C.WINDOW_HEIGHT - C.GROUND_HEIGHT
+    var halfGap f64 = (C.PIPE_GAP as f64) / 2.0
+
+    for (var pipe Pipe : pipes) {
+        var pipeX i64 = floor(pipe.x) as i64
+        var topHeight i64 = floor(pipe.gapY - halfGap) as i64
+        var bottomY i64 = floor(pipe.gapY + halfGap) as i64
+        var bottomHeight i64 = groundTop - bottomY
+
+        window.fillRect(win, pipeX, 0, C.PIPE_WIDTH, topHeight, 94, 201, 72)
+        window.fillRect(win, pipeX, bottomY, C.PIPE_WIDTH, bottomHeight, 94, 201, 72)
+    }
+}
+
+fn renderBird(win window.Window, state GameState) void {
+    const birdY i64 = floor(state.birdY) as i64
+    const birdEyeX i64 = C.BIRD_X + C.BIRD_WIDTH - 10
+    const birdEyeY i64 = birdY + 6
+    const birdBeakX i64 = C.BIRD_X + C.BIRD_WIDTH - 2
+    const birdBeakY i64 = birdY + 8
+
+    window.fillRect(win, C.BIRD_X, birdY, C.BIRD_WIDTH, C.BIRD_HEIGHT, 255, 230, 64)
+    window.fillRect(win, birdEyeX, birdEyeY, 4, 4, 32, 32, 32)
+    window.fillRect(win, birdBeakX, birdBeakY, 8, 6, 255, 140, 0)
+}
+
+fn renderScore(win window.Window, state GameState) void {
+    const scoreText str = "Score: " + (state.score as str)
+
+    window.drawText(win, 18, 18, scoreText, 2, 32, 32, 32)
+    window.drawText(win, 16, 16, scoreText, 2, 255, 255, 255)
+}
+
+fn RenderFrame(win window.Window, state GameState) void {
+    const groundTop i64 = C.WINDOW_HEIGHT - C.GROUND_HEIGHT
+
+    window.clearRgb(win, 135, 206, 235)
+    renderPipes(win, state.pipes)
+    window.fillRect(win, 0, groundTop, C.WINDOW_WIDTH, C.GROUND_HEIGHT, 181, 101, 29)
+    renderBird(win, state)
+    renderScore(win, state)
+    window.present(win)
+}

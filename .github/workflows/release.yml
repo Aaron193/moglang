@@ -1,4 +1,4 @@
-name: Release Mog Runtime
+name: Release Kelvra Runtime
 
 on:
   push:
@@ -50,16 +50,16 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
         run: |
-          grep -Fq "set(MOG_VERSION \"$RELEASE_VERSION\"" CMakeLists.txt
-          grep -Fq "#define MOG_RUNTIME_VERSION \"$RELEASE_VERSION\"" src/PackageManager.hpp
+          grep -Fq "set(KELVRA_VERSION \"$RELEASE_VERSION\"" CMakeLists.txt
+          grep -Fq "#define KELVRA_RUNTIME_VERSION \"$RELEASE_VERSION\"" src/PackageManager.hpp
           grep -Fq "## $RELEASE_VERSION" CHANGELOG.md
       - name: Configure and build
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMOG_VERSION=${{ needs.release-context.outputs.version }}
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DKELVRA_VERSION=${{ needs.release-context.outputs.version }}
           cmake --build build --parallel
       - name: Verify embedded version and core regressions
         run: |
-          test "$(./build/mog --version)" = "mog ${{ needs.release-context.outputs.version }} (native ABI 3)"
+          test "$(./build/kelvra --version)" = "kelvra ${{ needs.release-context.outputs.version }} (native ABI 3)"
           ./tests/test_ast_frontend.sh
           ./tests/test_ast_emitter_regression.sh
           bash tests/test_cli_flags.sh
@@ -69,11 +69,11 @@ jobs:
         run: |
           bash tests/test_vscode_manifest.sh
           bash tests/test_vscode_grammar.sh
-          bash tests/test_lsp_formatting.sh ./build/mog-lsp
-          bash tests/test_lsp_import_diagnostics.sh ./build/mog-lsp
-          bash tests/test_lsp_navigation.sh ./build/mog-lsp
-          bash tests/test_lsp_protocol.sh ./build/mog-lsp
-          bash tests/test_lsp_smoke.sh ./build/mog-lsp
+          bash tests/test_lsp_formatting.sh ./build/kelvra-lsp
+          bash tests/test_lsp_import_diagnostics.sh ./build/kelvra-lsp
+          bash tests/test_lsp_navigation.sh ./build/kelvra-lsp
+          bash tests/test_lsp_protocol.sh ./build/kelvra-lsp
+          bash tests/test_lsp_smoke.sh ./build/kelvra-lsp
 
   package:
     needs: [release-context, validate]
@@ -125,13 +125,13 @@ jobs:
         run: >-
           cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
           -DOPENSSL_USE_STATIC_LIBS=TRUE
-          -DMOG_VERSION=${{ needs.release-context.outputs.version }}
+          -DKELVRA_VERSION=${{ needs.release-context.outputs.version }}
       - name: Build
         run: cmake --build build/release --parallel
       - name: Verify embedded version
         run: >-
-          test "$(./build/release/mog --version)" =
-          "mog ${{ needs.release-context.outputs.version }} (native ABI 3)"
+          test "$(./build/release/kelvra --version)" =
+          "kelvra ${{ needs.release-context.outputs.version }} (native ABI 3)"
       - name: Package
         run: cpack --config build/release/CPackConfig.cmake -B dist
       - name: Validate packaged executables and dependencies
@@ -148,7 +148,7 @@ jobs:
           done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: mog-${{ matrix.name }}
+          name: kelvra-${{ matrix.name }}
           path: |
             dist/*.tar.gz
             dist/*.zip

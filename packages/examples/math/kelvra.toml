@@ -1,0 +1,15 @@
+kind = "native"
+import_name = "math"
+namespace = "examples"
+name = "math"
+version = "0.1.0"
+license = "MIT"
+abi_version = 3
+kelvra_runtime = "^0.2.0"
+author = "Kelvra runtime"
+description = "Reference namespaced math package."
+dependencies = []
+
+[native]
+build = "cmake"
+targets = ["linux-x86_64-gnu", "linux-arm64-gnu", "macos-arm64"]

@@ -4,18 +4,18 @@ description: The official SDL-backed window package, its current API, and the de
 ---
 
 `window` is an independently versioned official package. Git installs build it
-from source and require SDL2 development files; it is not bundled into the Mog
+from source and require SDL2 development files; it is not bundled into the Kelvra
 runtime.
 
 ## Importing the package
 
-```mog
-const window = @import("github.com/moglang/window")
+```kelvra
+const window = @import("github.com/kelvralang/window")
 ```
 
 ## Core lifecycle
 
-```mog
+```kelvra
 const win window.Window =
   window.create("Demo", 800i64, 600i64)
 
@@ -29,7 +29,7 @@ The current API creates windows hidden by default. Visible manual demos call
 
 ## Events and input
 
-```mog
+```kelvra
 const evt window.Event? = window.pollEvent(win)
 
 if (evt != null) {
@@ -52,7 +52,7 @@ Current input/event helpers include:
 
 The package already exposes a small immediate-mode drawing surface:
 
-```mog
+```kelvra
 window.clearRgb(win, 32i64, 64i64, 96i64)
 window.fillRect(win, 8i64, 8i64, 24i64, 24i64, 255i64, 0i64, 0i64)
 window.drawText(win, 8i64, 40i64, "Score: 12", 2i64, 255i64, 255i64, 255i64)
@@ -66,36 +66,36 @@ supports `\n` for multi-line text, and clips against the window surface. The
 
 That is enough for the rectangle-rendered Flappy Bird demo with an in-window
 score HUD in
-`examples/flappy_bird.mog`.
+`examples/flappy_bird.kel`.
 
 ## Demos in this repo
 
 Manual examples:
 
-- `examples/window_open.mog`
-- `examples/window_events.mog`
-- `examples/flappy_bird.mog`
+- `examples/window_open.kel`
+- `examples/window_events.kel`
+- `examples/flappy_bird.kel`
 
 Headless test coverage:
 
-- `tests/sample_mog_window.mog`
-- `tests/sample_mog_window_render.mog`
+- `tests/sample_kelvra_window.kel`
+- `tests/sample_kelvra_window_render.kel`
 
 ## Build note
 
 Installing Window from Git requires CMake, a C++17 compiler, and SDL2 development
-files. The Mog runtime itself does not require SDL2.
+files. The Kelvra runtime itself does not require SDL2.
 
 ## Publishing the official package
 
 Window's tag workflow builds target-specific convenience archives and attaches
-checksums to a GitHub Release. MOG does not consume GitHub Release archives as
+checksums to a GitHub Release. KELVRA does not consume GitHub Release archives as
 prebuilt dependencies. To offer prebuilt installation, publish each prepared
 target bundle to a configured registry:
 
 ```bash
-mog publish --registry official --signing-key ./keys/release.toml .
-mog publish --registry official --target linux-arm64-gnu \
+kelvra publish --registry official --signing-key ./keys/release.toml .
+kelvra publish --registry official --target linux-arm64-gnu \
   --native-artifact-dir ./dist/linux-arm64-gnu \
   --signing-key ./keys/release.toml .
 ```

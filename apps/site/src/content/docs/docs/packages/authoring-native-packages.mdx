@@ -4,29 +4,29 @@ description: Start from the official template, declare a public API, implement t
 ---
 
 Start with the official
-[native package template](https://github.com/moglang/native-package-template)
-for a standalone C or C++ backed package. It includes the manifest, public Mog
+[native package template](https://github.com/kelvralang/native-package-template)
+for a standalone C or C++ backed package. It includes the manifest, public Kelvra
 API, ABI header, CMake build, consumer test, changelog, and release workflows.
 
 ## Package layout
 
 A native package typically includes:
 
-- `mog.toml`
-- `package.api.mog`
+- `kelvra.toml`
+- `package.api.kel`
 - `NativePackageAPI.hpp`
 - `src/package.cpp`
 - `CMakeLists.txt`
-- `tests/main.mog`
+- `tests/main.kel`
 
-`mog.toml` is the canonical package manifest name. Older `package.toml` files
+`kelvra.toml` is the canonical package manifest name. Older `package.toml` files
 are still accepted as a compatibility path, but new packages should use
-`mog.toml`.
+`kelvra.toml`.
 
 Useful examples:
 
-- [native package template](https://github.com/moglang/native-package-template)
-- [`github.com/moglang/window`](https://github.com/moglang/window)
+- [native package template](https://github.com/kelvralang/native-package-template)
+- [`github.com/kelvralang/window`](https://github.com/kelvralang/window)
 - the repository's `packages/examples/math/` and `packages/examples/counter/`
 
 ## Manifest fields
@@ -48,9 +48,9 @@ The `import_name` is the name users write in `@import("...")`.
 
 ## Public API declarations
 
-`package.api.mog` is where you declare the public surface:
+`package.api.kel` is where you declare the public surface:
 
-```mog
+```kelvra
 package counter
 
 @doc("GC-managed opaque counter handle.")
@@ -75,15 +75,15 @@ Keep the public header byte-for-byte aligned with the runtime's canonical header
 set the manifest's `abi_version`, and declare every supported target under
 `[native]`.
 
-Host API v2 lets native code retain Mog values, release them, inspect retained
-values, and invoke Mog callbacks across garbage collections. The runtime rejects
+Host API v2 lets native code retain Kelvra values, release them, inspect retained
+values, and invoke Kelvra callbacks across garbage collections. The runtime rejects
 persistent values used from another VM or thread, so packages must keep retained
 values scoped to their owning runtime and thread. Native ABI 3 packages that do
 not need Host API v2 remain compatible.
 
 ## Reserved namespaces
 
-Official runtime-maintained packages use the reserved `mog:*` canonical package
+Official runtime-maintained packages use the reserved `kelvra:*` canonical package
 space internally. User and example packages should not claim that space outside
 the sanctioned repo roots.
 
@@ -91,15 +91,15 @@ the sanctioned repo roots.
 
 1. Create a repository from the official native package template.
 2. Replace its sample module identity, manifest metadata, and `import_name`.
-3. Declare the public API in `package.api.mog`.
+3. Declare the public API in `package.api.kel`.
 4. Implement and register the package in `src/package.cpp`.
 5. Update the supported native targets and any system dependencies.
-6. Run the template's consumer test and `mog validate-package .`.
+6. Run the template's consumer test and `kelvra validate-package .`.
 7. Add a changelog entry, keep the manifest version and `vX.Y.Z` Git tag in
    sync, then let the package release workflow publish checksummed artifacts.
 
-To publish prebuilt artifacts through a configured Mog registry, use
-`mog publish` separately for each target with `--native-artifact-dir` and a
+To publish prebuilt artifacts through a configured Kelvra registry, use
+`kelvra publish` separately for each target with `--native-artifact-dir` and a
 registry signing key. GitHub Release archives are not automatically consumed as
 registry packages.
 

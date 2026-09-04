@@ -1,14 +1,14 @@
 ---
 title: Control Flow
-description: Branching, loops, foreach syntax, and loop-control rules in Mog.
+description: Branching, loops, foreach syntax, and loop-control rules in Kelvra.
 ---
 
-Mog currently supports `if`, `else`, `while`, classic `for`, foreach loops,
+Kelvra currently supports `if`, `else`, `while`, classic `for`, foreach loops,
 `break`, `continue`, and labeled loops.
 
 ## `if` and `else`
 
-```mog
+```kelvra
 var score i32 = 7
 
 if (score > 5) {
@@ -22,7 +22,7 @@ Conditions are expressions, not statement-only forms.
 
 ## `while`
 
-```mog
+```kelvra
 var i i32 = 0
 while (i < 3) {
   print(i)
@@ -34,7 +34,7 @@ while (i < 3) {
 
 Semicolons only appear inside `for (...)` clauses.
 
-```mog
+```kelvra
 for (var i i32 = 0; i < 3; i += 1) {
   print(i)
 }
@@ -46,7 +46,7 @@ Outside `for (...)`, semicolons are a syntax error.
 
 Foreach uses `:` instead of semicolons.
 
-```mog
+```kelvra
 var nums Array<i32> = [1, 2, 3]
 for (var n i32 : nums) {
   print(n)
@@ -56,7 +56,7 @@ for (var n i32 : nums) {
 For dictionaries, iterate an explicit projection instead of the dictionary
 itself:
 
-```mog
+```kelvra
 var scores Dict<str, i32> = {"alice": 7, "bob": 9}
 for (var name str : scores.keys()) {
   print(name)
@@ -70,7 +70,7 @@ The type checker currently rejects `for (... : dict)` directly.
 
 `break` exits the nearest loop. `continue` skips to the next iteration.
 
-```mog
+```kelvra
 for (var i i32 = 0; i < 10; i++) {
   if (i == 3) continue
   if (i == 7) break
@@ -82,7 +82,7 @@ for (var i i32 = 0; i < 10; i++) {
 
 Labels let you target an outer loop instead of only the innermost one.
 
-```mog
+```kelvra
 outer: while (true) {
   for (var i i32 = 0; i < 10; i++) {
     if (i == 3) continue

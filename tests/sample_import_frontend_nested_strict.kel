@@ -1,0 +1,4 @@
+const { Value, GetValue } = @import("./modules/frontend_nested_a.kel")
+
+print(GetValue())
+print(Value)

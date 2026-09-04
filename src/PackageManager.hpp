@@ -7,8 +7,8 @@
 #include "DependencySpec.hpp"
 #include "PackageRegistry.hpp"
 
-#ifndef MOG_RUNTIME_VERSION
-#define MOG_RUNTIME_VERSION "0.1.7"
+#ifndef KELVRA_RUNTIME_VERSION
+#define KELVRA_RUNTIME_VERSION "0.1.7"
 #endif
 
 struct ProjectRegistryConfig {
@@ -43,7 +43,7 @@ struct ProjectScriptConfig {
 struct ProjectManifestData {
     std::string kind = "project";
     std::string name;
-    std::string version = MOG_RUNTIME_VERSION;
+    std::string version = KELVRA_RUNTIME_VERSION;
     std::string description;
     ProjectScriptConfig scripts;
     std::vector<std::string> workspaceMembers;

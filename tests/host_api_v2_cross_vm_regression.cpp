@@ -28,10 +28,10 @@ if (!host.crossVmRejected()) {
 )";
 
     if (first.interpret(firstSource, false, false, false,
-                        "/tmp/mog_host_api_first.mog") != Status::OK)
+                        "/tmp/kelvra_host_api_first.kel") != Status::OK)
         return 1;
     if (second.interpret(secondSource, false, false, false,
-                         "/tmp/mog_host_api_second.mog") != Status::OK)
+                         "/tmp/kelvra_host_api_second.kel") != Status::OK)
         return 1;
     return 0;
 }

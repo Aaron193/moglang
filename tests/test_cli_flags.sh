@@ -4,7 +4,7 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INTERPRETER="$PROJECT_ROOT/build/interpreter"
-TARGET="$SCRIPT_DIR/sample_var.mog"
+TARGET="$SCRIPT_DIR/sample_var.kel"
 
 if [[ ! -x "$INTERPRETER" ]]; then
     echo "Interpreter not found at $INTERPRETER"
@@ -34,7 +34,7 @@ STRICT_FLAG_STATUS=$?
 set -e
 
 if [[ $VERSION_STATUS -ne 0 ]] ||
-   ! grep -Eq '^mog [0-9]+\.[0-9]+\.[0-9]+ \(native ABI [0-9]+\)$' <<< "$VERSION_OUTPUT"; then
+   ! grep -Eq '^kelvra [0-9]+\.[0-9]+\.[0-9]+ \(native ABI [0-9]+\)$' <<< "$VERSION_OUTPUT"; then
     echo "[FAIL] --version output is missing or malformed"
     echo "$VERSION_OUTPUT"
     exit 1

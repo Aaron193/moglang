@@ -55,9 +55,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: tooling/vscode-mog/package-lock.json
+          cache-dependency-path: tooling/vscode-kelvra/package-lock.json
       - name: Verify tag, manifest, lockfile, and changelog versions
-        working-directory: tooling/vscode-mog
+        working-directory: tooling/vscode-kelvra
         env:
           RELEASE_VERSION: ${{ needs.context.outputs.version }}
         run: |
@@ -76,7 +76,7 @@ jobs:
           }
           NODE
       - name: Install and check extension dependencies
-        working-directory: tooling/vscode-mog
+        working-directory: tooling/vscode-kelvra
         run: |
           npm ci
           npm run compile
@@ -94,17 +94,17 @@ jobs:
           - target: linux-x64
             runner: ubuntu-22.04
             shell: bash
-            executable: mog-lsp
+            executable: kelvra-lsp
             architecture: x86_64
           - target: darwin-arm64
             runner: macos-14
             shell: bash
-            executable: mog-lsp
+            executable: kelvra-lsp
             architecture: arm64
           - target: win32-x64
             runner: windows-2022
             shell: msys2 {0}
-            executable: mog-lsp.exe
+            executable: kelvra-lsp.exe
             architecture: x86_64
     defaults:
       run:
@@ -138,19 +138,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: tooling/vscode-mog/package-lock.json
+          cache-dependency-path: tooling/vscode-kelvra/package-lock.json
       - name: Build bundled language server
         run: |
           cmake -S . -B build/extension -DCMAKE_BUILD_TYPE=Release \
             -DOPENSSL_USE_STATIC_LIBS=TRUE
-          cmake --build build/extension --target mog-lsp --parallel
+          cmake --build build/extension --target kelvra-lsp --parallel
           bash tests/test_lsp_formatting.sh ./build/extension/${{ matrix.executable }}
           bash tests/test_lsp_import_diagnostics.sh ./build/extension/${{ matrix.executable }}
           bash tests/test_lsp_navigation.sh ./build/extension/${{ matrix.executable }}
           bash tests/test_lsp_protocol.sh ./build/extension/${{ matrix.executable }}
           bash tests/test_lsp_smoke.sh ./build/extension/${{ matrix.executable }}
       - name: Stage server and package target-specific VSIX
-        working-directory: tooling/vscode-mog
+        working-directory: tooling/vscode-kelvra
         run: |
           npm ci
           npm run compile
@@ -159,24 +159,24 @@ jobs:
           prerelease=()
           [[ '${{ needs.context.outputs.prerelease }}' == true ]] && prerelease=(--pre-release)
           npm run package -- "${prerelease[@]}" --target ${{ matrix.target }} \
-            --out ../../dist/vscode-mog-${{ needs.context.outputs.version }}-${{ matrix.target }}.vsix
+            --out ../../dist/vscode-kelvra-${{ needs.context.outputs.version }}-${{ matrix.target }}.vsix
       - name: Inspect and smoke-test exact VSIX contents
-        run: bash scripts/validate_vsix.sh dist/vscode-mog-${{ needs.context.outputs.version }}-${{ matrix.target }}.vsix ${{ matrix.target }}
+        run: bash scripts/validate_vsix.sh dist/vscode-kelvra-${{ needs.context.outputs.version }}-${{ matrix.target }}.vsix ${{ matrix.target }}
       - name: Test installed extension artifact on Linux
         if: runner.os == 'Linux'
-        working-directory: tooling/vscode-mog
+        working-directory: tooling/vscode-kelvra
         env:
-          MOG_TEST_VSIX: ${{ github.workspace }}/dist/vscode-mog-${{ needs.context.outputs.version }}-${{ matrix.target }}.vsix
-        run: xvfb-run -a npm run test:extension -- --vsix "$MOG_TEST_VSIX"
+          KELVRA_TEST_VSIX: ${{ github.workspace }}/dist/vscode-kelvra-${{ needs.context.outputs.version }}-${{ matrix.target }}.vsix
+        run: xvfb-run -a npm run test:extension -- --vsix "$KELVRA_TEST_VSIX"
       - name: Test installed extension artifact on macOS and Windows
         if: runner.os != 'Linux'
-        working-directory: tooling/vscode-mog
+        working-directory: tooling/vscode-kelvra
         env:
-          MOG_TEST_VSIX: ${{ github.workspace }}/dist/vscode-mog-${{ needs.context.outputs.version }}-${{ matrix.target }}.vsix
-        run: npm run test:extension -- --vsix "$MOG_TEST_VSIX"
+          KELVRA_TEST_VSIX: ${{ github.workspace }}/dist/vscode-kelvra-${{ needs.context.outputs.version }}-${{ matrix.target }}.vsix
+        run: npm run test:extension -- --vsix "$KELVRA_TEST_VSIX"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: vscode-mog-${{ matrix.target }}
+          name: vscode-kelvra-${{ matrix.target }}
           path: dist/*.vsix
           if-no-files-found: error
 
@@ -198,9 +198,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: tooling/vscode-mog/package-lock.json
+          cache-dependency-path: tooling/vscode-kelvra/package-lock.json
       - name: Install pinned publisher tooling
-        working-directory: tooling/vscode-mog
+        working-directory: tooling/vscode-kelvra
         run: npm ci
       - name: Refuse to replace an existing GitHub release
         env:
@@ -220,7 +220,7 @@ jobs:
           for package in dist/*.vsix; do
             prerelease=()
             [[ "$PRERELEASE" == true ]] && prerelease=(--pre-release)
-            ./tooling/vscode-mog/node_modules/.bin/vsce publish \
+            ./tooling/vscode-kelvra/node_modules/.bin/vsce publish \
               "${prerelease[@]}" --skip-duplicate --packagePath "$package"
           done
       - name: Publish immutable GitHub release assets
@@ -233,8 +233,8 @@ jobs:
           EXPECTED_VERSION: ${{ needs.context.outputs.version }}
         run: |
           for attempt in 1 2 3 4 5 6 7 8; do
-            ./tooling/vscode-mog/node_modules/.bin/vsce show \
-              moglang.vscode-mog --json > marketplace.json
+            ./tooling/vscode-kelvra/node_modules/.bin/vsce show \
+              kelvralang.vscode-kelvra --json > marketplace.json
             if node -e "const p=require('./marketplace.json'); process.exit(p.versions?.some(v => v.version === process.env.EXPECTED_VERSION) ? 0 : 1)"; then
               exit 0
             fi

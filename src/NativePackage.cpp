@@ -333,7 +333,7 @@ class TypeStringParser {
                 spec.find(':', secondColon + 1) != std::string::npos) {
                 outError =
                     "Package metadata handle types must use canonical package "
-                    "IDs like handle<mog:window:WindowHandle>.";
+                    "IDs like handle<kelvra:window:WindowHandle>.";
                 return nullptr;
             }
 

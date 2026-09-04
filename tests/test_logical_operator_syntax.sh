@@ -4,8 +4,8 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INTERPRETER="$PROJECT_ROOT/build/interpreter"
-IDENTIFIER_TARGET="$SCRIPT_DIR/sample_logical_identifiers.mog"
-INVALID_TARGET="$SCRIPT_DIR/sample_invalid_logical_word_sequence.mog"
+IDENTIFIER_TARGET="$SCRIPT_DIR/sample_logical_identifiers.kel"
+INVALID_TARGET="$SCRIPT_DIR/sample_invalid_logical_word_sequence.kel"
 
 if [[ ! -x "$INTERPRETER" ]]; then
     echo "Interpreter not found at $INTERPRETER"

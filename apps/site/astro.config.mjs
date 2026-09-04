@@ -1,12 +1,12 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
-import { mogShikiOptions } from './mog-language.mjs';
+import { kelvraShikiOptions } from './kelvra-language.mjs';
 
-const site = process.env.SITE_URL || 'https://moglang.dev';
+const site = process.env.SITE_URL || 'https://kelvralang.dev';
 const basePath = process.env.BASE_PATH?.replace(/\/+$/, '') || '';
 const base = basePath || undefined;
-const editBaseUrl = process.env.MOG_SITE_EDIT_BASE_URL;
+const editBaseUrl = process.env.KELVRA_SITE_EDIT_BASE_URL;
 
 /**
  * Prefix root-relative Markdown links with the deployment base path.
@@ -38,19 +38,19 @@ export default defineConfig({
 	},
 	integrations: [
 		starlight({
-			title: 'Mog',
+			title: 'Kelvra',
 			description:
-				'Mog is a strictly typed, bytecode-compiled programming language with a VM, REPL, native packages, and editor tooling.',
+				'Kelvra is a strictly typed, bytecode-compiled programming language with a VM, REPL, native packages, and editor tooling.',
 			tagline: 'A sharp programming language for people who want the toolchain to take them seriously.',
 			expressiveCode: {
-				shiki: mogShikiOptions,
+				shiki: kelvraShikiOptions,
 			},
 			logo: {
-				src: '../../tooling/vscode-mog/images/fileicons/moglang-icon-option-3.svg',
-				alt: 'Mog',
+				src: '../../tooling/vscode-kelvra/images/fileicons/kelvralang-icon-option-3.svg',
+				alt: 'Kelvra',
 			},
 			customCss: ['./src/styles/site.css'],
-			favicon: '/mog-logo.svg',
+			favicon: '/kelvra-logo.svg',
 			pagefind: true,
 			lastUpdated: true,
 			disable404Route: true,
@@ -74,7 +74,7 @@ export default defineConfig({
 				{
 					label: 'Getting Started',
 					items: [
-						{ label: 'Install Mog', slug: 'docs/getting-started/install' },
+						{ label: 'Install Kelvra', slug: 'docs/getting-started/install' },
 						{ label: 'Quickstart', slug: 'docs/getting-started/quickstart' },
 					],
 				},

@@ -1,0 +1,4 @@
+const { Counter } = @import("./modules/class_mod.kel")
+
+Counter()
+print(1)

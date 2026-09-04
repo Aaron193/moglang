@@ -1,5 +1,0 @@
-const first = @import("./modules/cache_target.mog")
-const second = @import("./modules/cache_target.mog")
-
-print(first.VALUE)
-print(second.VALUE)

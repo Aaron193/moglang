@@ -1,0 +1,7 @@
+const { Seed } = @import("./frontend_nested_c.kel")
+
+fn GetBase() i32 {
+    return Seed + 1i32
+}
+
+const Base i32 = Seed + 1i32

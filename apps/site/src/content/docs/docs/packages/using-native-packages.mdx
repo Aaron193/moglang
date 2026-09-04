@@ -7,17 +7,17 @@ import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
 Native packages use the same `@import(...)` syntax as source modules, but the
 import resolves package metadata and a compiled shared library rather than a
-single `.mog` source file.
+single `.kel` source file.
 
 ## A complete local example
 
 The `math` used below is the reference native package at
-`packages/examples/math/` in the Mog runtime repository. `./build.sh` builds it
+`packages/examples/math/` in the Kelvra runtime repository. `./build.sh` builds it
 into the repository's package output, which is why the bare `"math"` import can
 resolve when running examples from a source checkout.
 
 <Tabs syncKey="native-math-example">
-	<TabItem label="app.mog">
+	<TabItem label="app.kel">
 	```rust
 	const math = @import("math")
 
@@ -26,7 +26,7 @@ resolve when running examples from a source checkout.
 	print(math.greet("Turing"))
 	```
 	</TabItem>
-	<TabItem label="package.api.mog">
+	<TabItem label="package.api.kel">
 	```rust
 	package math
 
@@ -40,7 +40,7 @@ resolve when running examples from a source checkout.
 	fn greet(name str) str
 	```
 	</TabItem>
-	<TabItem label="mog.toml">
+	<TabItem label="kelvra.toml">
 	```toml
 	kind = "native"
 	import_name = "math"
@@ -48,24 +48,24 @@ resolve when running examples from a source checkout.
 	name = "math"
 	version = "0.1.0"
 	abi_version = 3
-	mog_runtime = "^0.1.0"
+	kelvra_runtime = "^0.2.0"
 	```
 	</TabItem>
 </Tabs>
 
-`package.api.mog` is the public Mog-facing contract. The corresponding
+`package.api.kel` is the public Kelvra-facing contract. The corresponding
 `package.cpp` implements and registers those functions and constants through
 the native package ABI.
 
 <Aside type="note" title="Local reference package, not the official math package">
 	The independently released source package uses the canonical import
-	`github.com/moglang/math`. See [Official Packages](/docs/packages/official-packages/)
+	`github.com/kelvralang/math`. See [Official Packages](/docs/packages/official-packages/)
 	for that package and the rest of the project-maintained catalog.
 </Aside>
 
 Bare import names such as `"math"` resolve through package metadata. Canonical
-module paths such as `"github.com/moglang/fs"` resolve installed dependencies.
-Path-like imports such as `"./math.mog"` stay source-module imports.
+module paths such as `"github.com/kelvralang/fs"` resolve installed dependencies.
+Path-like imports such as `"./math.kel"` stay source-module imports.
 
 ## Search paths
 
@@ -78,14 +78,14 @@ The current interpreter searches for packages in:
 You can add extra roots explicitly:
 
 ```bash
-mog run --package-path /path/to/packages app.mog
+kelvra run --package-path /path/to/packages app.kel
 ```
 
 ## Opaque package types
 
-Packages can expose opaque handle types through `package.api.mog`.
+Packages can expose opaque handle types through `package.api.kel`.
 
-```mog
+```kelvra
 const counter = @import("counter")
 
 const first counter.Counter = counter.create(10i64)
@@ -100,7 +100,7 @@ their package identity.
 
 ## API declaration files
 
-Native packages can ship `package.api.mog` for:
+Native packages can ship `package.api.kel` for:
 
 - readable public signatures
 - editor navigation and hover docs
@@ -117,14 +117,14 @@ build.
 
 Useful flags:
 
-- `mog install --target <triple>` to select a specific native target
-- `mog install --prefer-prebuilt` to stay on registry-published binaries when available
-- `mog install --no-native-build` to reject source fallback
-- `mog install --cmake-toolchain <path>` to allow non-host source-build fallback
+- `kelvra install --target <triple>` to select a specific native target
+- `kelvra install --prefer-prebuilt` to stay on registry-published binaries when available
+- `kelvra install --no-native-build` to reject source fallback
+- `kelvra install --cmake-toolchain <path>` to allow non-host source-build fallback
 
-When a registry entry only publishes source for the requested target, Mog
-records `build_from_source = true` and the selected target in `mog.lock`.
-Subsequent `mog run --locked --target <triple>` executions can reuse the cached
+When a registry entry only publishes source for the requested target, Kelvra
+records `build_from_source = true` and the selected target in `kelvra.lock`.
+Subsequent `kelvra run --locked --target <triple>` executions can reuse the cached
 install without rebuilding.
 
 ## Validating a package
@@ -132,11 +132,11 @@ install without rebuilding.
 Validate a package directory against its manifest and compiled shared library:
 
 ```bash
-mog validate-package packages/examples/math
-mog validate-package packages/examples/counter
+kelvra validate-package packages/examples/math
+kelvra validate-package packages/examples/counter
 ```
 
-The current validator checks package ID syntax, reserved `mog` usage,
+The current validator checks package ID syntax, reserved `kelvra` usage,
 manifest/ABI compatibility, registration metadata, and exported native
 signature parsing.
 

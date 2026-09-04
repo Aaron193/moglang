@@ -28,24 +28,24 @@ Sanitizers cannot be combined with `--lto`, `--pgo-generate`, or `--pgo-use`.
 ## Running code
 
 ```bash
-mog run path/to/program.mog
+kelvra run path/to/program.kel
 ```
 
 Add extra package roots when needed:
 
 ```bash
-mog run --package-path /path/to/packages app.mog
+kelvra run --package-path /path/to/packages app.kel
 ```
 
 Check the installed runtime and native package ABI before diagnosing package
 compatibility issues:
 
 ```bash
-mog --version
-# mog 0.1.7 (native ABI 3)
+kelvra --version
+# kelvra 0.1.7 (native ABI 3)
 ```
 
-`mog version` and `mog -V` print the same version line.
+`kelvra version` and `kelvra -V` print the same version line.
 
 ## Runtime and diagnostics flags
 
@@ -64,12 +64,12 @@ The current interpreter exposes these runtime/debugging switches:
 Examples:
 
 ```bash
-./build/interpreter --trace tests/sample_var.mog
-./build/interpreter --show-return tests/sample_var.mog
-./build/interpreter --disassemble tests/sample_var.mog
-./build/interpreter --frontend-timings tests/sample_var.mog
-./build/interpreter --frontend-timings-json tests/sample_var.mog
-./build/interpreter run --target linux-arm64-gnu --cmake-toolchain ./toolchains/linux-arm64.cmake app.mog
+./build/interpreter --trace tests/sample_var.kel
+./build/interpreter --show-return tests/sample_var.kel
+./build/interpreter --disassemble tests/sample_var.kel
+./build/interpreter --frontend-timings tests/sample_var.kel
+./build/interpreter --frontend-timings-json tests/sample_var.kel
+./build/interpreter run --target linux-arm64-gnu --cmake-toolchain ./toolchains/linux-arm64.cmake app.kel
 ```
 
 The shell test suite verifies that these flags still execute the target program
@@ -92,17 +92,17 @@ Current package-management commands include:
 - `registry ...`
 - `validate-package`
 
-`mog test` and `mog build` run the corresponding root entry from the
-`[scripts]` table in `mog.toml`, installing development and build dependencies
-first. `mog run` installs normal dependencies when needed before executing the
+`kelvra test` and `kelvra build` run the corresponding root entry from the
+`[scripts]` table in `kelvra.toml`, installing development and build dependencies
+first. `kelvra run` installs normal dependencies when needed before executing the
 program. Use `--locked` for reproducible lockfile-only resolution and
 `--offline` to prohibit network access.
 
 Cache commands include `cache status`, `cache path <user|project|registry|git>`,
 and `cache prune`; pass `--dry-run` to preview pruning.
 
-For package-managed native dependencies, `mog install`, `mog update`, and
-`mog run` also accept:
+For package-managed native dependencies, `kelvra install`, `kelvra update`, and
+`kelvra run` also accept:
 
 - `--target <triple>` to pin the selected native artifact target
 - `--prefer-prebuilt` to prefer registry-published prebuilt artifacts
@@ -111,22 +111,22 @@ For package-managed native dependencies, `mog install`, `mog update`, and
 
 Registry publishing accepts:
 
-- `--signing-key <path>` to sign a trusted `registry.v2` index during `mog publish`
+- `--signing-key <path>` to sign a trusted `registry.v2` index during `kelvra publish`
 - `--target <triple>` plus `--native-artifact-dir <dir>` to publish a prepared native prebuilt bundle for an explicit target
 
 Dependency auditing accepts:
 
-- `--offline` to reuse cached advisory metadata during `mog audit`
+- `--offline` to reuse cached advisory metadata during `kelvra audit`
 
 ## Registry management
 
 Hosted registry trust and credentials can now be bootstrapped through
-`mog registry` instead of hand-editing project manifests:
+`kelvra registry` instead of hand-editing project manifests:
 
 ```bash
 ./build/interpreter registry status default
 ./build/interpreter registry trust default --key-file ./keys/registry-public-key.toml
-./build/interpreter registry login default --token "$MOG_TOKEN"
+./build/interpreter registry login default --token "$KELVRA_TOKEN"
 ./build/interpreter registry list
 ./build/interpreter registry untrust default --key-id release-key
 ./build/interpreter registry logout default
@@ -140,10 +140,10 @@ Current registry subcommands:
 - `registry untrust <alias> --key-id ...` to remove user-stored trust
 - `registry login <alias>` and `registry logout <alias>` to manage hosted bearer tokens
 
-Stored trust and hosted tokens live under `~/.config/mog/registries.toml`,
+Stored trust and hosted tokens live under `~/.config/kelvra/registries.toml`,
 keyed by the normalized registry index, so the same hosted registry can be
 reused across multiple project-local aliases. The legacy top-level
-`mog login` and `mog logout` commands remain as compatibility wrappers.
+`kelvra login` and `kelvra logout` commands remain as compatibility wrappers.
 
 ## Frontend timings
 
@@ -164,12 +164,12 @@ The interpreter also validates package directories:
 
 ## Intentional non-feature
 
-The repo explicitly tests that `--strict` is rejected as an unknown option. Mog
+The repo explicitly tests that `--strict` is rejected as an unknown option. Kelvra
 is already strictly typed by default; there is no separate runtime strictness
 flag today.
 
 ## Related pages
 
-- [Install Mog](/docs/getting-started/install/)
+- [Install Kelvra](/docs/getting-started/install/)
 - [Using Native Packages](/docs/packages/using-native-packages/)
 - [REPL](/docs/tooling/repl/)

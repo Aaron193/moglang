@@ -57,175 +57,175 @@ run_expect_compile_error() {
 failed=0
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/assign_str_to_i32.mog" \
+    "$SCRIPT_DIR/types/errors/assign_str_to_i32.kel" \
     "cannot assign 'str' to variable 'age' of type 'i32'" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/function_arg_type_mismatch.mog" \
+    "$SCRIPT_DIR/types/errors/function_arg_type_mismatch.kel" \
     "function argument 1 expects 'i32', got 'str'" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/return_type_mismatch.mog" \
+    "$SCRIPT_DIR/types/errors/return_type_mismatch.kel" \
     "cannot return 'str' from function returning 'i32'" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/invalid_cast_str_to_i32.mog" \
+    "$SCRIPT_DIR/types/errors/invalid_cast_str_to_i32.kel" \
     "cannot cast 'str' to 'i32'" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/subtype_assignment_invalid.mog" \
+    "$SCRIPT_DIR/types/errors/subtype_assignment_invalid.kel" \
     "cannot assign 'Animal' to variable 'd' of type 'Dog'" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/assign_array_str_to_array_i32.mog" \
+    "$SCRIPT_DIR/types/errors/assign_array_str_to_array_i32.kel" \
     "cannot assign 'Array<str>' to variable 'nums' of type 'Array<i32>'" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/assign_dict_value_str_to_bool.mog" \
+    "$SCRIPT_DIR/types/errors/assign_dict_value_str_to_bool.kel" \
     "cannot assign 'Dict<str, str>' to variable 'flags' of type 'Dict<str, bool>'" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/foreach_dict_requires_explicit_projection.mog" \
+    "$SCRIPT_DIR/types/errors/foreach_dict_requires_explicit_projection.kel" \
     "cannot iterate Dict<K, V> directly; use .keys() or .values()." || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/assign_null_to_non_optional.mog" \
+    "$SCRIPT_DIR/types/errors/assign_null_to_non_optional.kel" \
     "cannot assign 'null' to variable 'name' of type 'str'" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/optional_member_access_without_check.mog" \
+    "$SCRIPT_DIR/types/errors/optional_member_access_without_check.kel" \
     "cannot access members on optional value of type 'Dog?' without a null check" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/optional_call_without_check.mog" \
+    "$SCRIPT_DIR/types/errors/optional_call_without_check.kel" \
     "cannot call optional value of type 'Dog?' without a null check" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/function_closure_param_count_mismatch.mog" \
+    "$SCRIPT_DIR/types/errors/function_closure_param_count_mismatch.kel" \
     "closure parameter count mismatch: expected 1, got 2." \
     "1:23" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/assign_to_const.mog" \
+    "$SCRIPT_DIR/types/errors/assign_to_const.kel" \
     "cannot assign to const variable 'value'." || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/compound_assign_to_const.mog" \
+    "$SCRIPT_DIR/types/errors/compound_assign_to_const.kel" \
     "cannot assign to const variable 'total'." || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/compound_bitwise_to_const.mog" \
+    "$SCRIPT_DIR/types/errors/compound_bitwise_to_const.kel" \
     "cannot assign to const variable 'total'." || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/bitwise_bool_operand.mog" \
+    "$SCRIPT_DIR/types/errors/bitwise_bool_operand.kel" \
     "bitwise operators require integer operands" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/bitwise_float_operand.mog" \
+    "$SCRIPT_DIR/types/errors/bitwise_float_operand.kel" \
     "bitwise operators require integer operands" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/unary_bitwise_str_operand.mog" \
+    "$SCRIPT_DIR/types/errors/unary_bitwise_str_operand.kel" \
     "unary '~' expects an integer operand" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/shift_float_rhs.mog" \
+    "$SCRIPT_DIR/types/errors/shift_float_rhs.kel" \
     "shift operators require integer operands" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/compound_bitwise_result_unassignable.mog" \
+    "$SCRIPT_DIR/types/errors/compound_bitwise_result_unassignable.kel" \
     "result of compound assignment is not assignable to 'u8'" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/compound_arithmetic_result_unassignable.mog" \
+    "$SCRIPT_DIR/types/errors/compound_arithmetic_result_unassignable.kel" \
     "result of compound assignment is not assignable to 'i64'" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/update_const.mog" \
+    "$SCRIPT_DIR/types/errors/update_const.kel" \
     "cannot assign to const variable 'count'." || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/closure_assign_to_const.mog" \
+    "$SCRIPT_DIR/types/errors/closure_assign_to_const.kel" \
     "cannot assign to const variable 'value'." || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/undefined_identifier.mog" \
+    "$SCRIPT_DIR/types/errors/undefined_identifier.kel" \
     "unknown identifier 'app'" \
     "2:5" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/lambda_missing_param_type.mog" \
+    "$SCRIPT_DIR/types/errors/lambda_missing_param_type.kel" \
     "expression-bodied lambdas require explicit parameter types." \
     "1:29" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/lambda_return_type_mismatch.mog" \
+    "$SCRIPT_DIR/types/errors/lambda_return_type_mismatch.kel" \
     "cannot assign 'function(i32) -> str' to variable 'bad' of type 'function(i32) -> i32'" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/lambda_block_body.mog" \
+    "$SCRIPT_DIR/types/errors/lambda_block_body.kel" \
     "expression-bodied lambdas do not support block bodies" \
     "1:36" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/infer_var_from_void.mog" \
+    "$SCRIPT_DIR/types/errors/infer_var_from_void.kel" \
     "cannot infer type for variable 'result' from a void expression; add an explicit type annotation." || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/omitted_return_value_named_function.mog" \
+    "$SCRIPT_DIR/types/errors/omitted_return_value_named_function.kel" \
     "functions with omitted return types cannot return a value; add an explicit return type." || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/assign_handle_foreign_type.mog" \
+    "$SCRIPT_DIR/types/errors/assign_handle_foreign_type.kel" \
     "cannot assign 'counter.Counter' to variable 'bad' of type 'counter.Gauge'" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/import_binding_type_mismatch.mog" \
+    "$SCRIPT_DIR/types/errors/import_binding_type_mismatch.kel" \
     "cannot assign imported value 'function(i32, i32) -> i32' to binding 'Add' of type 'function(f64, f64) -> f64'" \
     "1:9" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/import_missing_export.mog" \
+    "$SCRIPT_DIR/types/errors/import_missing_export.kel" \
     "imported module" \
     "1:9" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/import_value_used_as_type.mog" \
+    "$SCRIPT_DIR/types/errors/import_value_used_as_type.kel" \
     "expected type after variable name." \
     "3:5" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/import_native_binding_type_mismatch.mog" \
+    "$SCRIPT_DIR/types/errors/import_native_binding_type_mismatch.kel" \
     "cannot assign imported value 'function(i64, i64) -> i64' to binding 'addI64' of type 'function(f64, f64) -> f64'" \
     "1:9" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/import_native_handle_binding_type_mismatch.mog" \
+    "$SCRIPT_DIR/types/errors/import_native_handle_binding_type_mismatch.kel" \
     "cannot assign imported value 'function(i64) -> counter.Counter' to binding 'create' of type 'function(i64) -> counter.Gauge'" \
     "3:9" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/import_cycle_frontend.mog" \
+    "$SCRIPT_DIR/types/errors/import_cycle_frontend.kel" \
     "Circular import detected" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/break_outside_loop.mog" \
+    "$SCRIPT_DIR/types/errors/break_outside_loop.kel" \
     "cannot break outside of a loop" \
     "1:1" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/continue_outside_loop.mog" \
+    "$SCRIPT_DIR/types/errors/continue_outside_loop.kel" \
     "cannot continue outside of a loop" \
     "1:1" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/unknown_loop_label.mog" \
+    "$SCRIPT_DIR/types/errors/unknown_loop_label.kel" \
     "unknown loop label 'missing' for 'break'" \
     "2:11" || failed=1
 
 run_expect_compile_error \
-    "$SCRIPT_DIR/types/errors/duplicate_loop_label.mog" \
+    "$SCRIPT_DIR/types/errors/duplicate_loop_label.kel" \
     "duplicate loop label 'outer'" \
     "2:5" || failed=1
 

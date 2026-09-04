@@ -21,7 +21,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 
 <MarketingLayout
 	title="A Programming Language With Bite"
-	description="Mog is a strictly typed programming language with a bytecode VM, REPL, native packages, and editor tooling. Start with the official docs."
+	description="Kelvra is a strictly typed programming language with a bytecode VM, REPL, native packages, and editor tooling. Start with the official docs."
 	variant="landing"
 >
 	<section class="hero-grid">
@@ -29,12 +29,12 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 			<span class="eyebrow">Official Website + Docs</span>
 			<h1>Strict by default. Small rules. Real tooling.</h1>
 			<p>
-				Mog is a bytecode-compiled programming language implemented in C++ with a VM, compiler,
+				Kelvra is a bytecode-compiled programming language implemented in C++ with a VM, compiler,
 				REPL, native package system, and editor tooling in the same repository. The design goal is
 				clarity without softness.
 			</p>
 			<div class="hero-actions">
-				<a class="primary" href={`${base}docs/getting-started/install/`}>Install Mog</a>
+				<a class="primary" href={`${base}docs/getting-started/install/`}>Install Kelvra</a>
 				<a class="secondary" href={`${base}docs/getting-started/quickstart/`}>Read the Quickstart</a>
 			</div>
 			<div class="hero-metrics">
@@ -53,12 +53,12 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 			</div>
 		</div>
 
-		<div class="code-panel" aria-label="Mog code sample">
+		<div class="code-panel" aria-label="Kelvra code sample">
 			<div class="code-panel__top">
 				<div class="code-dots" aria-hidden="true"><span></span><span></span><span></span></div>
-				<span>counter.mog</span>
+				<span>counter.kel</span>
 			</div>
-			<Code code={heroCode} lang="mog" frame="none" class="hero-code" />
+			<Code code={heroCode} lang="kelvra" frame="none" class="hero-code" />
 		</div>
 	</section>
 
@@ -68,7 +68,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 			<h3>Readable syntax without ceremonial noise</h3>
 			<p>
 				No semicolons in normal statement syntax, explicit continuation rules, and type signatures
-				where they matter. Mog is compact without becoming vague.
+				where they matter. Kelvra is compact without becoming vague.
 			</p>
 		</article>
 		<article class="feature-card">
@@ -83,7 +83,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 			<span class="eyebrow">Packages + Tooling</span>
 			<h3>Imports, native packages, and editor support</h3>
 			<p>
-				Use `@import(...)` for modules and native packages, manage projects with `mog.toml`, and
+				Use `@import(...)` for modules and native packages, manage projects with `kelvra.toml`, and
 				install the official VS Code extension with a bundled language server.
 			</p>
 		</article>
@@ -94,7 +94,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 			<span class="eyebrow">A Complete Toolchain</span>
 			<h2>Start with a release archive. Keep the compiler, packages, and editor in sync.</h2>
 			<p>
-				Mog runtime releases contain both the command-line tool and the matching language server.
+				Kelvra runtime releases contain both the command-line tool and the matching language server.
 				The Marketplace extension bundles a tested server for supported platforms, while source
 				builds keep every part of the toolchain available to contributors.
 			</p>
@@ -107,15 +107,15 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 					its <code>bin</code> directory on your path.
 				</p>
 				<ul>
-					<li>Run projects with <code>mog run app.mog</code></li>
-					<li>Manage dependencies with <code>mog add</code> and <code>mog install</code></li>
-					<li>Verify runtime and native ABI versions with <code>mog --version</code></li>
+					<li>Run projects with <code>kelvra run app.kel</code></li>
+					<li>Manage dependencies with <code>kelvra add</code> and <code>kelvra install</code></li>
+					<li>Verify runtime and native ABI versions with <code>kelvra --version</code></li>
 				</ul>
 			</article>
 			<article class="stack-card">
 				<h3>Work in VS Code</h3>
 				<p>
-					Moglang Developer Tools provides language-aware editing backed by the same frontend used
+					Kelvra Developer Tools provides language-aware editing backed by the same frontend used
 					by the compiler.
 				</p>
 				<ul>
@@ -139,7 +139,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 		<div class="docs-grid">
 			<article class="docs-card">
 				<h3>Getting Started</h3>
-				<p>Install a release or build from source, then run your first Mog program.</p>
+				<p>Install a release or build from source, then run your first Kelvra program.</p>
 			</article>
 			<article class="docs-card">
 				<h3>Language Guides</h3>
@@ -169,7 +169,7 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 			<article class="docs-card">
 				<h3>Runtime releases</h3>
 				<p>
-					Tested archives include <code>mog</code> and <code>mog-lsp</code>, with SHA-256 checksums
+					Tested archives include <code>kelvra</code> and <code>kelvra-lsp</code>, with SHA-256 checksums
 					published beside immutable GitHub release assets.
 				</p>
 			</article>
@@ -184,14 +184,14 @@ const base = import.meta.env.BASE_URL.endsWith('/')
 		<div class="cta-banner">
 			<div>
 				<span class="eyebrow">Start Here</span>
-				<h2>Install Mog, write a program, and let the tooling do its job.</h2>
+				<h2>Install Kelvra, write a program, and let the tooling do its job.</h2>
 				<p>
 					The quickstart covers the syntax in a few minutes. The language guides and reference are
 					there when you need the exact rule.
 				</p>
 			</div>
 			<div class="hero-actions">
-				<a class="primary" href={`${base}docs/getting-started/install/`}>Install Mog</a>
+				<a class="primary" href={`${base}docs/getting-started/install/`}>Install Kelvra</a>
 				<a class="secondary" href={`${base}docs/reference/releases/`}>Read Release Notes</a>
 			</div>
 		</div>

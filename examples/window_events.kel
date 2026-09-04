@@ -1,0 +1,34 @@
+const window = @import("github.com/kelvralang/window")
+
+const win window.Window =
+    window.create("window event demo", 800i64, 600i64)
+
+window.show(win)
+window.clear(win)
+window.present(win)
+
+print("Close the window or press Escape to exit.")
+
+var running bool = true
+
+while (running) {
+    const evt window.Event? = window.pollEvent(win)
+    if (evt != null) {
+        var kind str = window.eventKind(evt)
+        print(kind)
+
+        if (kind == "quit") {
+            running = false
+        } else {
+            if (kind == "key_down") {
+                var keyCode i64 = window.eventKeyCode(evt)
+                print(keyCode)
+                if (keyCode == window.KEY_ESCAPE) {
+                    running = false
+                }
+            }
+        }
+    }
+}
+
+window.close(win)

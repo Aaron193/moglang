@@ -3,12 +3,12 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LSP_BIN="${1:-$PROJECT_ROOT/build/mog-lsp}"
+LSP_BIN="${1:-$PROJECT_ROOT/build/kelvra-lsp}"
 if [[ -d "$LSP_BIN" ]]; then
-    if [[ -x "$LSP_BIN/mog-lsp.exe" ]]; then
-        LSP_BIN="$LSP_BIN/mog-lsp.exe"
+    if [[ -x "$LSP_BIN/kelvra-lsp.exe" ]]; then
+        LSP_BIN="$LSP_BIN/kelvra-lsp.exe"
     else
-        LSP_BIN="$LSP_BIN/mog-lsp"
+        LSP_BIN="$LSP_BIN/kelvra-lsp"
     fi
 fi
 
@@ -42,7 +42,7 @@ def read_message(proc):
     while True:
         line = proc.stdout.readline()
         if not line:
-            raise RuntimeError("unexpected EOF from mog-lsp")
+            raise RuntimeError("unexpected EOF from kelvra-lsp")
         if line == b"\r\n":
             break
         key, value = line.decode("utf-8").split(":", 1)
@@ -59,9 +59,9 @@ def read_until(proc, predicate):
             return message
 
 
-workspace = Path(tempfile.mkdtemp(prefix="mog_lsp_formatting_"))
+workspace = Path(tempfile.mkdtemp(prefix="kelvra_lsp_formatting_"))
 try:
-    source_path = workspace / "sample.mog"
+    source_path = workspace / "sample.kel"
     source_text = "\n".join([
         "fn add(x i32,y i32)i32{",
         "var total i32= x+y",
@@ -100,7 +100,7 @@ try:
         "params": {
             "textDocument": {
                 "uri": source_uri,
-                "languageId": "mog",
+                "languageId": "kelvra",
                 "version": 1,
                 "text": source_text,
             }
@@ -264,11 +264,11 @@ try:
             "inferred for-loop formatting did not preserve omitted type syntax"
         )
 
-    fixture_source = (PROJECT_ROOT / "examples" / "test" / "main.mog").read_text(
+    fixture_source = (PROJECT_ROOT / "examples" / "test" / "main.kel").read_text(
         encoding="utf-8"
     )
     fixture_expected = (
-        PROJECT_ROOT / "examples" / "test" / "main-formatted.mog"
+        PROJECT_ROOT / "examples" / "test" / "main-formatted.kel"
     ).read_text(encoding="utf-8")
     send_message(proc, {
         "jsonrpc": "2.0",
@@ -350,7 +350,7 @@ try:
         "",
     ])
     (package_dir / "package.toml").write_text(package_manifest, encoding="utf-8")
-    package_source_path = package_dir / "package.api.mog"
+    package_source_path = package_dir / "package.api.kel"
     package_source_text = "\n".join([
         "package counter",
         "",
@@ -367,7 +367,7 @@ try:
         "params": {
             "textDocument": {
                 "uri": package_source_uri,
-                "languageId": "mog",
+                "languageId": "kelvra",
                 "version": 1,
                 "text": package_source_text,
             }

@@ -517,7 +517,7 @@ bool validateDependencySpecs(const std::vector<DependencySpec>& dependencies,
         if (colon == std::string::npos ||
             packageId.find(':', colon + 1) != std::string::npos) {
             outError = "Dependency '" + packageId +
-                       "' must use a canonical package ID like 'mog:window'.";
+                       "' must use a canonical package ID like 'kelvra:window'.";
             return false;
         }
 
@@ -637,7 +637,7 @@ bool validatePackageDirectorySuffix(const std::filesystem::path& dirPath,
         std::vector<std::string> packagedModuleParts{"packages"};
         packagedModuleParts.insert(packagedModuleParts.end(), moduleParts.begin(),
                                    moduleParts.end());
-        std::vector<std::string> installedModuleParts{".mog", "install",
+        std::vector<std::string> installedModuleParts{".kelvra", "install",
                                                       "packages"};
         installedModuleParts.insert(installedModuleParts.end(), moduleParts.begin(),
                                     moduleParts.end());
@@ -658,7 +658,7 @@ bool validatePackageDirectorySuffix(const std::filesystem::path& dirPath,
     if (!pathEndsWith(dirPath, {manifest.packageNamespace, manifest.packageName}) &&
         !pathEndsWith(dirPath, {"packages", manifest.packageNamespace,
                                 manifest.packageName}) &&
-        !pathEndsWith(dirPath, {".mog", "install", "packages",
+        !pathEndsWith(dirPath, {".kelvra", "install", "packages",
                                 manifest.packageNamespace,
                                 manifest.packageName})) {
         outError = "Package directory must end with '" + manifest.packageNamespace +
@@ -707,22 +707,22 @@ bool validateReservedNamespacePath(const std::filesystem::path& dirPath,
             return false;
         }
     }
-    if (manifest.packageNamespace != "mog") {
+    if (manifest.packageNamespace != "kelvra") {
         return true;
     }
 
     const bool isOfficialSourcePath =
-        pathEndsWith(dirPath, {"packages", "mog", manifest.packageName}) &&
+        pathEndsWith(dirPath, {"packages", "kelvra", manifest.packageName}) &&
         isInside(dirPath, repoRootPath / "packages");
     const bool isOfficialBuildPath =
-        pathEndsWith(dirPath, {"build", "packages", "mog",
+        pathEndsWith(dirPath, {"build", "packages", "kelvra",
                                manifest.packageName}) &&
         isInside(dirPath, repoRootPath / "build" / "packages");
     const bool isInstalledPath =
-        pathEndsWith(dirPath, {".mog", "install", "packages", "mog",
+        pathEndsWith(dirPath, {".kelvra", "install", "packages", "kelvra",
                                manifest.packageName});
     if (!isOfficialSourcePath && !isOfficialBuildPath && !isInstalledPath) {
-        outError = "Namespace 'mog' is reserved for runtime-maintained packages.";
+        outError = "Namespace 'kelvra' is reserved for runtime-maintained packages.";
         return false;
     }
 
@@ -733,10 +733,10 @@ bool loadValidatedPackageApi(const std::filesystem::path& dirPath,
                              const PackageManifest& manifest,
                              PackageApiMetadata& outApiMetadata,
                              std::string& outError) {
-    const std::filesystem::path apiPath = dirPath / "package.api.mog";
+    const std::filesystem::path apiPath = dirPath / "package.api.kel";
     if (!std::filesystem::exists(apiPath)) {
         outError = "Package directory '" + dirPath.string() +
-                   "' is missing package.api.mog.";
+                   "' is missing package.api.kel.";
         return false;
     }
 
@@ -969,9 +969,9 @@ bool loadPackageManifest(const std::string& packageDir,
                 return false;
             }
             outManifest.keywords = sortedUniqueStrings(std::move(outManifest.keywords));
-        } else if (key == "mog_runtime") {
-            if (!parseQuotedString(value, outManifest.mogRuntime, parseError)) {
-                outError = "Invalid manifest mog_runtime: " + parseError;
+        } else if (key == "kelvra_runtime") {
+            if (!parseQuotedString(value, outManifest.kelvraRuntime, parseError)) {
+                outError = "Invalid manifest kelvra_runtime: " + parseError;
                 return false;
             }
         } else if (key == "entry") {
@@ -1113,8 +1113,8 @@ bool validatePackageManifestForDistribution(const PackageManifest& manifest,
     }
 
     if (manifest.kind == "native") {
-        if (manifest.mogRuntime.empty()) {
-            outError = "Native package manifest must define mog_runtime.";
+        if (manifest.kelvraRuntime.empty()) {
+            outError = "Native package manifest must define kelvra_runtime.";
             return false;
         }
         if (manifest.native.build.empty()) {

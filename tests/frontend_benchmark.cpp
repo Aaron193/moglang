@@ -32,7 +32,7 @@ std::string canonicalPath(const std::string& path) {
 
 void printUsage(const char* argv0) {
     std::cerr << "Usage: " << argv0
-              << " [--json] [--package-path DIR] source.mog [more.mog]"
+              << " [--json] [--package-path DIR] source.kel [more.kel]"
               << std::endl;
 }
 

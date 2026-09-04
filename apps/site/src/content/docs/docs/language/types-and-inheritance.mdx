@@ -5,7 +5,7 @@ description: Struct declarations, methods, aliases, `this`, `super`, and the cur
 
 User-defined types are declared with `type ... struct`.
 
-```mog
+```kelvra
 type Counter struct {
   value i32
 
@@ -26,7 +26,7 @@ system.
 Fields live directly in the type body. Methods use the same `fn` syntax as
 top-level functions.
 
-```mog
+```kelvra
 type Box struct {
   value i32
 
@@ -47,7 +47,7 @@ Use `this` inside methods to read or write the receiver.
 
 Construction uses normal call syntax on the type name:
 
-```mog
+```kelvra
 var counter = Counter()
 var box Box = Box()
 ```
@@ -56,7 +56,7 @@ var box Box = Box()
 
 The language also supports aliases:
 
-```mog
+```kelvra
 type Score i32
 ```
 
@@ -67,7 +67,7 @@ most examples in the repo focus on structs.
 
 Single inheritance is available with `< Parent`.
 
-```mog
+```kelvra
 type A struct {
   fn greet() str {
     return "A"

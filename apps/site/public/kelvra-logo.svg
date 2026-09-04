@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" role="img" aria-labelledby="title desc">
+  <title id="title">Kelvra interlocking code mark</title>
+  <desc id="desc">An abstract letter K interlocked with a navy code bracket and a coral diagonal.</desc>
+  <defs>
+    <linearGradient id="navy" x1="95" y1="987" x2="590" y2="244" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111D4F"/>
+      <stop offset="1" stop-color="#263A82"/>
+    </linearGradient>
+    <linearGradient id="coral" x1="621" y1="1017" x2="1095" y2="244" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF3F4C"/>
+      <stop offset="1" stop-color="#FF7160"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#navy)" d="M454 224 72 627l382 403V806L284 627l170-179V224Z"/>
+  <path fill="url(#navy)" d="M454 224h190v806H454V224Z"/>
+  <path fill="url(#coral)" d="M1118 224H874L644 514v234l246 282h250L755 627l363-403Z"/>
+  <path fill="#FF8B72" d="m644 514 111 113-111 121V514Z" opacity=".82"/>
+</svg>

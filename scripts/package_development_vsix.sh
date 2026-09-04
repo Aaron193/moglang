@@ -2,15 +2,15 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-extension_dir="$repo_root/tooling/vscode-mog"
-output="${1:-$repo_root/build/vscode-mog-development.vsix}"
+extension_dir="$repo_root/tooling/vscode-kelvra"
+output="${1:-$repo_root/build/vscode-kelvra-development.vsix}"
 
 case "$(uname -s):$(uname -m)" in
-    Linux:x86_64) target=linux-x64; executable=mog-lsp ;;
-    Darwin:arm64) target=darwin-arm64; executable=mog-lsp ;;
+    Linux:x86_64) target=linux-x64; executable=kelvra-lsp ;;
+    Darwin:arm64) target=darwin-arm64; executable=kelvra-lsp ;;
     MINGW*:x86_64|MSYS*:x86_64|CYGWIN*:x86_64)
         target=win32-x64
-        executable=mog-lsp.exe
+        executable=kelvra-lsp.exe
         ;;
     *)
         echo "No development VSIX target for $(uname -s) $(uname -m)" >&2
@@ -18,7 +18,7 @@ case "$(uname -s):$(uname -m)" in
         ;;
 esac
 
-server="${MOG_LSP_PATH:-$repo_root/build/tooling-debug/$executable}"
+server="${KELVRA_LSP_PATH:-$repo_root/build/tooling-debug/$executable}"
 if [[ ! -x "$server" ]]; then
     for candidate in \
         "$repo_root/build/tooling-debug/$executable" \

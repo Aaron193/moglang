@@ -48,10 +48,10 @@ runtime error for invalid input.
 These operations use byte offsets, not Unicode code-point or grapheme indexes.
 Invalid codes and out-of-range bounds raise a runtime error.
 
-```mog
-print(charCodeAt("Mog", 0i64))
+```kelvra
+print(charCodeAt("Kelvra", 0i64))
 print(charFromCode(77i64))
-print(slice("Mog language", 0i64, 3i64))
+print(slice("Kelvra language", 0i64, 3i64))
 ```
 
 ## Collection constructors
@@ -62,7 +62,7 @@ print(slice("Mog language", 0i64, 3i64))
 
 Prefer a type annotation for an empty or otherwise ambiguous collection:
 
-```mog
+```kelvra
 var values Array<i32> = Array()
 var lookup Dict<str, i32> = Dict()
 var unique Set<i32> = Set(1, 2, 2)

@@ -12,7 +12,7 @@ PROGRAM=""
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/profile_callgrind.sh [options] <program.mog>
+  scripts/profile_callgrind.sh [options] <program.kel>
   scripts/profile_callgrind.sh --annotate-only <callgrind.out>
 
 Options:

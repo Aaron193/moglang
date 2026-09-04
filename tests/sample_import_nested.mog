@@ -1,3 +1,0 @@
-const nested = @import("./modules/nested_a_module.mog")
-
-print(nested.A)

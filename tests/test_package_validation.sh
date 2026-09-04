@@ -79,14 +79,14 @@ run_expect_failure \
 TEMP_DIR="$(mktemp -d)"
 LOOKALIKE_DIR="$PROJECT_ROOT/packages-namespace-lookalike-$$"
 trap 'rm -rf "$TEMP_DIR" "$LOOKALIKE_DIR"' EXIT
-mkdir -p "$TEMP_DIR/mog/fake"
-cat <<'EOF_MANIFEST' > "$TEMP_DIR/mog/fake/package.toml"
-namespace = "mog"
+mkdir -p "$TEMP_DIR/kelvra/fake"
+cat <<'EOF_MANIFEST' > "$TEMP_DIR/kelvra/fake/package.toml"
+namespace = "kelvra"
 name = "fake"
 version = "0.1.0"
 license = "MIT"
 abi_version = 3
-mog_runtime = "^0.1.0"
+kelvra_runtime = "^0.2.0"
 description = "fake"
 dependencies = []
 
@@ -96,9 +96,9 @@ targets = ["linux-x86_64-gnu"]
 EOF_MANIFEST
 
 run_expect_failure \
-    "reject reserved mog namespace outside repo package roots" \
-    "Namespace 'mog' is reserved for runtime-maintained packages." \
-    "$INTERPRETER" --validate-package "$TEMP_DIR/mog/fake" ||
+    "reject reserved kelvra namespace outside repo package roots" \
+    "Namespace 'kelvra' is reserved for runtime-maintained packages." \
+    "$INTERPRETER" --validate-package "$TEMP_DIR/kelvra/fake" ||
     failed=1
 
 mkdir -p "$TEMP_DIR/examples/invalid-system-dep"
@@ -109,7 +109,7 @@ name = "invalid-system-dep"
 version = "0.1.0"
 license = "MIT"
 abi_version = 3
-mog_runtime = "^0.1.0"
+kelvra_runtime = "^0.2.0"
 description = "invalid system dependency"
 dependencies = []
 
@@ -135,7 +135,7 @@ name = "unsupported-native-build"
 version = "0.1.0"
 license = "MIT"
 abi_version = 3
-mog_runtime = "^0.1.0"
+kelvra_runtime = "^0.2.0"
 description = "unsupported native build"
 dependencies = []
 
@@ -159,14 +159,14 @@ name = "source-system-dep"
 version = "0.1.0"
 license = "MIT"
 description = "source package with native-only metadata"
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 
 [system-dependencies]
 sdl2 = { version = ">=2.0.0", required = true }
 EOF_SOURCE_SYSDEP
 
-cat <<'EOF_SOURCE_SYSDEP_SRC' > "$TEMP_DIR/examples/source-system-dep/src/main.mog"
+cat <<'EOF_SOURCE_SYSDEP_SRC' > "$TEMP_DIR/examples/source-system-dep/src/main.kel"
 fn Name() str {
     return "source-system-dep"
 }
@@ -187,17 +187,17 @@ name = "legacysource"
 version = "0.1.0"
 license = "MIT"
 description = "legacy source package"
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_LEGACY_SOURCE
 
-cat <<'EOF_LEGACY_SOURCE_API' > "$TEMP_DIR/examples/legacysource/package.api.mog"
+cat <<'EOF_LEGACY_SOURCE_API' > "$TEMP_DIR/examples/legacysource/package.api.kel"
 package legacysource
 
 fn Name() str
 EOF_LEGACY_SOURCE_API
 
-cat <<'EOF_LEGACY_SOURCE_SRC' > "$TEMP_DIR/examples/legacysource/src/main.mog"
+cat <<'EOF_LEGACY_SOURCE_SRC' > "$TEMP_DIR/examples/legacysource/src/main.kel"
 fn Name() str {
     return "legacysource"
 }
@@ -209,7 +209,7 @@ run_expect_success \
     failed=1
 
 mkdir -p "$TEMP_DIR/examples/missingentry/src"
-cat <<'EOF_MISSING_ENTRY' > "$TEMP_DIR/examples/missingentry/mog.toml"
+cat <<'EOF_MISSING_ENTRY' > "$TEMP_DIR/examples/missingentry/kelvra.toml"
 kind = "source"
 import_name = "missingentry"
 namespace = "examples"
@@ -217,17 +217,17 @@ name = "missingentry"
 version = "0.1.0"
 license = "MIT"
 description = "missing source entry"
-entry = "src/absent.mog"
+entry = "src/absent.kel"
 dependencies = []
 EOF_MISSING_ENTRY
 
-cat <<'EOF_MISSING_ENTRY_API' > "$TEMP_DIR/examples/missingentry/package.api.mog"
+cat <<'EOF_MISSING_ENTRY_API' > "$TEMP_DIR/examples/missingentry/package.api.kel"
 package missingentry
 
 fn Name() str
 EOF_MISSING_ENTRY_API
 
-cat <<'EOF_MISSING_ENTRY_SRC' > "$TEMP_DIR/examples/missingentry/src/main.mog"
+cat <<'EOF_MISSING_ENTRY_SRC' > "$TEMP_DIR/examples/missingentry/src/main.kel"
 fn Name() str {
     return "missing-entry"
 }
@@ -239,50 +239,50 @@ run_expect_failure \
     "$INTERPRETER" --validate-package "$TEMP_DIR/examples/missingentry" ||
     failed=1
 
-mkdir -p "$TEMP_DIR/mog/fake-source/src"
-cat <<'EOF_FAKE_SOURCE' > "$TEMP_DIR/mog/fake-source/mog.toml"
+mkdir -p "$TEMP_DIR/kelvra/fake-source/src"
+cat <<'EOF_FAKE_SOURCE' > "$TEMP_DIR/kelvra/fake-source/kelvra.toml"
 kind = "source"
 import_name = "fake-source"
-namespace = "mog"
+namespace = "kelvra"
 name = "fake-source"
 version = "0.1.0"
 license = "MIT"
 description = "reserved source package"
-entry = "src/main.mog"
+entry = "src/main.kel"
 dependencies = []
 EOF_FAKE_SOURCE
 
-cat <<'EOF_FAKE_SOURCE_API' > "$TEMP_DIR/mog/fake-source/package.api.mog"
+cat <<'EOF_FAKE_SOURCE_API' > "$TEMP_DIR/kelvra/fake-source/package.api.kel"
 package fake-source
 
 fn Name() str
 EOF_FAKE_SOURCE_API
 
-cat <<'EOF_FAKE_SOURCE_SRC' > "$TEMP_DIR/mog/fake-source/src/main.mog"
+cat <<'EOF_FAKE_SOURCE_SRC' > "$TEMP_DIR/kelvra/fake-source/src/main.kel"
 fn Name() str {
     return "fake-source"
 }
 EOF_FAKE_SOURCE_SRC
 
 run_expect_failure \
-    "reject reserved mog namespace for source packages" \
-    "Namespace 'mog' is reserved for runtime-maintained packages." \
-    "$INTERPRETER" --validate-package "$TEMP_DIR/mog/fake-source" ||
+    "reject reserved kelvra namespace for source packages" \
+    "Namespace 'kelvra' is reserved for runtime-maintained packages." \
+    "$INTERPRETER" --validate-package "$TEMP_DIR/kelvra/fake-source" ||
     failed=1
 
 mkdir -p "$TEMP_DIR/std/fake/src"
-printf '%s\n' 'kind = "source"' 'module = "std/fake"' 'import_name = "fake"' 'namespace = "thirdparty"' 'name = "fake"' 'version = "0.1.0"' 'license = "MIT"' 'description = "invalid standard module"' 'entry = "src/main.mog"' 'dependencies = []' > "$TEMP_DIR/std/fake/mog.toml"
-printf '%s\n' 'package fake' 'fn Name() str' > "$TEMP_DIR/std/fake/package.api.mog"
-printf '%s\n' 'fn Name() str { return "fake" }' > "$TEMP_DIR/std/fake/src/main.mog"
+printf '%s\n' 'kind = "source"' 'module = "std/fake"' 'import_name = "fake"' 'namespace = "thirdparty"' 'name = "fake"' 'version = "0.1.0"' 'license = "MIT"' 'description = "invalid standard module"' 'entry = "src/main.kel"' 'dependencies = []' > "$TEMP_DIR/std/fake/kelvra.toml"
+printf '%s\n' 'package fake' 'fn Name() str' > "$TEMP_DIR/std/fake/package.api.kel"
+printf '%s\n' 'fn Name() str { return "fake" }' > "$TEMP_DIR/std/fake/src/main.kel"
 run_expect_failure \
     "reject external std module" \
     "Module namespace 'std/...' is reserved for language-owned modules." \
     "$INTERPRETER" --validate-package "$TEMP_DIR/std/fake" ||
     failed=1
 mkdir -p "$LOOKALIKE_DIR/packages/std/fake/src"
-printf '%s\n' 'kind = "source"' 'module = "std/fake"' 'import_name = "fake"' 'namespace = "thirdparty"' 'name = "fake"' 'version = "0.1.0"' 'license = "MIT"' 'description = "lookalike standard module"' 'entry = "src/main.mog"' 'dependencies = []' > "$LOOKALIKE_DIR/packages/std/fake/mog.toml"
-printf '%s\n' 'package fake' 'fn Name() str' > "$LOOKALIKE_DIR/packages/std/fake/package.api.mog"
-printf '%s\n' 'fn Name() str { return "fake" }' > "$LOOKALIKE_DIR/packages/std/fake/src/main.mog"
+printf '%s\n' 'kind = "source"' 'module = "std/fake"' 'import_name = "fake"' 'namespace = "thirdparty"' 'name = "fake"' 'version = "0.1.0"' 'license = "MIT"' 'description = "lookalike standard module"' 'entry = "src/main.kel"' 'dependencies = []' > "$LOOKALIKE_DIR/packages/std/fake/kelvra.toml"
+printf '%s\n' 'package fake' 'fn Name() str' > "$LOOKALIKE_DIR/packages/std/fake/package.api.kel"
+printf '%s\n' 'fn Name() str { return "fake" }' > "$LOOKALIKE_DIR/packages/std/fake/src/main.kel"
 run_expect_failure \
     "reject std module under lookalike package root" \
     "Module namespace 'std/...' is reserved for language-owned modules." \
