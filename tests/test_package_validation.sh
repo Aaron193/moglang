@@ -86,7 +86,7 @@ name = "fake"
 version = "0.1.0"
 license = "MIT"
 abi_version = 3
-kelvra_runtime = "^0.1.0"
+kelvra_runtime = "^0.2.0"
 description = "fake"
 dependencies = []
 
@@ -109,7 +109,7 @@ name = "invalid-system-dep"
 version = "0.1.0"
 license = "MIT"
 abi_version = 3
-kelvra_runtime = "^0.1.0"
+kelvra_runtime = "^0.2.0"
 description = "invalid system dependency"
 dependencies = []
 
@@ -135,7 +135,7 @@ name = "unsupported-native-build"
 version = "0.1.0"
 license = "MIT"
 abi_version = 3
-kelvra_runtime = "^0.1.0"
+kelvra_runtime = "^0.2.0"
 description = "unsupported native build"
 dependencies = []
 

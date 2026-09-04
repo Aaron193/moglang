@@ -1448,7 +1448,7 @@ version = "0.1.0"
 license = "MIT"
 publish = false
 abi_version = 3
-kelvra_runtime = "^0.1.0"
+kelvra_runtime = "^0.2.0"
 author = "Kelvra runtime"
 description = "Private native package."
 dependencies = []
@@ -4206,7 +4206,7 @@ name = "native-math"
 version = "v0.1.0"
 license = "MIT"
 abi_version = 3
-kelvra_runtime = "^0.1.0"
+kelvra_runtime = "^0.2.0"
 description = "Git-native package test."
 dependencies = []
 

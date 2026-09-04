@@ -89,7 +89,7 @@ kind = "native"
 module = "github.com/acme/window"
 version = "0.1.0"
 abi_version = 3
-kelvra_runtime = "^0.1.0"
+kelvra_runtime = "^0.2.0"
 
 [native]
 entry = "package"
