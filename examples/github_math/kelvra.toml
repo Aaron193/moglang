@@ -4,4 +4,4 @@ version = "0.1.0"
 description = "Example project that imports the Kelvra math package from GitHub."
 
 [dependencies]
-"github.com/kelvralang/math" = { version = "v0.1.0" }
+"github.com/kelvralang/math" = { version = "v0.2.0" }

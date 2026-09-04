@@ -503,7 +503,7 @@ compatibility issues:
 
 ```bash
 kelvra --version
-# kelvra 0.1.7 (native ABI 3)
+# kelvra 0.2.0 (native ABI 3)
 ```
 
 For the full package-manager guide, including dependency sources, registries,
@@ -556,7 +556,7 @@ build_args = ["--verbose"]
 env = { "PKG_CONFIG_PATH" = "/opt/sdk/lib/pkgconfig" }
 
 [dependencies]
-window = { package = "github:window", version = "^0.1.0", registry = "official" }
+window = { package = "github:window", version = "^0.2.0", registry = "official" }
 ```
 
 For native source-build fallback, Kelvra uses `--cmake-toolchain` first. If that
