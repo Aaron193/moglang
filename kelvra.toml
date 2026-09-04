@@ -4,4 +4,4 @@ version = "0.2.0"
 description = "Kelvra language workspace"
 
 [dependencies]
-"github.com/kelvralang/window" = { version = "v0.2.0" }
+"github.com/kelvralang/window" = { branch = "rebrand/kelvra" }
