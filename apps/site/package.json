@@ -12,13 +12,13 @@
     "astro": "ASTRO_TELEMETRY_DISABLED=1 astro"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.38.2",
-    "astro": "^6.0.1",
-    "sharp": "^0.34.2"
+    "@astrojs/starlight": "^0.41.11",
+    "astro": "^7.2.10",
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.8",
-    "expressive-code": "^0.41.7",
-    "typescript": "^5.9.3"
+    "expressive-code": "^0.44.2",
+    "typescript": "^7.0.2"
   }
 }
